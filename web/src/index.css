@@ -1,0 +1,30 @@
+/*
+ * Everything visual comes from Telegram's theme variables (§10), which the SDK
+ * binds to CSS custom properties at startup — see src/telegram/init.ts. There
+ * is no palette of our own here, and there should not be one: the app is meant
+ * to look like part of the client the user opened it from.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
+  background: var(--tg-theme-bg-color, #fff);
+  color: var(--tg-theme-text-color, #000);
+  /* Keep content clear of the notch and the home indicator. Falls back to 0
+     when the client reported no insets. */
+  padding: var(--tg-viewport-safe-area-inset-top, 0) var(--tg-viewport-safe-area-inset-right, 0)
+    var(--tg-viewport-safe-area-inset-bottom, 0) var(--tg-viewport-safe-area-inset-left, 0);
+  box-sizing: border-box;
+}
+
+#root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

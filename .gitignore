@@ -1,0 +1,37 @@
+# Secrets
+.env
+.env.local
+
+# Логи и pid-файлы локального стенда (scripts/dev-up.sh)
+/.dev/
+
+# Go
+/api/bin/
+*.test
+*.out
+
+# Node
+node_modules/
+/web/dist/
+/web/.vite/
+npm-debug.log*
+yarn-error.log*
+
+# Python (parser)
+__pycache__/
+*.py[cod]
+/parser/.venv/
+/parser/*.session
+/parser/*.session-journal
+
+# Docker / Caddy state
+/caddy_data/
+/caddy_config/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store

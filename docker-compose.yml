@@ -1,0 +1,97 @@
+# The whole product on one VPS: Postgres, the API, and Caddy in front (§10).
+# No orchestrator, no Redis, no queues.
+#
+#   cp .env.example .env && $EDITOR .env
+#   docker compose up -d --build
+#
+# Locally you usually want only Postgres from here and the rest run by hand —
+# see the README.
+
+name: flatmatch
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flatmatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flatmatch}
+      POSTGRES_DB: ${POSTGRES_DB:-flatmatch}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Exposed on loopback only: convenient for psql from the host, not
+      # reachable from the internet.
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      # The API applies migrations on startup, so it must not start before
+      # Postgres can actually answer.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flatmatch} -d ${POSTGRES_DB:-flatmatch}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Inside the compose network Postgres answers to its service name, which
+      # is why this is set here rather than taken from .env.
+      DATABASE_URL: postgres://${POSTGRES_USER:-flatmatch}:${POSTGRES_PASSWORD:-flatmatch}@postgres:5432/${POSTGRES_DB:-flatmatch}?sslmode=disable
+      API_ADDR: ":8080"
+      # Not marked required with `:?` on purpose: compose interpolates every
+      # service even when you ask for one, and `docker compose up -d postgres`
+      # is the normal local-dev command. The API itself refuses to start
+      # without these and says exactly which one is missing.
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      APP_URL: ${APP_URL:-}
+      BOT_POLLING_ENABLED: ${BOT_POLLING_ENABLED:-true}
+      TMA_INITDATA_TTL: ${TMA_INITDATA_TTL:-24h}
+      MODERATION_CHAT_ID: ${MODERATION_CHAT_ID:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Empty on purpose: Caddy serves the front-end from the same origin, so
+      # there is no cross-origin request to allow.
+      CORS_ORIGINS: ""
+    expose:
+      - "8080"
+
+  caddy:
+    build:
+      # Root context — the image needs both web/ and the Caddyfile.
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      # Certificates and Caddy's own state must survive a redeploy, or every
+      # restart asks Let's Encrypt for a new certificate and hits its rate limit.
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Telegram channel parser (§8) — a stub until §12 step 7. It is behind a
+  # profile so `docker compose up` does not start it:
+  #   docker compose --profile parser up -d
+  parser:
+    build: ./parser
+    profiles: ["parser"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-flatmatch}:${POSTGRES_PASSWORD:-flatmatch}@postgres:5432/${POSTGRES_DB:-flatmatch}?sslmode=disable
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

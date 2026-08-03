@@ -1,6 +1,6 @@
 ---
 name: running-locally
-description: Use when the FlatMatch Mini App has to run on this machine — opening it from Telegram, checking /start, reproducing something a user saw, or after the cloudflared address changed and login started failing with 401.
+description: Use when the FlatMatch Mini App has to run on this machine — opening it from Telegram, checking /start, reproducing something a user saw, walking through the onboarding again on an account that has already submitted it, or after the cloudflared address changed and login started failing with 401.
 ---
 
 # Запуск FlatMatch локально
@@ -21,6 +21,14 @@ scripts/dev-down.sh   # остановить
 запустит api. Логи — в `.dev/{api,web,tunnel}.log`.
 
 После этого напиши боту `/start` — придёт кнопка.
+
+**Запускать в отдельном окне терминала.** Туннель, dev-сервер фронта и api
+остаются детьми той оболочки, из которой стартовал скрипт: закроешь окно —
+стенд умрёт целиком, и в Телеграме кнопка поведёт в никуда. Отсюда же правило
+для агента: не запускать `dev-up.sh` обычным синхронным вызовом — когда вызов
+завершится или будет прерван, вся группа процессов получит сигнал и стенд
+ляжет прямо посреди теста. Либо просить человека запустить у себя, либо
+запускать фоном (`run_in_background`).
 
 ## Порядок важен
 
@@ -53,10 +61,43 @@ brew install cloudflared
 | `failed to request quick Tunnel: context deadline exceeded` | обычная неудача quick tunnel, скрипт сам делает три попытки |
 | api молчит на `/start` | смотреть `.dev/api.log`: нужна строка `bot polling started` |
 | `409 Conflict` в логе api | тем же токеном опрашивает второй процесс, живой где-то ещё |
+| стенд лёг разом, в `api.log` — `shutdown signal received` | скрипт запускали из недолговечной оболочки (вызов агента, закрытое окно) → см. «Быстрый путь» |
+| в приложении «анкета на проверке» вместо онбординга | аккаунт уже `pending` → сбросить в draft, ниже |
 
 **Первым делом смотри `.dev/api.log`.** Каждый запрос там одной строкой с
 `request_id`, а причина 401 пишется в лог и намеренно не отдаётся клиенту —
 в приложении будет просто «Не получилось войти».
+
+## Пройти онбординг заново
+
+Анкета проходится один раз: после отправки аккаунт уезжает в `pending`, шаг 11,
+и приложение показывает «анкета на проверке». Второй прогон — только сбросом
+статуса, регистрации в продукте нет и завести «ещё один аккаунт» нельзя: вход
+по `tg_id`.
+
+```sh
+# кто вообще есть в базе
+docker compose exec postgres psql -U flatmatch -d flatmatch \
+  -c "SELECT tg_id, name, tg_username, status, onboarding_step FROM users"
+
+# вернуть на первый экран, ответы и фото остаются в строке
+docker compose exec postgres psql -U flatmatch -d flatmatch \
+  -c "UPDATE users SET status='draft', onboarding_step=0 WHERE tg_id=<tg_id>"
+```
+
+Ответы при этом сохраняются, и экраны откроются уже заполненными — это нужный
+режим, чтобы проверить возврат к брошенному шагу. Для честного «первого
+запуска» строку проще удалить, она пересоздастся сама на ближайшем открытии
+приложения:
+
+```sh
+docker compose exec postgres psql -U flatmatch -d flatmatch \
+  -c "DELETE FROM users WHERE tg_id=<tg_id>"
+```
+
+В базе обычно два аккаунта: настоящий телеграмный и `777000001` — мок из
+`cmd/devinitdata`. Сбрасывать надо тот, которым открываешь приложение.
+Из неинтерактивной оболочки — `docker compose exec -T`, иначе не будет tty.
 
 ## Разработка без Telegram
 

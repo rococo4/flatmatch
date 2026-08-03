@@ -1,0 +1,122 @@
+/* Единственный слой поверх темы Telegram.
+   Никаких своих цветовых систем: всё, кроме шапок типов точек / цвета поиска / вердикт-чипов
+   и пастельных заглушек аватаров, выражено через --tg-theme-*.
+   Telegram проставляет --tg-theme-* сам (SDK setThemeParams / нативно). */
+
+:root {
+  /* фолбэки на случай запуска вне Telegram (dev в браузере) */
+  --tg-theme-bg-color: #ffffff;
+  --tg-theme-secondary-bg-color: #efeff4;
+  --tg-theme-section-bg-color: #ffffff;
+  --tg-theme-header-bg-color: #ffffff;
+  --tg-theme-text-color: #000000;
+  --tg-theme-hint-color: #999999;
+  --tg-theme-subtitle-text-color: #7d7d82;
+  --tg-theme-link-color: #2481cc;
+  --tg-theme-accent-text-color: #2481cc;
+  --tg-theme-button-color: #2481cc;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-destructive-text-color: #ff3b30;
+  --tg-theme-section-separator-color: #e6e6ea;
+
+  /* Роли поверхностей: карточка обязана отличаться от полотна в обеих темах.
+     В светлой полотно тёмнее карточки, в тёмной — наоборот. */
+  --app-bg: var(--tg-theme-secondary-bg-color);
+  --card-bg: var(--tg-theme-bg-color);
+  --sep: var(--tg-theme-section-separator-color);
+
+  /* Жёлтый: в теме Telegram переменной нет. Только счётчик лимита «3 из 5»
+     и плашки изменений точки. Больше нигде. */
+  --warning-bg: #FFF3D6;
+  --warning-fg: #8A5B00;
+
+  /* Нейтральный чип/поверхность внутри карточки. */
+  --chip-bg: #e4e4ea;
+
+  /* Шапки типов + цвет поиска — единственные кастомные цвета продукта. */
+  --type-flat-bg: #CFEDE7;   --type-flat-fg: #0C6055;   /* квартира с рынка */
+  --type-home-bg: #D8EDD9;   --type-home-fg: #1D6330;   /* сосед к себе */
+  --type-search-bg: #F9DCE8; --type-search-fg: #8E2456; /* люди / поиск */
+
+  /* Промо-блок пула людей — единственная цветная подложка карточки:
+     розовая — предложение войти, зелёная — уже в пуле. */
+  --search-card-bg: #FDF1F6; --search-card-border: #F2CFDF;
+  --saved-card-bg: #F0F8F1;  --saved-card-border: #CDE7D0;
+
+  /* Вердикт-чипы параметров и совпадения анкет.
+     Красного в сравнении людей не существует: «не совпали» — серое. */
+  --verdict-ok-bg: #DFF1E0;   --verdict-ok-fg: #1D6330;
+  --verdict-edge-bg: #FFF0D2; --verdict-edge-fg: #8A5B00;
+  --verdict-no-bg: #e9e9ee;   --verdict-no-fg: #7d7d82;
+}
+
+/* Telegram сообщает тёмную схему через color-scheme на html
+   (SDK-react: useSignal(miniApp.isDark) → data-theme="dark"). */
+[data-theme='dark'] {
+  --tg-theme-bg-color: #17212b;
+  --tg-theme-secondary-bg-color: #232e3c;
+  --tg-theme-section-bg-color: #232e3c;
+  --tg-theme-header-bg-color: #17212b;
+  --tg-theme-text-color: #ffffff;
+  --tg-theme-hint-color: #708499;
+  --tg-theme-subtitle-text-color: #8d9aa8;
+  --tg-theme-link-color: #6ab3f3;
+  --tg-theme-accent-text-color: #6ab3f3;
+  --tg-theme-button-color: #5288c1;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-destructive-text-color: #ec3942;
+  --tg-theme-section-separator-color: #2b3440;
+
+  --app-bg: var(--tg-theme-bg-color);
+  --card-bg: var(--tg-theme-secondary-bg-color);
+
+  --warning-bg: #3D3116;
+  --warning-fg: #F5C462;
+
+  --chip-bg: #2b3644;
+
+  --type-flat-bg: #123F39;   --type-flat-fg: #7CD8C9;
+  --type-home-bg: #16351E;   --type-home-fg: #8CD59A;
+  --type-search-bg: #40182B; --type-search-fg: #F0A5C4;
+
+  --search-card-bg: #2A1D25; --search-card-border: #4A2839;
+  --saved-card-bg: #1B2A21;  --saved-card-border: #2C4A34;
+
+  --verdict-ok-bg: #16351E;   --verdict-ok-fg: #8CD59A;
+  --verdict-edge-bg: #3D3116; --verdict-edge-fg: #F5C462;
+  --verdict-no-bg: #2b3644;   --verdict-no-fg: #8d9aa8;
+}
+
+html, body, #root { margin: 0; padding: 0; min-height: 100%; }
+
+body {
+  background: var(--app-bg);
+  color: var(--tg-theme-text-color);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
+    system-ui, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--tg-theme-link-color); text-decoration: none; }
+a:hover { color: var(--tg-theme-accent-text-color); }
+
+/* Полоски-заглушки под фото: реальные фото придут из точек и анкет. */
+.ph-photo {
+  background-color: var(--app-bg);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tg-theme-hint-color) 16%, transparent) 0 1px,
+    transparent 1px 7px
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--tg-theme-hint-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.ph-photo--in-card { background-color: var(--card-bg); }
+
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

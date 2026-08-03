@@ -17,6 +17,13 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // Uploaded photos. The API hands out addresses under /media, so without
+      // this the <img> asks the dev server for a path it knows nothing about
+      // and every avatar renders broken.
+      '/media': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
   build: {

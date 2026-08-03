@@ -5,6 +5,15 @@
  * to look like part of the client the user opened it from.
  */
 
+/* Padding counts inside the declared width. The design was drawn under this
+   rule, so without it every `width: 100%` field with padding grows past its
+   column — which is what made the age input run under the gender chips. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body,
 #root {
@@ -20,11 +29,11 @@ body {
      when the client reported no insets. */
   padding: var(--tg-viewport-safe-area-inset-top, 0) var(--tg-viewport-safe-area-inset-right, 0)
     var(--tg-viewport-safe-area-inset-bottom, 0) var(--tg-viewport-safe-area-inset-left, 0);
-  box-sizing: border-box;
 }
 
+/* The screens lay themselves out and expect the full width. Centring here is a
+   leftover from the one-placeholder skeleton, and it shrink-wrapped every
+   screen to the width of its widest line. */
 #root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
 }

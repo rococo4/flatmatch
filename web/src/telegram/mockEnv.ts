@@ -1,4 +1,4 @@
-import { mockTelegramEnv, isTMA } from '@telegram-apps/sdk-react';
+import { mockTelegramEnv } from '@telegram-apps/sdk-react';
 
 /**
  * Pretends to be a Telegram client so the app can be developed in an ordinary
@@ -18,7 +18,7 @@ import { mockTelegramEnv, isTMA } from '@telegram-apps/sdk-react';
 export function mockTelegramEnvIfNeeded(): void {
   // Never mock inside a real client: the launch data is already there, and
   // wrapping postMessage would only get in the way.
-  if (isTMA()) {
+  if (launchedByTelegram()) {
     return;
   }
 
@@ -39,6 +39,22 @@ export function mockTelegramEnvIfNeeded(): void {
       ? ''
       : 'VITE_MOCK_INIT_DATA is not set, so the API will answer 401 — see src/telegram/mockEnv.ts.',
   );
+}
+
+/**
+ * Whether a real Telegram client started this page.
+ *
+ * The SDK's own `isTMA()` cannot answer this: it looks at the launch params it
+ * can retrieve, and `mockTelegramEnv` writes those to sessionStorage. So the
+ * first mocked load makes every later reload in the same tab claim to be
+ * running inside Telegram, the mock is skipped, and mounting fails with
+ * UnknownEnvError against a client that is not there.
+ *
+ * A real client always hands the parameters over in the URL, so that is what
+ * gets asked. Storage left over from an earlier load cannot fake it.
+ */
+function launchedByTelegram(): boolean {
+  return /tgWebApp/.test(window.location.hash) || /tgWebApp/.test(window.location.search);
 }
 
 /**

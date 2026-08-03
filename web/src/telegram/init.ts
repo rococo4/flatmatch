@@ -9,6 +9,7 @@ import {
   mountViewport,
   bindViewportCssVars,
   expandViewport,
+  mountBackButton,
 } from '@telegram-apps/sdk-react';
 
 /**
@@ -32,6 +33,13 @@ export function initTelegram(debug: boolean): void {
 
   mountThemeParamsSync();
   bindThemeParamsCssVars();
+
+  // Without mounting, every showBackButton() is a no-op and screens that ask
+  // for the client's back arrow silently get none — which is how the
+  // questionnaire ended up with no way back.
+  if (mountBackButton.isAvailable()) {
+    mountBackButton();
+  }
 
   // The viewport mounts asynchronously — the client has to answer with its
   // size. Failing to get it is not fatal: it costs the safe-area variables,

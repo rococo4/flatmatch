@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@telegram-apps/telegram-ui/dist/styles.css';
 
+// Единственный слой поверх темы Telegram: всё, кроме шапок типов карточек,
+// цвета поиска и вердикт-чипов, выражено через --tg-theme-* (§10).
+import './styles/tokens.css';
 import './index.css';
 import { App } from './App';
 import { initTelegram } from './telegram/init';

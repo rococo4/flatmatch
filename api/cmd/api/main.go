@@ -18,6 +18,7 @@ import (
 	"flatmatch/api/internal/api/http/usersapi"
 	"flatmatch/api/internal/config"
 	"flatmatch/api/internal/httpx"
+	"flatmatch/api/internal/photostore"
 	"flatmatch/api/internal/postgres"
 	"flatmatch/api/internal/repo/usersrepo"
 	"flatmatch/api/internal/service/users"
@@ -28,6 +29,10 @@ import (
 
 // shutdownGrace is how long in-flight requests get to finish after a signal.
 const shutdownGrace = 15 * time.Second
+
+// mediaPrefix is where uploaded photos are addressed, both in the URL the API
+// hands out and in the route that serves them.
+const mediaPrefix = "/media"
 
 func main() {
 	if err := run(); err != nil {
@@ -60,12 +65,18 @@ func run() error {
 	}
 	defer pool.Close()
 
-	userService := users.New(usersrepo.New(pool))
+	// The one line that changes the day photos move to object storage.
+	photos, err := photostore.NewDir(cfg.PhotoDir, mediaPrefix)
+	if err != nil {
+		return err
+	}
+
+	userService := users.New(usersrepo.New(pool), photos)
 	validator := tma.NewValidator(cfg.BotToken, cfg.InitDataTTL)
 
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           router(log, pool, validator, userService),
+		Handler:           router(log, pool, validator, userService, photos.Root()),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -122,7 +133,8 @@ func router(
 	log *slog.Logger,
 	pool httpx.Pinger,
 	validator authmw.Validator,
-	accounts authmw.Accounts,
+	accounts *users.Service,
+	mediaRoot string,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -133,9 +145,15 @@ func router(
 
 	r.Get("/healthz", httpx.Health(pool))
 
+	// Photos are served without authentication, the same way an object storage
+	// bucket will serve them later: the key is a random uuid, so the address is
+	// unguessable, and a face in a profile is meant to be seen.
+	r.Handle(mediaPrefix+"/*", http.StripPrefix(mediaPrefix+"/",
+		http.FileServer(http.Dir(mediaRoot))))
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authmw.New(validator, accounts))
-		r.Mount("/", usersapi.New().Routes())
+		r.Mount("/", usersapi.New(accounts).Routes())
 	})
 
 	return r

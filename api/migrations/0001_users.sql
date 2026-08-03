@@ -38,20 +38,32 @@ CREATE TABLE users (
     cleaning text CHECK (cleaning IN ('schedule', 'when_dirty', 'creative_mess')),
     -- «Алкоголь дома?» — «Не пью» / «С соседом за сериалом — да» / «Тусовки — норм»
     alcohol text CHECK (alcohol IN ('none', 'with_neighbor', 'parties')),
+    -- «Как тебе с общими тратами?» — «Делю поровну и плачу сразу» / «Веду учёт» /
+    -- «Разберёмся по ходу».
+    expenses text CHECK (expenses IN ('split_equally', 'tracked', 'as_we_go')),
 
     about text CHECK (char_length(about) <= 200),
 
-    photo_url text,
+    photo_key text,
 
     photo_status text NOT NULL DEFAULT 'pending'
         CHECK (photo_status IN ('pending', 'ok', 'rejected')),
 
+    -- «О себе»
+    about_status text NOT NULL DEFAULT 'pending'
+        CHECK (about_status IN ('pending', 'ok', 'rejected')),
+
     status text NOT NULL DEFAULT 'draft'
         CHECK (status IN ('draft', 'pending', 'active', 'banned')),
 
+    onboarding_step smallint NOT NULL DEFAULT 0
+        CHECK (onboarding_step BETWEEN 0 AND 11),
 
     last_seen  timestamptz NOT NULL DEFAULT now(),
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT photo_ok_needs_a_file
+        CHECK (photo_status <> 'ok' OR photo_key IS NOT NULL)
 );
 
 -- +goose Down

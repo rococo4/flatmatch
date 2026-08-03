@@ -24,6 +24,83 @@ type Client struct {
 	http  *http.Client
 }
 
+// APIError is a Bot API call that Telegram itself rejected, as opposed to a
+// transport failure.
+type APIError struct {
+	Method      string
+	Code        int
+	Description string
+}
+
+// envelope is the shape every Bot API response takes.
+type envelope struct {
+	OK          bool            `json:"ok"`
+	Result      json.RawMessage `json:"result"`
+	ErrorCode   int             `json:"error_code"`
+	Description string          `json:"description"`
+}
+
+// InlineKeyboardButton is one button under a message.
+//
+// Only the fields the product actually sends are modelled — Telegram accepts a
+// dozen more. Adding one when it is needed is a one-line change; carrying
+// fields nobody sets only makes the type look like it does more than it does.
+type InlineKeyboardButton struct {
+	Text string  `json:"text"`
+	Web  *WebApp `json:"web_app,omitempty"`
+}
+
+// WebApp points a button at a Mini App. Telegram requires an HTTPS URL.
+type WebApp struct {
+	URL string `json:"url"`
+}
+
+// InlineKeyboard is a grid of buttons: outer slice is rows.
+type InlineKeyboard struct {
+	Rows [][]InlineKeyboardButton `json:"inline_keyboard"`
+}
+
+// SendMessageRequest is a sendMessage call.
+type SendMessageRequest struct {
+	ChatID      int64           `json:"chat_id"`
+	Text        string          `json:"text"`
+	ReplyMarkup *InlineKeyboard `json:"reply_markup,omitempty"`
+}
+
+// BotInfo is the subset of getMe worth logging at startup.
+type BotInfo struct {
+	Username string `json:"username"`
+}
+
+// Update is an incoming event. The skeleton only reads messages.
+type Update struct {
+	UpdateID int64    `json:"update_id"`
+	Message  *Message `json:"message"`
+}
+
+// Message is an incoming message.
+//
+// The sender is deliberately absent: the bot answers the chat, and identity
+// comes from initData once the Mini App opens (§4) — never from a message,
+// which would be a second, weaker way to decide who somebody is.
+type Message struct {
+	Chat Chat   `json:"chat"`
+	Text string `json:"text"`
+}
+
+// Chat is where a message was sent.
+type Chat struct {
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
+}
+
+// getUpdatesRequest is one long-polling call.
+type getUpdatesRequest struct {
+	Offset         int64    `json:"offset,omitempty"`
+	Timeout        int      `json:"timeout"`
+	AllowedUpdates []string `json:"allowed_updates"`
+}
+
 // NewClient builds a client.
 //
 // The HTTP timeout must outlast the longest getUpdates poll, or every poll
@@ -35,24 +112,37 @@ func NewClient(token string) *Client {
 	}
 }
 
-// APIError is a Bot API call that Telegram itself rejected, as opposed to a
-// transport failure.
-type APIError struct {
-	Method      string
-	Code        int
-	Description string
-}
-
 func (e *APIError) Error() string {
 	return fmt.Sprintf("telegram %s: %d %s", e.Method, e.Code, e.Description)
 }
 
-// envelope is the shape every Bot API response takes.
-type envelope struct {
-	OK          bool            `json:"ok"`
-	Result      json.RawMessage `json:"result"`
-	ErrorCode   int             `json:"error_code"`
-	Description string          `json:"description"`
+// SendMessage delivers a message. This is the transport behind every
+// notification in §7.
+func (c *Client) SendMessage(ctx context.Context, req SendMessageRequest) error {
+	return c.call(ctx, "sendMessage", req, nil)
+}
+
+// GetMe verifies the token and reports which bot it belongs to. Calling it at
+// startup turns "the button does nothing" into a clear error in the logs.
+func (c *Client) GetMe(ctx context.Context) (BotInfo, error) {
+	var info BotInfo
+	err := c.call(ctx, "getMe", struct{}{}, &info)
+	return info, err
+}
+
+// GetUpdates long-polls for events newer than offset.
+//
+// Telegram treats the offset as an acknowledgement: asking for N+1 confirms
+// everything up to N and lets it drop them, so the offset must only advance
+// once an update has actually been handled.
+func (c *Client) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
+	var updates []Update
+	err := c.call(ctx, "getUpdates", getUpdatesRequest{
+		Offset:         offset,
+		Timeout:        int(pollTimeout / time.Second),
+		AllowedUpdates: []string{"message"},
+	}, &updates)
+	return updates, err
 }
 
 // call invokes a Bot API method and decodes result into out, which may be nil
@@ -102,94 +192,4 @@ func redactToken(err error, token string) error {
 		return fmt.Errorf("%s", strings.ReplaceAll(msg, token, "<token>"))
 	}
 	return err
-}
-
-// InlineKeyboardButton is one button under a message.
-//
-// Only the fields the product actually sends are modelled — Telegram accepts a
-// dozen more. Adding one when it is needed is a one-line change; carrying
-// fields nobody sets only makes the type look like it does more than it does.
-type InlineKeyboardButton struct {
-	Text string  `json:"text"`
-	Web  *WebApp `json:"web_app,omitempty"`
-}
-
-// WebApp points a button at a Mini App. Telegram requires an HTTPS URL.
-type WebApp struct {
-	URL string `json:"url"`
-}
-
-// InlineKeyboard is a grid of buttons: outer slice is rows.
-type InlineKeyboard struct {
-	Rows [][]InlineKeyboardButton `json:"inline_keyboard"`
-}
-
-// SendMessageRequest is a sendMessage call.
-type SendMessageRequest struct {
-	ChatID      int64           `json:"chat_id"`
-	Text        string          `json:"text"`
-	ReplyMarkup *InlineKeyboard `json:"reply_markup,omitempty"`
-}
-
-// SendMessage delivers a message. This is the transport behind every
-// notification in §7.
-func (c *Client) SendMessage(ctx context.Context, req SendMessageRequest) error {
-	return c.call(ctx, "sendMessage", req, nil)
-}
-
-// BotInfo is the subset of getMe worth logging at startup.
-type BotInfo struct {
-	Username string `json:"username"`
-}
-
-// GetMe verifies the token and reports which bot it belongs to. Calling it at
-// startup turns "the button does nothing" into a clear error in the logs.
-func (c *Client) GetMe(ctx context.Context) (BotInfo, error) {
-	var info BotInfo
-	err := c.call(ctx, "getMe", struct{}{}, &info)
-	return info, err
-}
-
-// Update is an incoming event. The skeleton only reads messages.
-type Update struct {
-	UpdateID int64    `json:"update_id"`
-	Message  *Message `json:"message"`
-}
-
-// Message is an incoming message.
-//
-// The sender is deliberately absent: the bot answers the chat, and identity
-// comes from initData once the Mini App opens (§4) — never from a message,
-// which would be a second, weaker way to decide who somebody is.
-type Message struct {
-	Chat Chat   `json:"chat"`
-	Text string `json:"text"`
-}
-
-// Chat is where a message was sent.
-type Chat struct {
-	ID   int64  `json:"id"`
-	Type string `json:"type"`
-}
-
-// getUpdatesRequest is one long-polling call.
-type getUpdatesRequest struct {
-	Offset         int64    `json:"offset,omitempty"`
-	Timeout        int      `json:"timeout"`
-	AllowedUpdates []string `json:"allowed_updates"`
-}
-
-// GetUpdates long-polls for events newer than offset.
-//
-// Telegram treats the offset as an acknowledgement: asking for N+1 confirms
-// everything up to N and lets it drop them, so the offset must only advance
-// once an update has actually been handled.
-func (c *Client) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
-	var updates []Update
-	err := c.call(ctx, "getUpdates", getUpdatesRequest{
-		Offset:         offset,
-		Timeout:        int(pollTimeout / time.Second),
-		AllowedUpdates: []string{"message"},
-	}, &updates)
-	return updates, err
 }

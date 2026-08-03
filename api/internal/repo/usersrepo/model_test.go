@@ -19,27 +19,43 @@ func TestToEntityMapsAKnownRow(t *testing.T) {
 	now := time.Now()
 
 	got := userRow{
-		ID:          id,
-		TelegramID:  42,
-		Name:        "Арсений",
-		Username:    pointer.To("arsenii"),
-		PhotoURL:    pointer.To("https://t.me/i/userpic/320/arsenii.jpg"),
-		Status:      "active",
-		PhotoStatus: "ok",
-		LastSeen:    now,
-		CreatedAt:   now,
+		ID:             id,
+		TelegramID:     42,
+		Name:           "Арсений",
+		Username:       pointer.To("arsenii"),
+		Age:            pointer.To(28),
+		Gender:         pointer.To("male"),
+		GenderPref:     "any",
+		Schedule:       pointer.To("owl"),
+		About:          pointer.To("Люблю тишину по утрам"),
+		PhotoKey:       pointer.To("photos/" + id.String() + ".jpg"),
+		PhotoStatus:    "ok",
+		AboutStatus:    "ok",
+		Status:         "active",
+		OnboardingStep: 11,
+		LastSeen:       now,
+		CreatedAt:      now,
 	}.toEntity(t.Context())
 
 	want := entity.User{
-		ID:          id,
-		TelegramID:  42,
-		Name:        "Арсений",
-		Username:    "arsenii",
-		PhotoURL:    "https://t.me/i/userpic/320/arsenii.jpg",
-		Status:      entity.StatusActive,
-		PhotoStatus: entity.PhotoOK,
-		LastSeen:    now,
-		CreatedAt:   now,
+		ID:         id,
+		TelegramID: 42,
+		Name:       "Арсений",
+		Username:   "arsenii",
+		Profile: entity.Profile{
+			Age:        28,
+			Gender:     entity.GenderMale,
+			GenderPref: entity.GenderPrefAny,
+			Schedule:   entity.ScheduleOwl,
+			About:      "Люблю тишину по утрам",
+		},
+		PhotoKey:       "photos/" + id.String() + ".jpg",
+		PhotoStatus:    entity.ModerationOK,
+		AboutStatus:    entity.ModerationOK,
+		Status:         entity.StatusActive,
+		OnboardingStep: 11,
+		LastSeen:       now,
+		CreatedAt:      now,
 	}
 	if got != want {
 		t.Errorf("toEntity() = %+v, want %+v", got, want)
@@ -53,13 +69,18 @@ func TestToEntitySurvivesAnUnknownStatus(t *testing.T) {
 		Name:        "Из будущего",
 		Status:      "shadow_banned",
 		PhotoStatus: "under_review",
+		AboutStatus: "ok",
+		Schedule:    pointer.To("nocturnal"),
 	}.toEntity(t.Context())
 
 	if got.Status != entity.StatusUnknown {
 		t.Errorf("Status = %q, want %q", got.Status, entity.StatusUnknown)
 	}
-	if got.PhotoStatus != entity.PhotoUnknown {
-		t.Errorf("PhotoStatus = %q, want %q", got.PhotoStatus, entity.PhotoUnknown)
+	if got.PhotoStatus != entity.ModerationUnknown {
+		t.Errorf("PhotoStatus = %q, want %q", got.PhotoStatus, entity.ModerationUnknown)
+	}
+	if got.Profile.Schedule != entity.ScheduleUnknown {
+		t.Errorf("Schedule = %q, want %q", got.Profile.Schedule, entity.ScheduleUnknown)
 	}
 	// …and the account stays hidden, rather than being shown with a meaning
 	// nothing in this binary can act on.
@@ -72,21 +93,29 @@ func TestToEntitySurvivesAnUnknownStatus(t *testing.T) {
 	}
 }
 
-func TestToEntityWarnsAboutAnUnknownStatus(t *testing.T) {
-	// Hiding an account without saying so turns a five-minute fix into a
-	// support ticket weeks later, so the warning is part of the contract.
+func TestToEntityWarnsAboutUnknownValues(t *testing.T) {
+	// Hiding a field without saying so turns a five-minute fix into a support
+	// ticket weeks later, so the warning is part of the contract.
 	var logged bytes.Buffer
 	ctx := logctx.With(t.Context(), slog.New(slog.NewJSONHandler(&logged, nil)))
 
-	userRow{Name: "Из будущего", Status: "shadow_banned", PhotoStatus: "ok"}.toEntity(ctx)
+	userRow{
+		Name:        "Из будущего",
+		Status:      "shadow_banned",
+		PhotoStatus: "ok",
+		AboutStatus: "ok",
+		Cleaning:    pointer.To("robot"),
+	}.toEntity(ctx)
 
 	out := logged.String()
 	if !strings.Contains(out, `"level":"WARN"`) {
 		t.Errorf("no warning was logged, got: %s", out)
 	}
-	// The stored value must be in there — it is what says which migration this
-	// binary is behind.
-	if !strings.Contains(out, "shadow_banned") {
-		t.Errorf("the warning does not quote the stored value, got: %s", out)
+	// Both offending columns have to be named: one warning per row is only
+	// enough if it says everything that went wrong in it.
+	for _, field := range []string{"status", "cleaning"} {
+		if !strings.Contains(out, field) {
+			t.Errorf("the warning does not name %q, got: %s", field, out)
+		}
 	}
 }

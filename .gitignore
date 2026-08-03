@@ -7,6 +7,8 @@
 
 # Go
 /api/bin/
+# Локальное хранилище фото (photostore), боевое — Yandex Object Storage
+/api/.data/
 *.test
 *.out
 

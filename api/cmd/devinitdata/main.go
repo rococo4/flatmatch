@@ -53,6 +53,17 @@ func main() {
 		"chat_instance": {"-1234567890123456789"},
 		"chat_type":     {"private"},
 		"auth_date":     {strconv.FormatInt(time.Now().Add(-*age).Unix(), 10)},
+
+		// Telegram signs launch data twice: HMAC in `hash`, which is what this
+		// tool and the API actually check, and Ed25519 in `signature`, which
+		// only Telegram's private key can produce.
+		//
+		// The value here is therefore a placeholder — but the field has to be
+		// present, because @telegram-apps/sdk-react refuses launch params
+		// without it, and browser development runs on exactly this data. It
+		// also lands inside the data-check-string, so `hash` covers it and the
+		// two sides stay consistent.
+		"signature": {"devinitdata-is-not-signed-by-telegram"},
 	}
 
 	fmt.Println(tma.Sign(token, params))

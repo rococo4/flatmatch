@@ -41,7 +41,6 @@ func New(validator Validator, accounts Accounts) func(http.Handler) http.Handler
 				ID:       data.User.ID,
 				Name:     entity.DisplayName(data.User.FirstName, data.User.LastName),
 				Username: data.User.Username,
-				PhotoURL: data.User.PhotoURL,
 			})
 			switch {
 			case errors.Is(err, users.ErrBanned):

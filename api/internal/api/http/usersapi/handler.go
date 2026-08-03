@@ -1,53 +1,46 @@
 package usersapi
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"flatmatch/api/internal/api/http/authmw"
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/httpx"
 )
 
+const maxPhotoBytes = 5 << 20 // 5 MiB
+
+type Accounts interface {
+	UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error)
+	SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error)
+	Submit(ctx context.Context, id uuid.UUID) (entity.User, error)
+	OwnPhotoURL(u entity.User) string
+}
+
+type Handler struct {
+	accounts Accounts
+}
+
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-type Handler struct{}
-
-func New() *Handler {
-	return &Handler{}
+func New(accounts Accounts) *Handler {
+	return &Handler{accounts: accounts}
 }
 
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/me", h.me)
+	r.Patch("/me/profile", h.updateProfile)
+	r.Post("/me/photo", h.uploadPhoto)
+	r.Post("/me/submit", h.submit)
 	return r
-}
-
-type profile struct {
-	ID          string             `json:"id"`
-	TelegramID  int64              `json:"tg_id"`
-	Name        string             `json:"name"`
-	Username    string             `json:"tg_username,omitempty"`
-	PhotoURL    string             `json:"photo_url,omitempty"`
-	Status      entity.Status      `json:"status"`
-	PhotoStatus entity.PhotoStatus `json:"photo_status"`
-	CreatedAt   time.Time          `json:"created_at"`
-}
-
-func toProfile(u entity.User) profile {
-	return profile{
-		ID:          u.ID.String(),
-		TelegramID:  u.TelegramID,
-		Name:        u.Name,
-		Username:    u.Username,
-		PhotoURL:    u.PhotoURL,
-		Status:      u.Status,
-		PhotoStatus: u.PhotoStatus,
-		CreatedAt:   u.CreatedAt,
-	}
 }
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
@@ -56,5 +49,77 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, errNoUserInContext)
 		return
 	}
-	httpx.JSON(w, r, http.StatusOK, toProfile(user))
+	h.respondSelf(w, r, user)
+}
+
+func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	var body patchRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		httpx.BadRequest(w, r, httpx.CodeBadRequest, "cannot read the request body", nil, err)
+		return
+	}
+
+	updated, err := h.accounts.UpdateProfile(r.Context(), user.ID, body.toPatch())
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	h.respondSelf(w, r, updated)
+}
+
+func (h *Handler) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes+64<<10)
+
+	file, _, err := r.FormFile("photo")
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			httpx.BadRequest(w, r, httpx.CodeTooLarge, "photo is larger than 5 MB", nil, err)
+			return
+		}
+		httpx.BadRequest(w, r, httpx.CodeBadRequest, "no file in the photo field", nil, err)
+		return
+	}
+	defer file.Close()
+
+	updated, err := h.accounts.SetPhoto(r.Context(), user.ID, file)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	h.respondSelf(w, r, updated)
+}
+
+func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	updated, err := h.accounts.Submit(r.Context(), user.ID)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	h.respondSelf(w, r, updated)
+}
+
+func (h *Handler) respondSelf(w http.ResponseWriter, r *http.Request, u entity.User) {
+	httpx.JSON(w, r, http.StatusOK, toOwnProfile(u, h.accounts.OwnPhotoURL(u)))
 }

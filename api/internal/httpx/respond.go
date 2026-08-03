@@ -15,6 +15,11 @@ const (
 	CodeForbidden    Code = "forbidden"
 	CodeNotFound     Code = "not_found"
 	CodeInternal     Code = "internal"
+
+	CodeInvalidField      Code = "invalid_field"
+	CodeProfileIncomplete Code = "profile_incomplete"
+	CodeTooLarge          Code = "too_large"
+	CodeUnsupportedMedia  Code = "unsupported_media"
 )
 
 type ErrorBody struct {
@@ -22,8 +27,9 @@ type ErrorBody struct {
 }
 
 type ErrorDetail struct {
-	Code    Code   `json:"code"`
-	Message string `json:"message"`
+	Code    Code     `json:"code"`
+	Message string   `json:"message"`
+	Fields  []string `json:"fields,omitempty"`
 }
 
 func JSON(w http.ResponseWriter, r *http.Request, status int, payload any) {
@@ -38,8 +44,15 @@ func JSON(w http.ResponseWriter, r *http.Request, status int, payload any) {
 }
 
 func Error(w http.ResponseWriter, r *http.Request, status int, code Code, message string, cause error) {
+	ErrorFields(w, r, status, code, message, nil, cause)
+}
+
+func ErrorFields(w http.ResponseWriter, r *http.Request, status int, code Code, message string, fields []string, cause error) {
 	log := logctx.From(r.Context())
 	attrs := []any{"code", code, "status", status}
+	if len(fields) > 0 {
+		attrs = append(attrs, "fields", fields)
+	}
 	if cause != nil {
 		attrs = append(attrs, "error", cause)
 	}
@@ -49,7 +62,11 @@ func Error(w http.ResponseWriter, r *http.Request, status int, code Code, messag
 		log.Info(message, attrs...)
 	}
 
-	JSON(w, r, status, ErrorBody{Error: ErrorDetail{Code: code, Message: message}})
+	JSON(w, r, status, ErrorBody{Error: ErrorDetail{Code: code, Message: message, Fields: fields}})
+}
+
+func BadRequest(w http.ResponseWriter, r *http.Request, code Code, message string, fields []string, cause error) {
+	ErrorFields(w, r, http.StatusBadRequest, code, message, fields, cause)
 }
 
 func Internal(w http.ResponseWriter, r *http.Request, cause error) {

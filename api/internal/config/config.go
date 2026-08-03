@@ -20,6 +20,11 @@ type Config struct {
 	// DatabaseURL is the Postgres connection string.
 	DatabaseURL string
 
+	// PhotoDir is where profile photos are written until object storage is set
+	// up. Temporary by design: the storage sits behind an interface, and moving
+	// to S3 replaces the implementation, not this path's users.
+	PhotoDir string
+
 	BotToken string
 	AppURL   string
 	// InitDataTTL is the maximum accepted age of initData's auth_date.
@@ -57,6 +62,7 @@ func Load() (Config, error) {
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		BotToken:    os.Getenv("BOT_TOKEN"),
 		AppURL:      os.Getenv("APP_URL"),
+		PhotoDir:    envOr("PHOTO_DIR", "./.data/photos"),
 	}
 
 	if cfg.DatabaseURL == "" {

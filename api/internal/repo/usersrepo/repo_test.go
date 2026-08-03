@@ -2,11 +2,15 @@ package usersrepo
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/AlekSi/pointer"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"flatmatch/api/internal/entity"
@@ -63,7 +67,6 @@ func TestEnsureByTelegramIDCreatesAccountOnFirstLaunch(t *testing.T) {
 		ID:       testTelegramID,
 		Name:     "Арсений",
 		Username: "arsenii",
-		PhotoURL: "https://t.me/i/userpic/320/arsenii.jpg",
 	})
 	if err != nil {
 		t.Fatalf("EnsureByTelegramID() failed: %v", err)
@@ -81,16 +84,21 @@ func TestEnsureByTelegramIDCreatesAccountOnFirstLaunch(t *testing.T) {
 	if got, want := user.Username, "arsenii"; got != want {
 		t.Errorf("Username = %q, want %q", got, want)
 	}
-	if got, want := user.PhotoURL, "https://t.me/i/userpic/320/arsenii.jpg"; got != want {
-		t.Errorf("PhotoURL = %q, want %q", got, want)
+	// Nothing has been uploaded yet: §4 has people choose a photo themselves,
+	// and a Telegram avatar is never substituted for one.
+	if user.PhotoKey != "" {
+		t.Errorf("PhotoKey = %q, want it empty on a fresh account", user.PhotoKey)
 	}
 	// A fresh account has not answered a single question yet — it is a draft,
 	// not something waiting for a moderator (§4, §5).
 	if got, want := user.Status, entity.StatusDraft; got != want {
 		t.Errorf("Status = %q, want %q", got, want)
 	}
-	if got, want := user.PhotoStatus, entity.PhotoPending; got != want {
+	if got, want := user.PhotoStatus, entity.ModerationPending; got != want {
 		t.Errorf("PhotoStatus = %q, want %q", got, want)
+	}
+	if got, want := user.OnboardingStep, 0; got != want {
+		t.Errorf("OnboardingStep = %d, want %d", got, want)
 	}
 	if user.Visible() {
 		t.Error("a pending account must not be visible")
@@ -155,27 +163,183 @@ func TestEnsureByTelegramIDStoresAbsentFieldsAsNull(t *testing.T) {
 	repo := New(pool)
 	ctx := t.Context()
 
-	// Not every Telegram account has a @username or a photo.
+	// Not every Telegram account has a @username.
 	user, err := repo.EnsureByTelegramID(ctx, entity.TelegramIdentity{ID: testTelegramID, Name: "Без ника"})
 	if err != nil {
 		t.Fatalf("EnsureByTelegramID() failed: %v", err)
 	}
-	if user.Username != "" || user.PhotoURL != "" {
-		t.Errorf("NULL did not come back as \"\": username=%q photo=%q", user.Username, user.PhotoURL)
+	if user.Username != "" {
+		t.Errorf("NULL did not come back as \"\": username=%q", user.Username)
 	}
 
 	// "" must reach the column as NULL, not as an empty string: a UNIQUE index
 	// on tg_username in a later step would otherwise treat every account
 	// without a username as a duplicate.
-	var usernameIsNull, photoIsNull bool
+	var usernameIsNull bool
 	err = pool.QueryRow(ctx,
-		`SELECT tg_username IS NULL, photo_url IS NULL FROM users WHERE tg_id = $1`,
+		`SELECT tg_username IS NULL FROM users WHERE tg_id = $1`,
 		testTelegramID,
-	).Scan(&usernameIsNull, &photoIsNull)
+	).Scan(&usernameIsNull)
 	if err != nil {
 		t.Fatalf("read back nullability: %v", err)
 	}
-	if !usernameIsNull || !photoIsNull {
-		t.Errorf("empty values were stored as '' instead of NULL: username null=%v photo null=%v", usernameIsNull, photoIsNull)
+	if !usernameIsNull {
+		t.Error("an empty username was stored as '' instead of NULL")
+	}
+}
+
+// seedUser creates the account the profile tests then modify.
+func seedUser(t *testing.T, repo *Repo) entity.User {
+	t.Helper()
+
+	user, err := repo.EnsureByTelegramID(t.Context(), entity.TelegramIdentity{
+		ID: testTelegramID, Name: "Арсений",
+	})
+	if err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	return user
+}
+
+func TestUpdateProfileLeavesUnmentionedAnswersAlone(t *testing.T) {
+	// The point of COALESCE: a request carrying one screen's answer must not
+	// blank out the eleven screens already filled in.
+	repo := New(newTestPool(t))
+	user := seedUser(t, repo)
+	ctx := t.Context()
+
+	if _, err := repo.UpdateProfile(ctx, user.ID, entity.ProfilePatch{
+		Schedule:       pointer.To(entity.ScheduleOwl),
+		OnboardingStep: pointer.To(2),
+	}); err != nil {
+		t.Fatalf("first UpdateProfile() failed: %v", err)
+	}
+
+	got, err := repo.UpdateProfile(ctx, user.ID, entity.ProfilePatch{
+		Smoking:        pointer.To(entity.SmokingNo),
+		OnboardingStep: pointer.To(3),
+	})
+	if err != nil {
+		t.Fatalf("second UpdateProfile() failed: %v", err)
+	}
+
+	if got.Profile.Schedule != entity.ScheduleOwl {
+		t.Errorf("Schedule = %q, want it left at %q", got.Profile.Schedule, entity.ScheduleOwl)
+	}
+	if got.Profile.Smoking != entity.SmokingNo {
+		t.Errorf("Smoking = %q, want %q", got.Profile.Smoking, entity.SmokingNo)
+	}
+	if got.OnboardingStep != 3 {
+		t.Errorf("OnboardingStep = %d, want 3", got.OnboardingStep)
+	}
+}
+
+func TestUpdateProfileSendsRewrittenAboutBackToModeration(t *testing.T) {
+	pool := newTestPool(t)
+	repo := New(pool)
+	user := seedUser(t, repo)
+	ctx := t.Context()
+
+	// Approved once…
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET about = 'Старый текст', about_status = 'ok' WHERE id = $1`, user.ID,
+	); err != nil {
+		t.Fatalf("approve about: %v", err)
+	}
+
+	// …then rewritten, which has to put it back in the queue (§5).
+	got, err := repo.UpdateProfile(ctx, user.ID, entity.ProfilePatch{
+		About: pointer.To("Новый текст"),
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile() failed: %v", err)
+	}
+	if got.AboutStatus != entity.ModerationPending {
+		t.Errorf("AboutStatus = %q, want %q", got.AboutStatus, entity.ModerationPending)
+	}
+
+	// A patch that does not touch «о себе» must leave the verdict where it is,
+	// or every answered question would drag the text back through moderation.
+	if _, err := pool.Exec(ctx, `UPDATE users SET about_status = 'ok' WHERE id = $1`, user.ID); err != nil {
+		t.Fatalf("re-approve about: %v", err)
+	}
+	got, err = repo.UpdateProfile(ctx, user.ID, entity.ProfilePatch{
+		Noise: pointer.To(entity.NoiseNormal),
+	})
+	if err != nil {
+		t.Fatalf("second UpdateProfile() failed: %v", err)
+	}
+	if got.AboutStatus != entity.ModerationOK {
+		t.Errorf("AboutStatus = %q, want it left at %q", got.AboutStatus, entity.ModerationOK)
+	}
+}
+
+func TestSetPhotoQueuesTheNewFile(t *testing.T) {
+	pool := newTestPool(t)
+	repo := New(pool)
+	user := seedUser(t, repo)
+	ctx := t.Context()
+
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET photo_key = 'photos/old.jpg', photo_status = 'ok' WHERE id = $1`, user.ID,
+	); err != nil {
+		t.Fatalf("approve photo: %v", err)
+	}
+
+	got, err := repo.SetPhoto(ctx, user.ID, "photos/new.jpg")
+	if err != nil {
+		t.Fatalf("SetPhoto() failed: %v", err)
+	}
+	if got.PhotoKey != "photos/new.jpg" {
+		t.Errorf("PhotoKey = %q, want the new one", got.PhotoKey)
+	}
+	// Replacing an approved photo has to un-approve it, or an unreviewed face
+	// would go straight into the pools.
+	if got.PhotoStatus != entity.ModerationPending {
+		t.Errorf("PhotoStatus = %q, want %q", got.PhotoStatus, entity.ModerationPending)
+	}
+	if got.PhotoApproved() {
+		t.Error("a freshly uploaded photo must not count as approved")
+	}
+}
+
+func TestApprovedPhotoCannotExistWithoutAFile(t *testing.T) {
+	// The photo_ok_needs_a_file CHECK. Without it a row could claim a moderator
+	// cleared a photo that is not there, and the app would render a placeholder
+	// as if it had been checked.
+	pool := newTestPool(t)
+	user := seedUser(t, New(pool))
+
+	_, err := pool.Exec(t.Context(),
+		`UPDATE users SET photo_status = 'ok', photo_key = NULL WHERE id = $1`, user.ID)
+	if err == nil {
+		t.Fatal("the database accepted an approved photo with no file")
+	}
+	if !strings.Contains(err.Error(), "photo_ok_needs_a_file") {
+		t.Errorf("rejected by something else: %v", err)
+	}
+}
+
+func TestByIDReportsAMissingUser(t *testing.T) {
+	repo := New(newTestPool(t))
+
+	if _, err := repo.ByID(t.Context(), uuid.New()); !errors.Is(err, entity.ErrNotFound) {
+		t.Fatalf("ByID() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetStatusMovesADraftToModeration(t *testing.T) {
+	repo := New(newTestPool(t))
+	user := seedUser(t, repo)
+
+	got, err := repo.SetStatus(t.Context(), user.ID, entity.StatusPending)
+	if err != nil {
+		t.Fatalf("SetStatus() failed: %v", err)
+	}
+	if got.Status != entity.StatusPending {
+		t.Errorf("Status = %q, want %q", got.Status, entity.StatusPending)
+	}
+	if got.Visible() {
+		t.Error("an account waiting for a moderator must not be visible")
 	}
 }

@@ -65,7 +65,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           router(cfg, log, pool, validator, userService),
+		Handler:           router(log, pool, validator, userService),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -119,7 +119,6 @@ func run() error {
 }
 
 func router(
-	cfg config.Config,
 	log *slog.Logger,
 	pool httpx.Pinger,
 	validator authmw.Validator,
@@ -131,7 +130,6 @@ func router(
 	r.Use(middleware.RealIP)
 	r.Use(httpx.RequestLogger(log))
 	r.Use(middleware.Recoverer)
-	r.Use(httpx.CORS(cfg.CORSOrigins))
 
 	r.Get("/healthz", httpx.Health(pool))
 

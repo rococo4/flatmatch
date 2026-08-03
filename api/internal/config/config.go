@@ -16,10 +16,6 @@ import (
 type Config struct {
 	APIAddr  string
 	LogLevel slog.Level
-	// CORSOrigins lists origins allowed to call the API from a browser.
-	// Empty means "no cross-origin requests", which is the production case:
-	// Caddy serves the front-end and the API from a single origin.
-	CORSOrigins []string
 
 	// DatabaseURL is the Postgres connection string.
 	DatabaseURL string
@@ -61,7 +57,6 @@ func Load() (Config, error) {
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		BotToken:    os.Getenv("BOT_TOKEN"),
 		AppURL:      os.Getenv("APP_URL"),
-		CORSOrigins: splitList(os.Getenv("CORS_ORIGINS")),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -120,16 +115,6 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func splitList(raw string) []string {
-	var out []string
-	for _, part := range strings.Split(raw, ",") {
-		if part = strings.TrimSpace(part); part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
 }
 
 func parseLogLevel(raw string) (slog.Level, error) {

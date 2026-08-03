@@ -255,7 +255,6 @@ goose postgres '...' down
 | `TMA_INITDATA_TTL`    | нет         | `24h`        | Максимальный возраст initData                                 |
 | `API_ADDR`            | нет         | `:8080`      | Адрес прослушивания                                           |
 | `LOG_LEVEL`           | нет         | `info`       | `debug` / `info` / `warn` / `error`                           |
-| `CORS_ORIGINS`        | нет         | пусто        | Только для dev-сервера Vite; в проде один origin              |
 | `MODERATION_CHAT_ID`  | нет         | —            | Чат модерации (§5), заготовка                                 |
 | `DOMAIN`              | нет         | `localhost`  | Домен для Caddy, только при деплое                            |
 | `POSTGRES_*`          | нет         | `flatmatch`  | Учётные данные Postgres в compose                             |

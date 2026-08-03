@@ -52,9 +52,6 @@ services:
       TMA_INITDATA_TTL: ${TMA_INITDATA_TTL:-24h}
       MODERATION_CHAT_ID: ${MODERATION_CHAT_ID:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Empty on purpose: Caddy serves the front-end from the same origin, so
-      # there is no cross-origin request to allow.
-      CORS_ORIGINS: ""
     expose:
       - "8080"
 

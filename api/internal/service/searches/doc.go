@@ -4,8 +4,9 @@
 //
 // A search is not a card and is never published: it puts its author into every
 // zone pool whose zone intersects theirs, and it feeds matching and pushes.
-// At most 3 active per person, and one person's active zones may not overlap —
-// checked against the zone directory by station sets.
+// At most 3 active per person — the only limit. One person's zones MAY overlap
+// or even coincide (§2.1): «Хамовники» and «красная ветка» are two honest
+// different intents; the pool shows such a person once, by their best verdict.
 //
 // Also owns the lifecycle from §3: TTL «ещё ищешь?», pause on silence,
 // close-with-a-reason where «нашёл здесь» is the product's headline metric, and

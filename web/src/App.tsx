@@ -94,6 +94,15 @@ type Loading =
 type FeedState = {
   mode: 'entry' | 'form' | 'results';
   draft: SearchDraft;
+  /**
+   * Черновик показанной выдачи, снятый на время открытой формы просмотра.
+   *
+   * Форма правит `draft` на каждую нажатую цифру, а брошенная форма не должна
+   * оставлять после себя чужие параметры: чипы над выдачей и кнопка «Войти в
+   * пул» обязаны описывать именно то, что на экране. У правки поиска своя
+   * копия черновика, а у просмотра — этот снимок.
+   */
+  shownDraft: SearchDraft | null;
   data: FeedResponse | null;
   busy: boolean;
   error: string | null;
@@ -128,6 +137,7 @@ type FormMode =
 const EMPTY_FEED: FeedState = {
   mode: 'entry',
   draft: EMPTY_DRAFT,
+  shownDraft: null,
   data: null,
   busy: false,
   error: null,
@@ -228,6 +238,11 @@ export function App() {
     setView('tab');
     setFeed((f) => ({
       ...f,
+      // Форму бросили — возвращаем черновик показанной выдачи. Иначе чипы
+      // рассказывали бы про ненабранные параметры, а «Войти в пул» молча
+      // сохранил бы поиск, которого человек не видел.
+      draft: f.shownDraft ?? f.draft,
+      shownDraft: null,
       mode: f.data ? 'results' : 'entry',
       busy: false,
       error: null,
@@ -279,7 +294,16 @@ export function App() {
 
   /** Форма параметров просмотра: «Найти» с входа и «Изменить параметры» с выдачи. */
   const openLookForm = (draft: SearchDraft) => {
-    setFeed((f) => ({ ...f, mode: 'form', draft, error: null, invalidFields: [] }));
+    setFeed((f) => ({
+      ...f,
+      mode: 'form',
+      draft,
+      // Снимок на случай, если форму бросят: «+ поиск» и «Найти» приходят с
+      // пустым черновиком, а выдача на экране осталась прежней.
+      shownDraft: f.draft,
+      error: null,
+      invalidFields: [],
+    }));
     setFormMode({ kind: 'look' });
     setTab('feed');
     setView('searchForm');
@@ -294,6 +318,9 @@ export function App() {
         ...f,
         mode: 'results',
         data,
+        // Показали — этот черновик и есть теперь черновик выдачи, откатывать
+        // больше не к чему.
+        shownDraft: null,
         busy: false,
         error: null,
         invalidFields: [],
@@ -339,6 +366,9 @@ export function App() {
         setFeed((f) => ({
           ...f,
           mode: 'form',
+          // Форма открылась не сама — снимок нужен ей так же: правки в ней
+          // могут кончиться кнопкой «назад».
+          shownDraft: f.shownDraft ?? f.draft,
           busy: false,
           error: err.message,
           invalidFields: err.fields,

@@ -17,7 +17,7 @@ export type SavedSearch = {
   peopleCount: number; // «6 ищут»
   fullMatchCount: number; // «с 3 полное совпадение»
   pointsLine: string; // «4 квартиры и 1 комната под эти параметры»; пусто — строки нет
-  newCount?: number; // бейдж «1 новый»
+  newCount?: number; // бейдж «1 новый» / «M новых»
 };
 
 /** Закрытый или поставленный на паузу поиск. Возвращается одним тапом (§3). */
@@ -299,7 +299,11 @@ export function MySearchesScreen({
             <article key={s.id} style={L.plainCard}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={S.title}>{s.zone}</span>
-                {!!s.newCount && <Badge tone="search">{s.newCount} новый</Badge>}
+                {!!s.newCount && (
+                  <Badge tone="search">
+                    {s.newCount} {plural(s.newCount, 'новый', 'новых', 'новых')}
+                  </Badge>
+                )}
                 <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
                   {s.since}
                 </span>

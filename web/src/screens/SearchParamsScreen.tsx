@@ -8,7 +8,7 @@
    Набор фильтров зафиксирован (§2.1) и не расширяется. Чипов «что уже есть»
    здесь нет намеренно: сервер не читает их из фильтров ленты, и поиск
    перестал бы быть снапшотом того, что человек видел. */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   backButton,
@@ -262,6 +262,14 @@ export function SearchParamsScreen({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Свежий onBack в ref, а не в зависимостях подписки: вызывающий передаёт
+  // inline-стрелку, и подписка иначе пересобиралась бы на каждый рендер —
+  // то есть на каждую цифру, набранную в бюджете.
+  const onBackRef = useRef(onBack);
+  useEffect(() => {
+    onBackRef.current = onBack;
+  }, [onBack]);
+
   // Родная кнопка «назад» Telegram. При открытом пикере она закрывает его, а
   // не уносит с экрана: иначе тап по системной стрелке терял набранную форму.
   useEffect(() => {
@@ -273,9 +281,21 @@ export function SearchParamsScreen({
     showBackButton();
     return onBackButtonClick(() => {
       if (pickerOpen) setPickerOpen(false);
-      else onBack();
+      else onBackRef.current();
     });
-  }, [pickerOpen, onBack]);
+  }, [pickerOpen]);
+
+  // Гасим стрелку при уходе с экрана — отдельным эффектом на монтирование, а
+  // не в cleanup подписки выше: та пересобирается на каждое открытие пикера, и
+  // стрелка мигала бы. Прятать её больше некому: из всех экранов кнопкой
+  // управляют только онбординг и эта форма, поэтому после «Показать» она
+  // осталась бы висеть на ленте и табах мёртвой кнопкой.
+  useEffect(
+    () => () => {
+      if (hideBackButton.isAvailable()) hideBackButton();
+    },
+    [],
+  );
 
   const zone = useMemo(
     () => (value.zoneId ? (zones ?? []).find((z) => z.id === value.zoneId) ?? null : null),
@@ -316,9 +336,9 @@ export function SearchParamsScreen({
             </span>
             {zone ? (
               <span style={{ minWidth: 0 }}>
-                <span style={{ fontSize: 16, fontWeight: 590 }}>{zone.name}</span>{' '}
+                <span style={{ fontSize: 16, fontWeight: 590 }}>{zone.name}</span>
                 <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
-                  {ZONE_KIND_LABEL[zone.kind]}
+                  {` · ${ZONE_KIND_LABEL[zone.kind]}`}
                 </span>
               </span>
             ) : (

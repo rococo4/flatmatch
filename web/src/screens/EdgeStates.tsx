@@ -3,7 +3,7 @@
    2) слоты поисков заняты
    3) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
    4) гейт второго «живу» в форме «к себе» */
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { CloseReason } from '../api/client';
 import { plural } from '../api/format';
 import { S } from '../ui/primitives';
@@ -62,7 +62,25 @@ const E = {
     background: 'var(--warning-bg)',
     color: 'var(--warning-fg)',
   } as CSSProperties,
+  scrim: {
+    // Шторка обязана лежать поверх всего, включая таб-бар: иначе кнопка,
+    // которая её открыла, выглядит мёртвой — шторка уезжает в конец потока
+    // и прячется под баром.
+    position: 'fixed',
+    inset: 0,
+    zIndex: 20,
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    padding: 10,
+    paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+    background: 'rgba(0, 0, 0, 0.4)',
+  } as CSSProperties,
   sheet: {
+    width: '100%',
+    // Тот же потолок ширины, что у экранов: на десктопе шторка во всю
+    // ширину монитора выглядит сломанной.
+    maxWidth: 520,
     borderRadius: 16,
     padding: '16px 14px 14px',
     background: 'var(--card-bg)',
@@ -233,6 +251,24 @@ export function SlotsFullPromo({
   );
 }
 
+/**
+ * Общая оболочка шторок: затемнение на весь экран и панель снизу.
+ *
+ * Одна на все три шторки намеренно: они отличаются содержимым, а не поведением,
+ * и по-разному всплывать не должны. Тап по затемнению — отказ (у каждой шторки
+ * он свой и всегда безопасный: «остаться», «отмена», «не отвечать»).
+ */
+function SheetShell({ onDismiss, children }: { onDismiss?: () => void; children: ReactNode }) {
+  return (
+    <div style={E.scrim} onClick={onDismiss}>
+      {/* Тап внутри панели не должен закрывать шторку. */}
+      <div style={{ ...E.sheet, gap: 14 }} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /** Выход из квартирного пула. Лайки не сгорают — про лимит здесь ничего не говорим. */
 export function LeavePoolSheet({
   pointTitle,
@@ -245,7 +281,7 @@ export function LeavePoolSheet({
   onLeave?: () => void;
 }) {
   return (
-    <div style={{ ...E.sheet, gap: 14 }}>
+    <SheetShell onDismiss={onStay}>
       <span style={E.grabber} />
       <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
         Выйти из пула {pointTitle}?
@@ -258,7 +294,7 @@ export function LeavePoolSheet({
           Выйти
         </button>
       </div>
-    </div>
+    </SheetShell>
   );
 }
 
@@ -283,7 +319,7 @@ export function CloseSearchSheet({
   onCancel?: () => void;
 }) {
   return (
-    <div style={{ ...E.sheet, gap: 14 }}>
+    <SheetShell onDismiss={onCancel}>
       <span style={E.grabber} />
       <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
         Почему закрываешь поиск?
@@ -298,7 +334,7 @@ export function CloseSearchSheet({
       <button type="button" style={E.stay} onClick={onCancel}>
         Отмена
       </button>
-    </div>
+    </SheetShell>
   );
 }
 
@@ -307,12 +343,15 @@ export function CloseSearchSheet({
 export function StillLiveSheet({
   onYes,
   onRented,
+  onDismiss,
 }: {
   onYes?: () => void;
   onRented?: () => void;
+  /** Тап мимо шторки: не ответить — нормальный исход, спрашиваем один раз. */
+  onDismiss?: () => void;
 }) {
   return (
-    <div style={{ ...E.sheet, gap: 14 }}>
+    <SheetShell onDismiss={onDismiss}>
       <span style={E.grabber} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px' }}>
@@ -366,7 +405,7 @@ export function StillLiveSheet({
           Уже сдана
         </button>
       </div>
-    </div>
+    </SheetShell>
   );
 }
 

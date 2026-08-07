@@ -711,7 +711,11 @@ export function App() {
         />
       )}
       {sheet === 'stillLive' && (
-        <StillLiveSheet onYes={() => setSheet(null)} onRented={() => setSheet(null)} />
+        <StillLiveSheet
+          onYes={() => setSheet(null)}
+          onRented={() => setSheet(null)}
+          onDismiss={() => setSheet(null)}
+        />
       )}
     </div>
   );
@@ -735,8 +739,13 @@ const OCCUPATIONS: Record<string, string> = {
 function buildPromo(p: FeedPromo, active: SearchResponse[], slotsFull: boolean): PromoState {
   const zone = { zone: p.zone.name, zoneIn: p.zone.name_in, zoneGen: p.zone.name_gen };
   if (p.my_search_id) {
-    // Слот — номер этого поиска среди активных, а не «сколько занято».
-    const at = active.findIndex((s) => s.id === p.my_search_id);
+    // Слот — номер этого поиска среди активных по старшинству, а не позиция в
+    // списке: сервер отдаёт новые первыми, и по нему каждый только что
+    // сохранённый поиск оказывался бы «слотом 1». Первым занят тот слот,
+    // который заняли раньше.
+    const at = [...active]
+      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+      .findIndex((s) => s.id === p.my_search_id);
     return {
       state: 'saved',
       ...zone,

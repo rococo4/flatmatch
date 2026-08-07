@@ -3,6 +3,7 @@
    вердикт-чипы и три секции ранжирования, а не отсечка. */
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { plural } from '../api/format';
 import { Avatar, Badge, S, VerdictChip, type Verdict } from '../ui/primitives';
 
 export type PoolPerson = {
@@ -94,7 +95,9 @@ function PersonMiniCard({ p, onOpen }: { p: PoolPerson; onOpen?: (id: string) =>
           {p.verifiedBadge && <Badge tone="accent">{p.verifiedBadge}</Badge>}
         </div>
         <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{p.habits}</span>
-        <span style={{ fontSize: 13, fontWeight: 510 }}>{p.matches} совпадений анкеты</span>
+        <span style={{ fontSize: 13, fontWeight: 510 }}>
+          {p.matches} {plural(p.matches, 'совпадение', 'совпадения', 'совпадений')} анкеты
+        </span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
           {p.verdicts.map((v) => (
             <VerdictChip key={v.label} verdict={v.verdict}>

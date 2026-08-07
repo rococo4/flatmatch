@@ -2,6 +2,7 @@
    Розовая подложка — предложение войти; зелёная — ты уже в пуле.
    Кнопки «Сохранить поиск» в панели чипов нет by design. */
 import type { CSSProperties } from 'react';
+import { plural } from '../api/format';
 import { AvatarStack, LimitChip, S } from './primitives';
 
 export type PromoState =
@@ -134,11 +135,7 @@ export function PoolPromoBlock({
       {data.state === 'saved' ? (
         <button type="button" style={{ ...S.secondaryButton, background: 'var(--card-bg)' }} onClick={onOpenPool}>
           Смотреть пул · {data.peopleCount}{' '}
-          {data.peopleCount % 10 === 1 && data.peopleCount % 100 !== 11
-            ? 'человек'
-            : [2, 3, 4].includes(data.peopleCount % 10) && ![12, 13, 14].includes(data.peopleCount % 100)
-              ? 'человека'
-              : 'человек'}
+          {plural(data.peopleCount, 'человек', 'человека', 'человек')}
         </button>
       ) : data.state === 'full' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>

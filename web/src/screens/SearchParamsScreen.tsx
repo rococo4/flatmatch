@@ -240,6 +240,7 @@ export function paramsToDraft(s: SearchResponse): SearchDraft {
 export function SearchParamsScreen({
   mode,
   zones,
+  zoneNameFallback,
   value,
   onChange,
   onSubmit,
@@ -251,6 +252,14 @@ export function SearchParamsScreen({
   mode: 'look' | 'edit';
   /** null — справочник ещё грузится; пикер об этом честно скажет. */
   zones: Zone[] | null;
+  /**
+   * Имя зоны из самого поиска — на время, пока справочник грузится.
+   *
+   * Без него правка сохранённого поиска открывалась бы с плашкой «Выбери
+   * район, станцию или ветку» поверх уже выбранной зоны: id известен, а имя
+   * живёт только в справочнике.
+   */
+  zoneNameFallback?: string;
   value: SearchDraft;
   onChange: (next: SearchDraft) => void;
   onSubmit: () => void;
@@ -341,6 +350,9 @@ export function SearchParamsScreen({
                   {` · ${ZONE_KIND_LABEL[zone.kind]}`}
                 </span>
               </span>
+            ) : value.zoneId && zoneNameFallback ? (
+              // Вид зоны не показываем: в поиске его нет, а угадывать нельзя.
+              <span style={{ fontSize: 16, fontWeight: 590, minWidth: 0 }}>{zoneNameFallback}</span>
             ) : (
               <span style={{ fontSize: 15, color: 'var(--tg-theme-hint-color)' }}>
                 Выбери район, станцию или ветку

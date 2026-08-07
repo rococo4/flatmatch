@@ -4,6 +4,8 @@
    3) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
    4) гейт второго «живу» в форме «к себе» */
 import type { CSSProperties } from 'react';
+import type { CloseReason } from '../api/client';
+import { plural } from '../api/format';
 import { S } from '../ui/primitives';
 
 const E = {
@@ -88,6 +90,19 @@ const E = {
     color: 'var(--tg-theme-accent-text-color)',
     cursor: 'pointer',
   } as CSSProperties,
+  sheetRow: {
+    width: '100%',
+    padding: '13px 14px',
+    border: 'none',
+    borderRadius: 11,
+    background: 'var(--app-bg)',
+    font: 'inherit',
+    fontSize: 15,
+    fontWeight: 590,
+    color: 'var(--tg-theme-text-color)',
+    textAlign: 'left',
+    cursor: 'pointer',
+  } as CSSProperties,
   leave: {
     flex: '1 1 0',
     padding: 13,
@@ -160,6 +175,7 @@ export function EmptyZonePromo({
 /** Слоты заняты: вход недоступен, зовём закрыть один поиск. */
 export function SlotsFullPromo({
   zone,
+  zoneIn,
   zoneGen,
   peopleCount,
   fullMatchCount,
@@ -167,6 +183,8 @@ export function SlotsFullPromo({
   onOpenSearches,
 }: {
   zone: string;
+  /** Уже с предлогом: «в Хамовниках» / «на красной ветке» / «у метро Сокол». */
+  zoneIn: string;
   zoneGen: string;
   peopleCount: number;
   fullMatchCount: number;
@@ -181,7 +199,7 @@ export function SlotsFullPromo({
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={E.headline}>
-          {peopleCount} человека ищут в {zone === 'Сокол' ? 'Соколе' : zone}
+          {peopleCount} {plural(peopleCount, 'человек', 'человека', 'человек')} ищут {zoneIn}
         </span>
         <span style={S.subtitle}>с {fullMatchCount} полное совпадение по твоим параметрам</span>
       </div>
@@ -240,6 +258,46 @@ export function LeavePoolSheet({
           Выйти
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Причины закрытия поиска (§3). Порядок не менять: «нашёл здесь» — ГЛАВНАЯ МЕТРИКА. */
+const CLOSE_REASONS: { reason: CloseReason; label: string }[] = [
+  { reason: 'found_here', label: 'Нашёл здесь' },
+  { reason: 'found_elsewhere', label: 'Нашёл в другом месте' },
+  { reason: 'changed_mind', label: 'Передумал' },
+];
+
+/**
+ * Закрытие поиска — только с причиной.
+ *
+ * Причина обязательна не ради статистики вообще, а ради одной цифры: «нашёл
+ * здесь» и есть метрика успеха продукта, поэтому тихого «просто закрыть» тут нет.
+ */
+export function CloseSearchSheet({
+  onPick,
+  onCancel,
+}: {
+  onPick?: (reason: CloseReason) => void;
+  onCancel?: () => void;
+}) {
+  return (
+    <div style={{ ...E.sheet, gap: 14 }}>
+      <span style={E.grabber} />
+      <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
+        Почему закрываешь поиск?
+      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {CLOSE_REASONS.map((r) => (
+          <button key={r.reason} type="button" style={E.sheetRow} onClick={() => onPick?.(r.reason)}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <button type="button" style={E.stay} onClick={onCancel}>
+        Отмена
+      </button>
     </div>
   );
 }

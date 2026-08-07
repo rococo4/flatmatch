@@ -6,7 +6,14 @@
    у себя.
 
    Чистые функции, React здесь не живёт. */
-import type { PoolChip, PoolPersonDTO, PoolSectionDTO, SearchParamsNoZone, Term } from './client';
+import type {
+  CloseReason,
+  PoolChip,
+  PoolPersonDTO,
+  PoolSectionDTO,
+  SearchParamsNoZone,
+  Term,
+} from './client';
 import type { Verdict } from '../ui/primitives';
 
 /**
@@ -54,6 +61,13 @@ const PETS_OWN_LABEL: Record<PoolPersonDTO['pets_own'], string> = {
   cat: 'кот',
   dog: 'собака',
   other: 'есть питомец',
+};
+
+/** Метка причины у карточки в архиве. Строчные — это подпись, а не кнопка. */
+const CLOSE_REASON_LABEL: Record<CloseReason, string> = {
+  found_here: 'нашёл здесь',
+  found_elsewhere: 'нашёл в другом месте',
+  changed_mind: 'передумал',
 };
 
 const SECTION_LABEL: Record<PoolSectionDTO['id'], string> = {
@@ -131,6 +145,16 @@ export function habitsLine(p: PoolPersonDTO): string {
 /** Заголовок секции пула: «СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ · 3». */
 export function sectionTitle(id: PoolSectionDTO['id'], n: number): string {
   return `${SECTION_LABEL[id]} · ${n}`;
+}
+
+/**
+ * Почему поиск в архиве: «нашёл здесь» / «нашёл в другом месте» / «передумал».
+ *
+ * Пустая строка у поиска без причины — это пауза по молчанию (§3), а не
+ * закрытие: выдумывать ей причину нельзя.
+ */
+export function closeReasonLabel(reason?: CloseReason): string {
+  return reason ? CLOSE_REASON_LABEL[reason] : '';
 }
 
 /** Русская плюрализация счётчиков: 1 человек / 2 человека / 5 человек. */

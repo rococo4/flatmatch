@@ -5,11 +5,19 @@ import type { CSSProperties } from 'react';
 import { plural } from '../api/format';
 import { AvatarStack, LimitChip, S } from './primitives';
 
+/**
+ * Четыре состояния блока (§6).
+ *
+ * `zoneIn` есть во всех четырёх, включая saved: склонения приходят с сервера
+ * готовыми, и разный их набор по вариантам только плодил бы ветки у
+ * вызывающего. `avatars` — URL фотографий, а не имена (в стек попадают
+ * только люди с одобренным фото).
+ */
 export type PromoState =
   | { state: 'offer'; zone: string; zoneIn: string; zoneGen: string; peopleCount: number; fullMatchCount: number; avatars: string[]; slot: number; slotsTotal: number }
   | { state: 'empty'; zone: string; zoneIn: string; zoneGen: string; peopleCount: 0; slot: number; slotsTotal: number }
   | { state: 'full'; zone: string; zoneIn: string; zoneGen: string; peopleCount: number; fullMatchCount: number; avatars: string[]; slotsTotal: number }
-  | { state: 'saved'; zone: string; zoneGen: string; peopleCount: number; fullMatchCount: number; avatars: string[]; slot: number; slotsTotal: number };
+  | { state: 'saved'; zone: string; zoneIn: string; zoneGen: string; peopleCount: number; fullMatchCount: number; avatars: string[]; slot: number; slotsTotal: number };
 
 const P = {
   card: (saved: boolean): CSSProperties => ({
@@ -81,12 +89,12 @@ export function PoolPromoBlock({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* Предлог не дописываем: name_in приходит с ним («в Хамовниках»,
+            «на красной ветке», «у метро Сокол»). */}
         <span style={P.headline}>
           {data.state === 'saved'
             ? `Ты в пуле ${data.zoneGen} · поиск сохранён`
-            : data.state === 'empty'
-              ? `${data.peopleCount} человек ищут в ${data.zoneIn}`
-              : `${data.peopleCount} человек ищут в ${data.zoneIn}`}
+            : `${data.peopleCount} ${plural(data.peopleCount, 'человек', 'человека', 'человек')} ищут ${data.zoneIn}`}
         </span>
         <span style={S.subtitle}>
           {data.state === 'saved'
@@ -116,7 +124,7 @@ export function PoolPromoBlock({
             ＋
           </span>
         ) : (
-          <AvatarStack names={data.avatars} total={data.peopleCount} size={36} />
+          <AvatarStack urls={data.avatars} total={data.peopleCount} size={36} />
         )}
         <span
           style={{

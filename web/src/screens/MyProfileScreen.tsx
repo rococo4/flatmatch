@@ -1,7 +1,6 @@
 /* Профиль свой — §6. Статус анкеты, вход в «Тебя лайкнули», верификация, мэтчи. */
 import type { CSSProperties } from 'react';
 import { Avatar, S } from '../ui/primitives';
-import { TabBar } from '../ui/TabBar';
 
 export type MyMatch = {
   id: string;
@@ -241,8 +240,6 @@ export function MyProfileScreen({
           ))}
         </div>
       </div>
-
-      <TabBar active="profile" unreadLikes={incomingLikes} />
     </div>
   );
 }

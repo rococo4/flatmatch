@@ -4,7 +4,6 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Avatar, Badge, S, VerdictChip, type Verdict } from '../ui/primitives';
-import { TabBar } from '../ui/TabBar';
 
 export type PoolPerson = {
   id: string;
@@ -14,6 +13,8 @@ export type PoolPerson = {
   habits: string; // «сова · не курю · без животных»
   matches: number; // «N совпадений анкеты»
   verdicts: { verdict: Verdict; label: string }[];
+  /** Пусто = фото не одобрено: вместо него инициалы, как требует §5. */
+  photoUrl?: string;
 };
 
 export type PoolSection = {
@@ -84,7 +85,7 @@ const L = {
 function PersonMiniCard({ p, onOpen }: { p: PoolPerson; onOpen?: (id: string) => void }) {
   return (
     <div style={L.personCard} onClick={() => onOpen?.(p.id)}>
-      <Avatar name={p.name} size={48} />
+      <Avatar name={p.name} size={48} src={p.photoUrl} />
       <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>
@@ -131,26 +132,63 @@ function Section({ s, onOpen }: { s: PoolSection; onOpen?: (id: string) => void 
   );
 }
 
+/**
+ * Подсказка плотности — один компонент на три состояния (§6).
+ *
+ * Молчит в норме: совет «уточни параметры» на десяти людях был бы вредным,
+ * а «подпишись первым» при непустом пуле — ложью.
+ */
+function DensityHint({ total, matched }: { total: number; matched: number }) {
+  const text =
+    total === 0
+      ? 'подпишись первым — пришлём пуш'
+      : matched > 50
+        ? 'уточни бюджет или сузь зону — список станет точнее'
+        : null;
+  if (!text) return null;
+  return (
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: 10,
+        background: 'var(--chip-bg)',
+        fontSize: 13,
+        lineHeight: 1.4,
+        color: 'var(--tg-theme-subtitle-text-color)',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 export function ZonePoolScreen({
   zone,
   zoneGen,
+  saved,
   sections,
   pointsCount,
-  unreadLikes,
   onBack,
   onOpenPerson,
   onOpenPoints,
 }: {
   zone: string; // «Хамовники»
   zoneGen: string; // «Хамовников»
+  /**
+   * Есть ли у смотрящего поиск ровно этой зоны. Ранжирование довольствуется
+   * поиском соседней пересекающейся зоны, поэтому чипы бывают и без подписки —
+   * и плашка «Ты в пуле» тогда соврала бы.
+   */
+  saved: boolean;
   sections: PoolSection[];
   /** Сколько точек подходит под те же параметры. */
   pointsCount?: number;
-  unreadLikes: number;
   onBack?: () => void;
   onOpenPerson?: (id: string) => void;
   onOpenPoints?: () => void;
 }) {
+  const total = sections.reduce((n, s) => n + s.people.length, 0);
+  const matched = sections.find((s) => s.id === 'all')?.people.length ?? 0;
   return (
     <div style={L.screen}>
       <div style={L.header}>
@@ -164,21 +202,26 @@ export function ZonePoolScreen({
       </div>
 
       <div style={L.body}>
-        <div style={L.savedBanner}>
-          <span style={{ fontSize: 14, fontWeight: 590, color: 'var(--type-home-fg)', lineHeight: 1.35 }}>
-            Ты в пуле {zoneGen} · поиск сохранён
-          </span>
-          <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
-            пуш о каждом новом совпавшем
-          </span>
-        </div>
+        {saved && (
+          <div style={L.savedBanner}>
+            <span style={{ fontSize: 14, fontWeight: 590, color: 'var(--type-home-fg)', lineHeight: 1.35 }}>
+              Ты в пуле {zoneGen} · поиск сохранён
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
+              пуш о каждом новом совпавшем
+            </span>
+          </div>
+        )}
+
+        <DensityHint total={total} matched={matched} />
 
         {sections.map((s) => (
           <Section key={s.id} s={s} onOpen={onOpenPerson} />
         ))}
 
-        {/* Тихая ссылка в выдачу точек под те же параметры — не кнопка. */}
-        {typeof pointsCount === 'number' && (
+        {/* Тихая ссылка в выдачу точек под те же параметры — не кнопка.
+            На нуле скрыта целиком: «· 0» вело бы в пустоту. */}
+        {!!pointsCount && (
           <div
             onClick={onOpenPoints}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', cursor: 'pointer' }}
@@ -200,107 +243,6 @@ export function ZonePoolScreen({
           </div>
         )}
       </div>
-
-      <TabBar active="feed" unreadLikes={unreadLikes} hasNewInSearches />
     </div>
   );
 }
-
-/* Демо-данные для вёрстки. */
-export const DEMO_POOL: PoolSection[] = [
-  {
-    id: 'all',
-    title: 'СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ · 2',
-    people: [
-      {
-        id: 'u1',
-        name: 'Аня',
-        age: 22,
-        verifiedBadge: 'Студент ВШЭ',
-        habits: 'сова · не курю · без животных',
-        matches: 6,
-        verdicts: [
-          { verdict: 'ok', label: '40–45к' },
-          { verdict: 'ok', label: '2 комн.' },
-          { verdict: 'ok', label: 'сентябрь' },
-        ],
-      },
-      {
-        id: 'u2',
-        name: 'Даша',
-        age: 24,
-        verifiedBadge: 'Студент МГУ',
-        habits: 'плавает · не курю · кот',
-        matches: 5,
-        verdicts: [
-          { verdict: 'ok', label: '38–44к' },
-          { verdict: 'ok', label: '2 комн.' },
-          { verdict: 'ok', label: 'год+' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'partial',
-    title: 'ПЕРЕСЕКАЮТСЯ ЧАСТИЧНО · 2',
-    people: [
-      {
-        id: 'u3',
-        name: 'Иван',
-        age: 25,
-        habits: 'жаворонок · балкон · без животных',
-        matches: 3,
-        verdicts: [
-          { verdict: 'edge', label: 'от 45к — краем' },
-          { verdict: 'ok', label: '2 комн.' },
-          { verdict: 'no', label: 'октябрь' },
-        ],
-      },
-      {
-        // Цена не указана = «неважно», совпадает со всем (§2.1):
-        // в «частично» человек из-за мягкой комнатности, а не из-за NULL-цены.
-        id: 'u5',
-        name: 'Пётр',
-        age: 31,
-        habits: 'жаворонок · не курю · собака',
-        matches: 4,
-        verdicts: [
-          { verdict: 'no', label: 'цена не указана' },
-          { verdict: 'ok', label: 'сентябрь' },
-          { verdict: 'no', label: '3 комн.' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'none',
-    title: 'НЕ СОВПАЛИ · 2',
-    dimmed: true,
-    collapsedAfter: 1,
-    people: [
-      {
-        id: 'u4',
-        name: 'Настя',
-        age: 29,
-        habits: 'сова · дома · собака',
-        matches: 2,
-        verdicts: [
-          { verdict: 'no', label: '60–80к' },
-          { verdict: 'no', label: '1 комн.' },
-          { verdict: 'no', label: 'полгода+' },
-        ],
-      },
-      {
-        id: 'u6',
-        name: 'Лена',
-        age: 23,
-        habits: 'сова · балкон · кот',
-        matches: 2,
-        verdicts: [
-          { verdict: 'no', label: '20–30к' },
-          { verdict: 'no', label: 'ноябрь' },
-        ],
-      },
-    ],
-  },
-];

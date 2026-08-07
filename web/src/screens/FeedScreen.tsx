@@ -3,6 +3,7 @@
    Сохранение поиска живёт только в промо-блоке людей.
    Микрокопия дословная. */
 import type { CSSProperties } from 'react';
+import { money, plural } from '../api/format';
 import {
   FactsBlock,
   HabitsBlock,
@@ -17,7 +18,6 @@ import {
 } from '../ui/primitives';
 import { PoolPromoBlock, type PromoState } from '../ui/PoolPromoBlock';
 import { FreshnessRow, type Freshness } from './EdgeStates';
-import { TabBar } from '../ui/TabBar';
 
 export type FlatCard = {
   kind: 'flat';
@@ -62,8 +62,6 @@ export const homeCardTitle = (it: HomeCard) =>
     : 'Сосед к себе — уже живёт там';
 
 export type FeedItem = FlatCard | HomeCard;
-
-const money = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
 
 const L = {
   screen: {
@@ -124,11 +122,11 @@ export function FeedScreen({
   params,
   promo,
   items,
-  unreadLikes,
-  hasNewInSearches,
+  error,
   onEditParams,
   onJoinPool,
   onOpenPool,
+  onFreeSlot,
   onEnterFlatPool,
   onOpenSource,
   onWantRoom,
@@ -138,11 +136,13 @@ export function FeedScreen({
   params: string[]; // текущие фильтры просмотра, только чтение
   promo: PromoState;
   items: FeedItem[];
-  unreadLikes: number;
-  hasNewInSearches?: boolean;
+  /** Отказ сохранения поиска — строкой над промо-блоком, а не молчанием. */
+  error?: string | null;
   onEditParams?: () => void;
   onJoinPool?: () => void;
   onOpenPool?: () => void;
+  /** «Освободить слот» из состояния full — в «Мои поиски». */
+  onFreeSlot?: () => void;
   onEnterFlatPool?: (id: string) => void;
   /** Ссылка на оригинал; после возврата хост показывает StillLiveSheet. */
   onOpenSource?: (id: string) => void;
@@ -156,7 +156,7 @@ export function FeedScreen({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
           <span style={{ fontSize: 17, fontWeight: 590, letterSpacing: '-0.2px' }}>{zone}</span>
           <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
-            {params.length} параметра поиска
+            {params.length} {plural(params.length, 'параметр', 'параметра', 'параметров')} поиска
           </span>
         </div>
         <button type="button" style={L.edit} onClick={onEditParams}>
@@ -187,19 +187,48 @@ export function FeedScreen({
         </div>
 
         <div style={L.list}>
-          <PoolPromoBlock data={promo} onJoin={onJoinPool} onOpenPool={onOpenPool} />
+          {error && (
+            <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>
+              {error}
+            </span>
+          )}
+          <PoolPromoBlock
+            data={promo}
+            onJoin={onJoinPool}
+            onOpenPool={onOpenPool}
+            onFreeSlot={onFreeSlot}
+          />
 
-          {items.map((it) =>
-            it.kind === 'flat' ? (
-              <FlatPointCard key={it.id} it={it} onEnterPool={onEnterFlatPool} onOpenSource={onOpenSource} />
-            ) : (
-              <HomePointCard key={it.id} it={it} onWantRoom={onWantRoom} onOpenProfile={onOpenProfile} />
-            ),
+          {items.length === 0 ? (
+            <PointsSoon />
+          ) : (
+            items.map((it) =>
+              it.kind === 'flat' ? (
+                <FlatPointCard key={it.id} it={it} onEnterPool={onEnterFlatPool} onOpenSource={onOpenSource} />
+              ) : (
+                <HomePointCard key={it.id} it={it} onWantRoom={onWantRoom} onOpenProfile={onOpenProfile} />
+              ),
+            )
           )}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <TabBar active="feed" unreadLikes={unreadLikes} hasNewInSearches={hasNewInSearches} />
+/**
+ * Место точек, пока их нет.
+ *
+ * Ни одной выдуманной квартиры: пустой список — это пустое состояние, а не
+ * повод показать демо-карточку. Настоящие точки приедут с §12 шагом 5.
+ */
+export function PointsSoon() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.6 }}>
+      <PhotoPlaceholder label="скрин объявления" style={{ aspectRatio: '16/9', borderRadius: 10 }} />
+      <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>
+        Квартиры появятся здесь — сейчас собираем
+      </span>
     </div>
   );
 }
@@ -401,21 +430,9 @@ function HomePointCard({
   );
 }
 
-/* Демо-данные для вёрстки. */
-export const DEMO_PARAMS = ['Хамовники', '35–45к с человека', '2 комнаты', 'с 1 сентября'];
-
-export const DEMO_PROMO: PromoState = {
-  state: 'offer',
-  zone: 'Хамовники',
-  zoneIn: 'Хамовниках',
-  zoneGen: 'Хамовников',
-  peopleCount: 6,
-  fullMatchCount: 3,
-  avatars: ['Аня', 'Даша', 'Иван', 'Настя'],
-  slot: 1,
-  slotsTotal: 3,
-};
-
+/* Демо-данные для вёрстки карточек точек: сами точки приедут с §12 шагом 5,
+   а чипы фильтров и промо-блок уже живые — их демо-заготовки удалены, чтобы
+   не разъезжаться с сервером. */
 export const DEMO_FEED: FeedItem[] = [
   {
     kind: 'flat',

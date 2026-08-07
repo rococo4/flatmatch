@@ -4,10 +4,10 @@
    3) Зову к себе · N из 2 (зелёный акцент): точки «к себе» со стадией и откликами.
    Отдельного экрана выбора типа нет — выбор через кнопки блоков.
    Отклики автор смотрит в общем «Тебя лайкнули» (пометка «на твою комнату»). */
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { plural } from '../api/format';
-import { Badge, PhotoPlaceholder, S } from '../ui/primitives';
-import { TabBar } from '../ui/TabBar';
+import { Badge, LimitChip, PhotoPlaceholder, S } from '../ui/primitives';
 
 export type SavedSearch = {
   id: string;
@@ -16,8 +16,17 @@ export type SavedSearch = {
   params: string[];
   peopleCount: number; // «6 ищут»
   fullMatchCount: number; // «с 3 полное совпадение»
-  pointsLine: string; // «4 квартиры и 1 комната под эти параметры»
+  pointsLine: string; // «4 квартиры и 1 комната под эти параметры»; пусто — строки нет
   newCount?: number; // бейдж «1 новый»
+};
+
+/** Закрытый или поставленный на паузу поиск. Возвращается одним тапом (§3). */
+export type ArchivedSearch = {
+  id: string;
+  zone: string;
+  params: string[];
+  /** «нашёл здесь» / «нашёл в другом месте» / «передумал»; пусто — пауза по молчанию. */
+  reason: string;
 };
 
 export type MarketFlat = {
@@ -197,16 +206,18 @@ function CreateEntry({ tone, onClick }: { tone: 'flat' | 'home'; onClick?: () =>
 export function MySearchesScreen({
   searches,
   searchSlotsTotal,
+  archived,
+  error,
   flats,
   flatSlotsTotal,
   homes,
   homeSlotsTotal,
-  unreadLikes,
   onOpenSearch,
   onOpenPool,
   onEditSearch,
   onCloseSearch,
   onAddSearch,
+  onReactivate,
   onOpenFlatPool,
   onRemoveFlat,
   onConfirmAlive,
@@ -216,13 +227,16 @@ export function MySearchesScreen({
   onCreateFlatPoint,
   onCreateHomePoint,
 }: {
+  /** Только активные: иначе «N ИЗ 3» перестаёт быть счётчиком слотов. */
   searches: SavedSearch[];
   searchSlotsTotal: number;
+  archived: ArchivedSearch[];
+  /** Отказ последнего действия с поиском — обычно «поиски заняты 3 из 3» от сервера. */
+  error?: string | null;
   flats: MarketFlat[];
   flatSlotsTotal: number;
   homes: HomePoint[];
   homeSlotsTotal: number;
-  unreadLikes: number;
   /** → выдача поиска (лента с его параметрами) */
   onOpenSearch?: (id: string) => void;
   /** → зонный пул этого поиска */
@@ -230,6 +244,7 @@ export function MySearchesScreen({
   onEditSearch?: (id: string) => void;
   onCloseSearch?: (id: string) => void;
   onAddSearch?: () => void;
+  onReactivate?: (id: string) => void;
   onOpenFlatPool?: (id: string) => void;
   onRemoveFlat?: (id: string) => void;
   /** «Проверил — она живая»: снимает скрытие по сигналам пула. */
@@ -243,6 +258,11 @@ export function MySearchesScreen({
   /** → форма «К себе», сразу на гейте стадии */
   onCreateHomePoint?: () => void;
 }) {
+  // Отказ по слотам показывается только после тапа: висящая плашка «занято»
+  // над списком из трёх карточек и так очевидна, а до тапа она просто шум.
+  const [slotsNotice, setSlotsNotice] = useState(false);
+  const slotsFull = searches.length >= searchSlotsTotal;
+
   return (
     <div style={L.screen}>
       <div style={L.header}>
@@ -256,10 +276,24 @@ export function MySearchesScreen({
             <span style={S.sectionTitle}>
               МОИ ПОИСКИ · {searches.length} ИЗ {searchSlotsTotal}
             </span>
-            <button type="button" style={L.addLink} onClick={onAddSearch}>
+            <button
+              type="button"
+              style={L.addLink}
+              onClick={() => (slotsFull ? setSlotsNotice(true) : onAddSearch?.())}
+            >
               + поиск
             </button>
           </div>
+
+          {/* Одно место для отказов по слотам: и своего («+ поиск» при трёх
+              активных), и серверного — из закрытия или реактивации. */}
+          {(error || (slotsNotice && slotsFull)) && (
+            <div>
+              <LimitChip>
+                {error ?? `поиски заняты ${searchSlotsTotal} из ${searchSlotsTotal}`}
+              </LimitChip>
+            </div>
+          )}
 
           {searches.map((s) => (
             <article key={s.id} style={L.plainCard}>
@@ -283,33 +317,37 @@ export function MySearchesScreen({
               <button type="button" style={S.secondaryButton} onClick={() => onOpenPool?.(s.id)}>
                 Смотреть пул · {s.peopleCount} {plural(s.peopleCount, 'человек', 'человека', 'человек')}
               </button>
-              {/* Строка точек — отдельный переход в выдачу поиска. */}
-              <div
-                onClick={() => onOpenSearch?.(s.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '9px 11px',
-                  borderRadius: 10,
-                  background: 'var(--app-bg)',
-                  cursor: 'pointer',
-                }}
-              >
-                <span
+              {/* Строка точек — отдельный переход в выдачу поиска. Пустая
+                  строка = точек нет, и строки тогда нет вовсе: вести в ноль
+                  некуда. */}
+              {s.pointsLine && (
+                <div
+                  onClick={() => onOpenSearch?.(s.id)}
                   style={{
-                    flex: '1 1 auto',
-                    fontSize: 13,
-                    color: 'var(--tg-theme-subtitle-text-color)',
-                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '9px 11px',
+                    borderRadius: 10,
+                    background: 'var(--app-bg)',
+                    cursor: 'pointer',
                   }}
                 >
-                  {s.pointsLine}
-                </span>
-                <span style={{ flex: '0 0 auto', fontSize: 17, lineHeight: 1, color: 'var(--tg-theme-hint-color)' }}>
-                  ›
-                </span>
-              </div>
+                  <span
+                    style={{
+                      flex: '1 1 auto',
+                      fontSize: 13,
+                      color: 'var(--tg-theme-subtitle-text-color)',
+                      minWidth: 0,
+                    }}
+                  >
+                    {s.pointsLine}
+                  </span>
+                  <span style={{ flex: '0 0 auto', fontSize: 17, lineHeight: 1, color: 'var(--tg-theme-hint-color)' }}>
+                    ›
+                  </span>
+                </div>
+              )}
               <div style={L.actions}>
                 <button type="button" style={L.actionLink} onClick={() => onEditSearch?.(s.id)}>
                   Редактировать
@@ -321,6 +359,36 @@ export function MySearchesScreen({
             </article>
           ))}
         </div>
+
+        {/* Архив: закрытые и поставленные на паузу. Пустого состояния нет —
+            секция появляется, только когда в архиве что-то есть. */}
+        {archived.length > 0 && (
+          <div style={L.section}>
+            <span style={S.sectionTitle}>АРХИВ · {archived.length}</span>
+            {archived.map((a) => (
+              <article key={a.id} style={{ ...L.plainCard, opacity: 0.6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={S.title}>{a.zone}</span>
+                  {a.reason && (
+                    <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
+                      {a.reason}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {a.params.map((p) => (
+                    <span key={p} style={{ ...S.chip, background: 'var(--app-bg)' }}>
+                      {p}
+                    </span>
+                  ))}
+                </div>
+                <button type="button" style={S.secondaryButton} onClick={() => onReactivate?.(a.id)}>
+                  Вернуть в поиск
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
 
         {/* 2. Присмотренные квартиры с рынка */}
         <div style={L.section}>
@@ -478,35 +546,12 @@ export function MySearchesScreen({
           )}
         </div>
       </div>
-
-      <TabBar active="searches" unreadLikes={unreadLikes} hasNewInSearches />
     </div>
   );
 }
 
-/* Демо-данные для вёрстки. */
-export const DEMO_SEARCHES: SavedSearch[] = [
-  {
-    id: 's1',
-    zone: 'Хамовники',
-    since: 'в пуле с 12 июля',
-    params: ['35–45к с человека', '2 комнаты', 'с 1 сентября'],
-    peopleCount: 6,
-    fullMatchCount: 3,
-    pointsLine: '4 квартиры и 1 комната под эти параметры',
-    newCount: 1,
-  },
-  {
-    id: 's2',
-    zone: 'Сокол',
-    since: 'в пуле с 24 июля',
-    params: ['до 30к с человека', '2 комнаты'],
-    peopleCount: 4,
-    fullMatchCount: 2,
-    pointsLine: '2 квартиры под эти параметры',
-  },
-];
-
+/* Демо-данные для вёрстки блоков 2 и 3: точки приедут с §12 шагом 5.
+   Поиски здесь живые — их демо-заготовка удалена. */
 export const DEMO_MARKET_FLATS: MarketFlat[] = [
   {
     id: 'f1',

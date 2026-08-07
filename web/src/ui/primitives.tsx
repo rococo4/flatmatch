@@ -341,7 +341,15 @@ function initialsOf(name: string) {
     .join('');
 }
 
-export function Avatar({ name, size = 48 }: { name: string; size?: number }) {
+/**
+ * Аватар человека. Без `src` — инициалы на пастельном круге.
+ *
+ * Пустой `src` = фото не одобрено модератором, и заглушка здесь не «пока
+ * грузится», а ровно то, что требует §5: до аппрува чужие глаза видят
+ * заглушку. Адрес берётся как есть («/media/…»): собирать его — дело
+ * хранилища, а не карточки.
+ */
+export function Avatar({ name, size = 48, src }: { name: string; size?: number; src?: string }) {
   const [bg, fg] = pastelOf(name);
   return (
     <div
@@ -350,6 +358,7 @@ export function Avatar({ name, size = 48 }: { name: string; size?: number }) {
         width: size,
         height: size,
         borderRadius: '50%',
+        overflow: 'hidden',
         background: bg,
         color: fg,
         display: 'flex',
@@ -360,22 +369,38 @@ export function Avatar({ name, size = 48 }: { name: string; size?: number }) {
         letterSpacing: '-0.2px',
       }}
     >
-      {initialsOf(name)}
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        initialsOf(name)
+      )}
     </div>
   );
 }
 
-/** Стек аватаров в промо-блоке пула: кто уже ищет в зоне. */
+/**
+ * Стек аватаров в промо-блоке пула: кто уже ищет в зоне.
+ *
+ * Сервер шлёт URL фотографий, а не имена (в стек попадают только люди с
+ * одобренным фото), поэтому `urls` главнее: когда он передан, кружки рисуются
+ * фотографиями, а `names` остаётся запасным вариантом для вёрстки без сети.
+ */
 export function AvatarStack({
   names,
+  urls,
   total,
   size = 34,
 }: {
-  names: string[];
+  names?: string[];
+  urls?: string[];
   total: number;
   size?: number;
 }) {
-  const rest = total - names.length;
+  const rest = total - (urls ?? names ?? []).length;
   const circle = (extra: CSSProperties): CSSProperties => ({
     width: size,
     height: size,
@@ -391,14 +416,33 @@ export function AvatarStack({
   });
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      {names.map((n, i) => {
-        const [bg, fg] = pastelOf(n);
-        return (
-          <span key={n} style={circle({ background: bg, color: fg, marginLeft: i ? -10 : 0 })}>
-            {initialsOf(n)}
-          </span>
-        );
-      })}
+      {urls
+        ? urls.map((url, i) => (
+            // Ключ с индексом: URL могут повториться (одно и то же фото у
+            // повторного человека в списке сервер не обещает исключать).
+            <span
+              key={`${url}:${i}`}
+              style={circle({
+                background: 'var(--chip-bg)',
+                marginLeft: i ? -10 : 0,
+                overflow: 'hidden',
+              })}
+            >
+              <img
+                src={url}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </span>
+          ))
+        : (names ?? []).map((n, i) => {
+            const [bg, fg] = pastelOf(n);
+            return (
+              <span key={n} style={circle({ background: bg, color: fg, marginLeft: i ? -10 : 0 })}>
+                {initialsOf(n)}
+              </span>
+            );
+          })}
       {rest > 0 && (
         <span
           style={circle({

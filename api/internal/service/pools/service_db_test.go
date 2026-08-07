@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -156,9 +157,57 @@ func TestZonePoolEndToEnd(t *testing.T) {
 	if counts.People != 3 || counts.FullMatch != 1 || counts.NewCount != 0 {
 		t.Errorf("Counts = %+v, want people=3 full=1 new=0", counts)
 	}
-	// Avatars skip the unapproved photo, so it is two rather than three.
-	if len(counts.Avatars) != 2 {
-		t.Errorf("Avatars = %v, want the two approved photos", counts.Avatars)
+	// Avatars skip the unapproved photo, so it is two rather than three, and
+	// they arrive freshest first — partial subscribed after full did.
+	wantAvatars := []string{"/media/partial.jpg", "/media/full.jpg"}
+	if !slices.Equal(counts.Avatars, wantAvatars) {
+		t.Errorf("Avatars = %v, want %v — approved only, freshest first",
+			counts.Avatars, wantAvatars)
+	}
+}
+
+// A closed search means «исчез из пула» (§3), and a paused one — TTL silence —
+// hides its owner just the same. Both are what makes a pool a live thing
+// rather than an ever-growing list.
+func TestZonePoolHidesClosedAndPausedSearches(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := searchesrepo.New(pool)
+	svc := New(repo, testDir(t), staticPhotos{})
+
+	viewer := seedUser(t, pool, testUser{n: 1, gender: entity.GenderMale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
+	stays := seedUser(t, pool, testUser{n: 2, gender: entity.GenderFemale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
+	quitter := seedUser(t, pool, testUser{n: 3, gender: entity.GenderFemale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
+	silent := seedUser(t, pool, testUser{n: 4, gender: entity.GenderMale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
+
+	mustCreate(t, repo, viewer.ID, zoneParams("pz-district", 35000, 45000, moveSept))
+	mustCreate(t, repo, stays.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+	// Same parameters as the one who stays: only the status may tell them apart.
+	closed := mustCreate(t, repo, quitter.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+	if _, err := repo.Close(t.Context(), quitter.ID, closed.ID, entity.CloseFoundHere); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+	paused := mustCreate(t, repo, silent.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+	pause(t, pool, paused.ID)
+
+	got, err := svc.ZonePool(t.Context(), viewer, "pz-district")
+	if err != nil {
+		t.Fatalf("ZonePool() failed: %v", err)
+	}
+	assertSectionHas(t, got, SectionAll, stays.ID)
+	assertNowhere(t, got, "their search is closed", quitter.ID)
+	assertNowhere(t, got, "their search is paused by TTL", silent.ID)
+
+	counts, err := svc.Counts(t.Context(), viewer.ID, zoneParams("pz-district", 35000, 45000, moveSept), nil)
+	if err != nil {
+		t.Fatalf("Counts() failed: %v", err)
+	}
+	if counts.People != 1 || counts.FullMatch != 1 {
+		t.Errorf("Counts = %+v, want people=1 full=1 — only the active search counts", counts)
 	}
 }
 
@@ -205,6 +254,8 @@ func TestZonePoolUnrankedWithoutOwnSearch(t *testing.T) {
 		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
 	plain := seedUser(t, pool, testUser{n: 3, gender: entity.GenderMale, pref: entity.GenderPrefAny,
 		schedule: entity.ScheduleLark, smoking: entity.SmokingHome})
+	switcher := seedUser(t, pool, testUser{n: 4, gender: entity.GenderMale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleLark, smoking: entity.SmokingHome})
 
 	detailed := zoneParams("pz-district", 35000, 45000, moveSept)
 	detailed.RoomsMin = pointer.To(2)
@@ -212,6 +263,12 @@ func TestZonePoolUnrankedWithoutOwnSearch(t *testing.T) {
 	mustCreate(t, repo, rich.ID, detailed)
 	// Created later, so it wins on freshness and must still lose on detail.
 	mustCreate(t, repo, plain.ID, entity.SearchParams{ZoneID: "pz-district", PriceMax: 45000})
+	// Two active searches of one person, equally detailed and distinguishable
+	// only by «до»: the card must carry the fresher one. Which of them survives
+	// deduplication rides entirely on the repository handing candidates over
+	// freshest first.
+	mustCreate(t, repo, switcher.ID, entity.SearchParams{ZoneID: "pz-district", PriceMax: 50000})
+	mustCreate(t, repo, switcher.ID, entity.SearchParams{ZoneID: "pz-line-east", PriceMax: 70000})
 
 	got, err := svc.ZonePool(t.Context(), viewer, "pz-district")
 	if err != nil {
@@ -220,11 +277,19 @@ func TestZonePoolUnrankedWithoutOwnSearch(t *testing.T) {
 	if got.Ranked || got.MySearch != nil || len(got.Sections) != 0 {
 		t.Fatalf("viewer has no search, pool must be unranked: %+v", got)
 	}
-	if len(got.People) != 2 {
-		t.Fatalf("got %d people, want 2", len(got.People))
+	if len(got.People) != 3 {
+		t.Fatalf("got %d people, want 3 — switcher holds two searches, not two cards", len(got.People))
 	}
 	if got.People[0].User.ID != rich.ID {
 		t.Errorf("first card is %s, want the richer search %s", got.People[0].User.ID, rich.ID)
+	}
+	switcherCard := got.People[1]
+	if switcherCard.User.ID != switcher.ID {
+		t.Fatalf("second card is %s, want %s", switcherCard.User.ID, switcher.ID)
+	}
+	if switcherCard.Params.PriceMax != 70000 {
+		t.Errorf("card of %s shows «до %d», want the fresher search's 70000",
+			switcher.ID, switcherCard.Params.PriceMax)
 	}
 	for _, p := range got.People {
 		if p.Chips != nil {
@@ -436,6 +501,17 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, spec testUser) entity.User {
 		PhotoKey:    spec.photoKey,
 		PhotoStatus: photoStatus,
 		Status:      entity.StatusActive,
+	}
+}
+
+// pause puts a search into the state TTL silence leaves it in (§3). No repo
+// method does it yet — that is the notifications step — so the test writes the
+// status the pool has to respect.
+func pause(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(),
+		`UPDATE searches SET status = 'paused' WHERE id = $1`, id); err != nil {
+		t.Fatalf("pause search %s: %v", id, err)
 	}
 }
 

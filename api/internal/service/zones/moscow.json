@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "stations": [
+    {"id": "st:1:frunzenskaya", "name": "Фрунзенская", "lat": 55.7274, "lng": 37.5806},
+    {"id": "st:1:sportivnaya", "name": "Спортивная", "lat": 55.7233, "lng": 37.5641},
+    {"id": "st:2:sokol", "name": "Сокол", "lat": 55.8050, "lng": 37.5150}
+  ],
+  "zones": [
+    {"id": "line-1", "kind": "line", "name": "красная ветка", "name_in": "на красной ветке",
+     "name_gen": "красной ветки", "stations": ["st:1:frunzenskaya", "st:1:sportivnaya"]},
+    {"id": "line-2", "kind": "line", "name": "зелёная ветка", "name_in": "на зелёной ветке",
+     "name_gen": "зелёной ветки", "stations": ["st:2:sokol"]},
+    {"id": "d-khamovniki", "kind": "district", "name": "Хамовники", "name_in": "в Хамовниках",
+     "name_gen": "Хамовников", "stations": ["st:1:frunzenskaya", "st:1:sportivnaya", "st:2:sokol"]},
+    {"id": "st-sokol", "kind": "station", "name": "Сокол", "name_in": "у метро Сокол",
+     "name_gen": "метро Сокол", "stations": ["st:2:sokol"]}
+  ]
+}

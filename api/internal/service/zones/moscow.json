@@ -1,18 +1,8073 @@
 {
   "version": 1,
   "stations": [
-    {"id": "st:1:frunzenskaya", "name": "Фрунзенская", "lat": 55.7274, "lng": 37.5806},
-    {"id": "st:1:sportivnaya", "name": "Спортивная", "lat": 55.7233, "lng": 37.5641},
-    {"id": "st:2:sokol", "name": "Сокол", "lat": 55.8050, "lng": 37.5150}
+    {
+      "id": "st:10:borisovo",
+      "name": "Борисово",
+      "lat": 55.6325,
+      "lng": 37.743333
+    },
+    {
+      "id": "st:10:bratislavskaya",
+      "name": "Братиславская",
+      "lat": 55.658817,
+      "lng": 37.748415
+    },
+    {
+      "id": "st:10:butyrskaya",
+      "name": "Бутырская",
+      "lat": 55.813333,
+      "lng": 37.602778
+    },
+    {
+      "id": "st:10:chkalovskaya",
+      "name": "Чкаловская",
+      "lat": 55.755951,
+      "lng": 37.659293
+    },
+    {
+      "id": "st:10:dostoevskaya",
+      "name": "Достоевская",
+      "lat": 55.781667,
+      "lng": 37.613889
+    },
+    {
+      "id": "st:10:dubrovka",
+      "name": "Дубровка",
+      "lat": 55.71807,
+      "lng": 37.676259
+    },
+    {
+      "id": "st:10:fiztekh",
+      "name": "Физтех",
+      "lat": 55.921389,
+      "lng": 37.546389
+    },
+    {
+      "id": "st:10:fonvizinskaya",
+      "name": "Фонвизинская",
+      "lat": 55.822778,
+      "lng": 37.588056
+    },
+    {
+      "id": "st:10:kozhukhovskaya",
+      "name": "Кожуховская",
+      "lat": 55.706156,
+      "lng": 37.68544
+    },
+    {
+      "id": "st:10:krestyanskaya-zastava",
+      "name": "Крестьянская застава",
+      "lat": 55.732278,
+      "lng": 37.665325
+    },
+    {
+      "id": "st:10:lianozovo",
+      "name": "Лианозово",
+      "lat": 55.931111,
+      "lng": 37.543611
+    },
+    {
+      "id": "st:10:lyublino",
+      "name": "Люблино",
+      "lat": 55.676596,
+      "lng": 37.761639
+    },
+    {
+      "id": "st:10:marina-roshcha",
+      "name": "Марьина Роща",
+      "lat": 55.793723,
+      "lng": 37.61618
+    },
+    {
+      "id": "st:10:marino",
+      "name": "Марьино",
+      "lat": 55.649158,
+      "lng": 37.743844
+    },
+    {
+      "id": "st:10:okruzhnaya",
+      "name": "Окружная",
+      "lat": 55.848889,
+      "lng": 37.571111
+    },
+    {
+      "id": "st:10:pechatniki",
+      "name": "Печатники",
+      "lat": 55.692921,
+      "lng": 37.728338
+    },
+    {
+      "id": "st:10:petrovsko-razumovskaya",
+      "name": "Петровско-Разумовская",
+      "lat": 55.836667,
+      "lng": 37.575556
+    },
+    {
+      "id": "st:10:rimskaya",
+      "name": "Римская",
+      "lat": 55.747027,
+      "lng": 37.679996
+    },
+    {
+      "id": "st:10:seligerskaya",
+      "name": "Селигерская",
+      "lat": 55.86483,
+      "lng": 37.55005
+    },
+    {
+      "id": "st:10:shipilovskaya",
+      "name": "Шипиловская",
+      "lat": 55.621667,
+      "lng": 37.743611
+    },
+    {
+      "id": "st:10:sretenskii-bulvar",
+      "name": "Сретенский бульвар",
+      "lat": 55.766106,
+      "lng": 37.635688
+    },
+    {
+      "id": "st:10:trubnaya",
+      "name": "Трубная",
+      "lat": 55.76771,
+      "lng": 37.621926
+    },
+    {
+      "id": "st:10:verkhnie-likhobory",
+      "name": "Верхние Лихоборы",
+      "lat": 55.85566,
+      "lng": 37.56282
+    },
+    {
+      "id": "st:10:volzhskaya",
+      "name": "Волжская",
+      "lat": 55.690446,
+      "lng": 37.754314
+    },
+    {
+      "id": "st:10:yakhromskaya",
+      "name": "Яхромская",
+      "lat": 55.8775,
+      "lng": 37.545833
+    },
+    {
+      "id": "st:10:zyablikovo",
+      "name": "Зябликово",
+      "lat": 55.611944,
+      "lng": 37.745278
+    },
+    {
+      "id": "st:11:aminevskaya",
+      "name": "Аминьевская",
+      "lat": 55.697222,
+      "lng": 37.464167
+    },
+    {
+      "id": "st:11:aviamotornaya",
+      "name": "Авиамоторная",
+      "lat": 55.753056,
+      "lng": 37.718611
+    },
+    {
+      "id": "st:11:davydkovo",
+      "name": "Давыдково",
+      "lat": 55.715278,
+      "lng": 37.451667
+    },
+    {
+      "id": "st:11:delovoi-tsentr",
+      "name": "Деловой центр",
+      "lat": 55.7491,
+      "lng": 37.5395
+    },
+    {
+      "id": "st:11:elektrozavodskaya",
+      "name": "Электрозаводская",
+      "lat": 55.782057,
+      "lng": 37.7053
+    },
+    {
+      "id": "st:11:kakhovskaya",
+      "name": "Каховская",
+      "lat": 55.653056,
+      "lng": 37.598333
+    },
+    {
+      "id": "st:11:kashirskaya",
+      "name": "Каширская",
+      "lat": 55.655,
+      "lng": 37.648611
+    },
+    {
+      "id": "st:11:khoroshevskaya",
+      "name": "Хорошевская",
+      "lat": 55.77643,
+      "lng": 37.51981
+    },
+    {
+      "id": "st:11:klenovyi-bulvar",
+      "name": "Кленовый бульвар",
+      "lat": 55.674444,
+      "lng": 37.680833
+    },
+    {
+      "id": "st:11:kuntsevskaya",
+      "name": "Кунцевская",
+      "lat": 55.730278,
+      "lng": 37.445833
+    },
+    {
+      "id": "st:11:lefortovo",
+      "name": "Лефортово",
+      "lat": 55.764444,
+      "lng": 37.702778
+    },
+    {
+      "id": "st:11:marina-roshcha",
+      "name": "Марьина Роща",
+      "lat": 55.798333,
+      "lng": 37.617222
+    },
+    {
+      "id": "st:11:michurinskii-prospekt",
+      "name": "Мичуринский проспект",
+      "lat": 55.688333,
+      "lng": 37.485
+    },
+    {
+      "id": "st:11:mnevniki",
+      "name": "Мнёвники",
+      "lat": 55.761153,
+      "lng": 37.47139
+    },
+    {
+      "id": "st:11:nagatinskii-zaton",
+      "name": "Нагатинский Затон",
+      "lat": 55.684444,
+      "lng": 37.703611
+    },
+    {
+      "id": "st:11:narodnoe-opolchenie",
+      "name": "Народное Ополчение",
+      "lat": 55.77592,
+      "lng": 37.485073
+    },
+    {
+      "id": "st:11:nizhegorodskaya",
+      "name": "Нижегородская",
+      "lat": 55.7325,
+      "lng": 37.728611
+    },
+    {
+      "id": "st:11:novatorskaya",
+      "name": "Новаторская",
+      "lat": 55.670833,
+      "lng": 37.52
+    },
+    {
+      "id": "st:11:pechatniki",
+      "name": "Печатники",
+      "lat": 55.694722,
+      "lng": 37.7275
+    },
+    {
+      "id": "st:11:petrovskii-park",
+      "name": "Петровский парк",
+      "lat": 55.79233,
+      "lng": 37.55952
+    },
+    {
+      "id": "st:11:prospekt-vernadskogo",
+      "name": "Проспект Вернадского",
+      "lat": 55.677778,
+      "lng": 37.505
+    },
+    {
+      "id": "st:11:rizhskaya",
+      "name": "Рижская",
+      "lat": 55.792222,
+      "lng": 37.633889
+    },
+    {
+      "id": "st:11:savelovskaya",
+      "name": "Савёловская",
+      "lat": 55.794054,
+      "lng": 37.587163
+    },
+    {
+      "id": "st:11:shelepikha",
+      "name": "Шелепиха",
+      "lat": 55.75723,
+      "lng": 37.52571
+    },
+    {
+      "id": "st:11:sokolniki",
+      "name": "Сокольники",
+      "lat": 55.791111,
+      "lng": 37.678889
+    },
+    {
+      "id": "st:11:tekstilshchiki",
+      "name": "Текстильщики",
+      "lat": 55.708333,
+      "lng": 37.728333
+    },
+    {
+      "id": "st:11:terekhovo",
+      "name": "Терехово",
+      "lat": 55.748108,
+      "lng": 37.459738
+    },
+    {
+      "id": "st:11:tsska",
+      "name": "ЦСКА",
+      "lat": 55.78643,
+      "lng": 37.53502
+    },
+    {
+      "id": "st:11:varshavskaya",
+      "name": "Варшавская",
+      "lat": 55.653333,
+      "lng": 37.619444
+    },
+    {
+      "id": "st:11:vorontsovskaya",
+      "name": "Воронцовская",
+      "lat": 55.658333,
+      "lng": 37.540833
+    },
+    {
+      "id": "st:11:zyuzino",
+      "name": "Зюзино",
+      "lat": 55.655158,
+      "lng": 37.575786
+    },
+    {
+      "id": "st:12:bittsevskii-park",
+      "name": "Битцевский Парк",
+      "lat": 55.600066,
+      "lng": 37.556058
+    },
+    {
+      "id": "st:12:bulvar-admirala-ushakova",
+      "name": "Бульвар Адмирала Ушакова",
+      "lat": 55.545207,
+      "lng": 37.542329
+    },
+    {
+      "id": "st:12:buninskaya-alleya",
+      "name": "Бунинская аллея",
+      "lat": 55.537977,
+      "lng": 37.515899
+    },
+    {
+      "id": "st:12:lesoparkovaya",
+      "name": "Лесопарковая",
+      "lat": 55.581656,
+      "lng": 37.577816
+    },
+    {
+      "id": "st:12:ulitsa-gorchakova",
+      "name": "Улица Горчакова",
+      "lat": 55.542281,
+      "lng": 37.532063
+    },
+    {
+      "id": "st:12:ulitsa-skobelevskaya",
+      "name": "Улица Скобелевская",
+      "lat": 55.548103,
+      "lng": 37.552721
+    },
+    {
+      "id": "st:12:ulitsa-starokachalovskaya",
+      "name": "Улица Старокачаловская",
+      "lat": 55.569194,
+      "lng": 37.576074
+    },
+    {
+      "id": "st:15:kosino",
+      "name": "Косино",
+      "lat": 55.7026,
+      "lng": 37.8511
+    },
+    {
+      "id": "st:15:lukhmanovskaya",
+      "name": "Лухмановская",
+      "lat": 55.7078,
+      "lng": 37.9004
+    },
+    {
+      "id": "st:15:nekrasovka",
+      "name": "Некрасовка",
+      "lat": 55.7029,
+      "lng": 37.9264
+    },
+    {
+      "id": "st:15:nizhegorodskaya",
+      "name": "Нижегородская",
+      "lat": 55.73,
+      "lng": 37.73
+    },
+    {
+      "id": "st:15:okskaya",
+      "name": "Окская",
+      "lat": 55.72,
+      "lng": 37.77
+    },
+    {
+      "id": "st:15:stakhanovskaya",
+      "name": "Стахановская",
+      "lat": 55.73,
+      "lng": 37.76
+    },
+    {
+      "id": "st:15:ulitsa-dmitrievskogo",
+      "name": "Улица Дмитриевского",
+      "lat": 55.7093,
+      "lng": 37.8792
+    },
+    {
+      "id": "st:15:yugo-vostochnaya",
+      "name": "Юго-Восточная",
+      "lat": 55.71,
+      "lng": 37.82
+    },
+    {
+      "id": "st:16:akademicheskaya",
+      "name": "Академическая",
+      "lat": 55.68808,
+      "lng": 37.57501
+    },
+    {
+      "id": "st:16:generala-tyuleneva",
+      "name": "Генерала Тюленева",
+      "lat": 55.626248,
+      "lng": 37.486032
+    },
+    {
+      "id": "st:16:kommunarka",
+      "name": "Коммунарка",
+      "lat": 55.57354,
+      "lng": 37.468116
+    },
+    {
+      "id": "st:16:kornilovskaya",
+      "name": "Корниловская",
+      "lat": 55.599411,
+      "lng": 37.479586
+    },
+    {
+      "id": "st:16:krymskaya",
+      "name": "Крымская",
+      "lat": 55.689971,
+      "lng": 37.605612
+    },
+    {
+      "id": "st:16:novatorskaya",
+      "name": "Новаторская",
+      "lat": 55.670833,
+      "lng": 37.52
+    },
+    {
+      "id": "st:16:novomoskovskaya",
+      "name": "Новомосковская",
+      "lat": 55.560094,
+      "lng": 37.469807
+    },
+    {
+      "id": "st:16:tyutchevskaya",
+      "name": "Тютчевская",
+      "lat": 55.618801,
+      "lng": 37.481415
+    },
+    {
+      "id": "st:16:universitet-druzhby-narodov",
+      "name": "Университет дружбы народов",
+      "lat": 55.64824,
+      "lng": 37.507556
+    },
+    {
+      "id": "st:16:vavilovskaya",
+      "name": "Вавиловская",
+      "lat": 55.686688,
+      "lng": 37.543706
+    },
+    {
+      "id": "st:16:zil",
+      "name": "ЗИЛ",
+      "lat": 55.697915,
+      "lng": 37.647565
+    },
+    {
+      "id": "st:1:biblioteka-im-lenina",
+      "name": "Библиотека им.Ленина",
+      "lat": 55.752123,
+      "lng": 37.610388
+    },
+    {
+      "id": "st:1:bulvar-rokossovskogo",
+      "name": "Бульвар Рокоссовского",
+      "lat": 55.814916,
+      "lng": 37.732227
+    },
+    {
+      "id": "st:1:cherkizovskaya",
+      "name": "Черкизовская",
+      "lat": 55.802787,
+      "lng": 37.744863
+    },
+    {
+      "id": "st:1:chistye-prudy",
+      "name": "Чистые пруды",
+      "lat": 55.76499,
+      "lng": 37.638293
+    },
+    {
+      "id": "st:1:filatov-lug",
+      "name": "Филатов луг",
+      "lat": 55.5997,
+      "lng": 37.4075
+    },
+    {
+      "id": "st:1:frunzenskaya",
+      "name": "Фрунзенская",
+      "lat": 55.727462,
+      "lng": 37.58022
+    },
+    {
+      "id": "st:1:komsomolskaya",
+      "name": "Комсомольская",
+      "lat": 55.774072,
+      "lng": 37.654565
+    },
+    {
+      "id": "st:1:krasnoselskaya",
+      "name": "Красносельская",
+      "lat": 55.780014,
+      "lng": 37.666097
+    },
+    {
+      "id": "st:1:krasnye-vorota",
+      "name": "Красные ворота",
+      "lat": 55.768307,
+      "lng": 37.6478
+    },
+    {
+      "id": "st:1:kropotkinskaya",
+      "name": "Кропоткинская",
+      "lat": 55.745297,
+      "lng": 37.604217
+    },
+    {
+      "id": "st:1:lubyanka",
+      "name": "Лубянка",
+      "lat": 55.759889,
+      "lng": 37.625336
+    },
+    {
+      "id": "st:1:novomoskovskaya-kommunarka",
+      "name": "Новомосковская (Коммунарка)",
+      "lat": 55.559765,
+      "lng": 37.468716
+    },
+    {
+      "id": "st:1:okhotnyi-ryad",
+      "name": "Охотный ряд",
+      "lat": 55.757228,
+      "lng": 37.615078
+    },
+    {
+      "id": "st:1:olkhovaya",
+      "name": "Ольховая",
+      "lat": 55.5692,
+      "lng": 37.4589
+    },
+    {
+      "id": "st:1:park-kultury",
+      "name": "Парк культуры",
+      "lat": 55.736163,
+      "lng": 37.595027
+    },
+    {
+      "id": "st:1:potapovo",
+      "name": "Потапово",
+      "lat": 55.552538,
+      "lng": 37.490978
+    },
+    {
+      "id": "st:1:preobrazhenskaya-ploshchad",
+      "name": "Преображенская площадь",
+      "lat": 55.796322,
+      "lng": 37.713582
+    },
+    {
+      "id": "st:1:prokshino",
+      "name": "Прокшино",
+      "lat": 55.5813,
+      "lng": 37.4425
+    },
+    {
+      "id": "st:1:prospekt-vernadskogo",
+      "name": "Проспект Вернадского",
+      "lat": 55.676549,
+      "lng": 37.504584
+    },
+    {
+      "id": "st:1:rumyantsevo",
+      "name": "Румянцево",
+      "lat": 55.633,
+      "lng": 37.4419
+    },
+    {
+      "id": "st:1:salarevo",
+      "name": "Саларьево",
+      "lat": 55.6227,
+      "lng": 37.424
+    },
+    {
+      "id": "st:1:sokolniki",
+      "name": "Сокольники",
+      "lat": 55.789282,
+      "lng": 37.679895
+    },
+    {
+      "id": "st:1:sportivnaya",
+      "name": "Спортивная",
+      "lat": 55.722388,
+      "lng": 37.562041
+    },
+    {
+      "id": "st:1:troparevo",
+      "name": "Тропарево",
+      "lat": 55.6459,
+      "lng": 37.4725
+    },
+    {
+      "id": "st:1:universitet",
+      "name": "Университет",
+      "lat": 55.69329,
+      "lng": 37.534511
+    },
+    {
+      "id": "st:1:vorobevy-gory",
+      "name": "Воробьевы горы",
+      "lat": 55.709169,
+      "lng": 37.557293
+    },
+    {
+      "id": "st:1:yugo-zapadnaya",
+      "name": "Юго-Западная",
+      "lat": 55.663146,
+      "lng": 37.482852
+    },
+    {
+      "id": "st:2:aeroport",
+      "name": "Аэропорт",
+      "lat": 55.800441,
+      "lng": 37.530477
+    },
+    {
+      "id": "st:2:alma-atinskaya",
+      "name": "Алма-Атинская",
+      "lat": 55.63349,
+      "lng": 37.765678
+    },
+    {
+      "id": "st:2:avtozavodskaya",
+      "name": "Автозаводская",
+      "lat": 55.706634,
+      "lng": 37.657008
+    },
+    {
+      "id": "st:2:belomorskaya",
+      "name": "Беломорская",
+      "lat": 55.8651,
+      "lng": 37.4764
+    },
+    {
+      "id": "st:2:belorusskaya",
+      "name": "Белорусская",
+      "lat": 55.777439,
+      "lng": 37.582107
+    },
+    {
+      "id": "st:2:dinamo",
+      "name": "Динамо",
+      "lat": 55.789704,
+      "lng": 37.558212
+    },
+    {
+      "id": "st:2:domodedovskaya",
+      "name": "Домодедовская",
+      "lat": 55.610131,
+      "lng": 37.717111
+    },
+    {
+      "id": "st:2:kantemirovskaya",
+      "name": "Кантемировская",
+      "lat": 55.636107,
+      "lng": 37.656218
+    },
+    {
+      "id": "st:2:kashirskaya",
+      "name": "Каширская",
+      "lat": 55.655745,
+      "lng": 37.649683
+    },
+    {
+      "id": "st:2:khovrino",
+      "name": "Ховрино",
+      "lat": 55.8777,
+      "lng": 37.4877
+    },
+    {
+      "id": "st:2:kolomenskaya",
+      "name": "Коломенская",
+      "lat": 55.677423,
+      "lng": 37.663719
+    },
+    {
+      "id": "st:2:krasnogvardeiskaya",
+      "name": "Красногвардейская",
+      "lat": 55.614075,
+      "lng": 37.742697
+    },
+    {
+      "id": "st:2:mayakovskaya",
+      "name": "Маяковская",
+      "lat": 55.769808,
+      "lng": 37.596192
+    },
+    {
+      "id": "st:2:novokuznetskaya",
+      "name": "Новокузнецкая",
+      "lat": 55.742391,
+      "lng": 37.62928
+    },
+    {
+      "id": "st:2:orekhovo",
+      "name": "Орехово",
+      "lat": 55.61269,
+      "lng": 37.695214
+    },
+    {
+      "id": "st:2:paveletskaya",
+      "name": "Павелецкая",
+      "lat": 55.729741,
+      "lng": 37.638693
+    },
+    {
+      "id": "st:2:rechnoi-vokzal",
+      "name": "Речной вокзал",
+      "lat": 55.854152,
+      "lng": 37.476728
+    },
+    {
+      "id": "st:2:sokol",
+      "name": "Сокол",
+      "lat": 55.805564,
+      "lng": 37.515245
+    },
+    {
+      "id": "st:2:teatralnaya",
+      "name": "Театральная",
+      "lat": 55.758808,
+      "lng": 37.61768
+    },
+    {
+      "id": "st:2:tekhnopark",
+      "name": "Технопарк",
+      "lat": 55.695,
+      "lng": 37.664167
+    },
+    {
+      "id": "st:2:tsaritsyno",
+      "name": "Царицыно",
+      "lat": 55.620982,
+      "lng": 37.669612
+    },
+    {
+      "id": "st:2:tverskaya",
+      "name": "Тверская",
+      "lat": 55.765343,
+      "lng": 37.603918
+    },
+    {
+      "id": "st:2:vodnyi-stadion",
+      "name": "Водный стадион",
+      "lat": 55.838978,
+      "lng": 37.487515
+    },
+    {
+      "id": "st:2:voikovskaya",
+      "name": "Войковская",
+      "lat": 55.818923,
+      "lng": 37.497791
+    },
+    {
+      "id": "st:3:arbatskaya",
+      "name": "Арбатская",
+      "lat": 55.752312,
+      "lng": 37.60349
+    },
+    {
+      "id": "st:3:baumanskaya",
+      "name": "Бауманская",
+      "lat": 55.772405,
+      "lng": 37.67904
+    },
+    {
+      "id": "st:3:elektrozavodskaya",
+      "name": "Электрозаводская",
+      "lat": 55.782057,
+      "lng": 37.7053
+    },
+    {
+      "id": "st:3:izmailovskaya",
+      "name": "Измайловская",
+      "lat": 55.787713,
+      "lng": 37.779896
+    },
+    {
+      "id": "st:3:kievskaya",
+      "name": "Киевская",
+      "lat": 55.743117,
+      "lng": 37.564132
+    },
+    {
+      "id": "st:3:krylatskoe",
+      "name": "Крылатское",
+      "lat": 55.756842,
+      "lng": 37.408139
+    },
+    {
+      "id": "st:3:kuntsevskaya",
+      "name": "Кунцевская",
+      "lat": 55.730673,
+      "lng": 37.446522
+    },
+    {
+      "id": "st:3:kurskaya",
+      "name": "Курская",
+      "lat": 55.758564,
+      "lng": 37.659039
+    },
+    {
+      "id": "st:3:mitino",
+      "name": "Митино",
+      "lat": 55.846098,
+      "lng": 37.36122
+    },
+    {
+      "id": "st:3:molodezhnaya",
+      "name": "Молодежная",
+      "lat": 55.741375,
+      "lng": 37.415627
+    },
+    {
+      "id": "st:3:myakinino",
+      "name": "Мякинино",
+      "lat": 55.823342,
+      "lng": 37.385214
+    },
+    {
+      "id": "st:3:park-pobedy",
+      "name": "Парк Победы",
+      "lat": 55.735679,
+      "lng": 37.516865
+    },
+    {
+      "id": "st:3:partizanskaya",
+      "name": "Партизанская",
+      "lat": 55.788401,
+      "lng": 37.74882
+    },
+    {
+      "id": "st:3:pervomaiskaya",
+      "name": "Первомайская",
+      "lat": 55.794376,
+      "lng": 37.799364
+    },
+    {
+      "id": "st:3:ploshchad-revolyutsii",
+      "name": "Площадь Революции",
+      "lat": 55.756741,
+      "lng": 37.62236
+    },
+    {
+      "id": "st:3:pyatnitskoe-shosse",
+      "name": "Пятницкое шоссе",
+      "lat": 55.853634,
+      "lng": 37.353108
+    },
+    {
+      "id": "st:3:semenovskaya",
+      "name": "Семеновская",
+      "lat": 55.783096,
+      "lng": 37.719289
+    },
+    {
+      "id": "st:3:shchelkovskaya",
+      "name": "Щелковская",
+      "lat": 55.809962,
+      "lng": 37.798261
+    },
+    {
+      "id": "st:3:slavyanskii-bulvar",
+      "name": "Славянский бульвар",
+      "lat": 55.729542,
+      "lng": 37.470973
+    },
+    {
+      "id": "st:3:smolenskaya",
+      "name": "Смоленская",
+      "lat": 55.747713,
+      "lng": 37.583802
+    },
+    {
+      "id": "st:3:strogino",
+      "name": "Строгино",
+      "lat": 55.803831,
+      "lng": 37.402405
+    },
+    {
+      "id": "st:3:volokolamskaya",
+      "name": "Волоколамская",
+      "lat": 55.835154,
+      "lng": 37.382453
+    },
+    {
+      "id": "st:4:aleksandrovskii-sad",
+      "name": "Александровский сад",
+      "lat": 55.752255,
+      "lng": 37.608775
+    },
+    {
+      "id": "st:4:arbatskaya",
+      "name": "Арбатская",
+      "lat": 55.752122,
+      "lng": 37.601553
+    },
+    {
+      "id": "st:4:bagrationovskaya",
+      "name": "Багратионовская",
+      "lat": 55.743544,
+      "lng": 37.497042
+    },
+    {
+      "id": "st:4:delovoi-tsentr-vystavochnaya",
+      "name": "Деловой центр (Выставочная)",
+      "lat": 55.750243,
+      "lng": 37.542641
+    },
+    {
+      "id": "st:4:filevskii-park",
+      "name": "Филевский парк",
+      "lat": 55.739665,
+      "lng": 37.483902
+    },
+    {
+      "id": "st:4:fili",
+      "name": "Фили",
+      "lat": 55.746763,
+      "lng": 37.514035
+    },
+    {
+      "id": "st:4:kievskaya",
+      "name": "Киевская",
+      "lat": 55.743168,
+      "lng": 37.565425
+    },
+    {
+      "id": "st:4:kuntsevskaya",
+      "name": "Кунцевская",
+      "lat": 55.730815,
+      "lng": 37.446754
+    },
+    {
+      "id": "st:4:kutuzovskaya",
+      "name": "Кутузовская",
+      "lat": 55.740544,
+      "lng": 37.5341
+    },
+    {
+      "id": "st:4:moskva-siti",
+      "name": "Москва-Сити",
+      "lat": 55.748056,
+      "lng": 37.532778
+    },
+    {
+      "id": "st:4:pionerskaya",
+      "name": "Пионерская",
+      "lat": 55.736027,
+      "lng": 37.466728
+    },
+    {
+      "id": "st:4:smolenskaya",
+      "name": "Смоленская",
+      "lat": 55.749083,
+      "lng": 37.582173
+    },
+    {
+      "id": "st:4:studencheskaya",
+      "name": "Студенческая",
+      "lat": 55.738761,
+      "lng": 37.54842
+    },
+    {
+      "id": "st:5:belorusskaya",
+      "name": "Белорусская",
+      "lat": 55.775179,
+      "lng": 37.582303
+    },
+    {
+      "id": "st:5:dobryninskaya",
+      "name": "Добрынинская",
+      "lat": 55.728994,
+      "lng": 37.622533
+    },
+    {
+      "id": "st:5:kievskaya",
+      "name": "Киевская",
+      "lat": 55.74361,
+      "lng": 37.56735
+    },
+    {
+      "id": "st:5:komsomolskaya",
+      "name": "Комсомольская",
+      "lat": 55.775672,
+      "lng": 37.654772
+    },
+    {
+      "id": "st:5:krasnopresnenskaya",
+      "name": "Краснопресненская",
+      "lat": 55.760378,
+      "lng": 37.577114
+    },
+    {
+      "id": "st:5:kurskaya",
+      "name": "Курская",
+      "lat": 55.758631,
+      "lng": 37.661059
+    },
+    {
+      "id": "st:5:novoslobodskaya",
+      "name": "Новослободская",
+      "lat": 55.779606,
+      "lng": 37.601252
+    },
+    {
+      "id": "st:5:oktyabrskaya",
+      "name": "Октябрьская",
+      "lat": 55.729264,
+      "lng": 37.611049
+    },
+    {
+      "id": "st:5:park-kultury",
+      "name": "Парк культуры",
+      "lat": 55.735221,
+      "lng": 37.593095
+    },
+    {
+      "id": "st:5:paveletskaya",
+      "name": "Павелецкая",
+      "lat": 55.731414,
+      "lng": 37.636294
+    },
+    {
+      "id": "st:5:prospekt-mira",
+      "name": "Проспект Мира",
+      "lat": 55.779584,
+      "lng": 37.633646
+    },
+    {
+      "id": "st:5:taganskaya",
+      "name": "Таганская",
+      "lat": 55.742396,
+      "lng": 37.653334
+    },
+    {
+      "id": "st:6:akademicheskaya",
+      "name": "Академическая",
+      "lat": 55.687147,
+      "lng": 37.5723
+    },
+    {
+      "id": "st:6:alekseevskaya",
+      "name": "Алексеевская",
+      "lat": 55.807794,
+      "lng": 37.638699
+    },
+    {
+      "id": "st:6:babushkinskaya",
+      "name": "Бабушкинская",
+      "lat": 55.870641,
+      "lng": 37.664341
+    },
+    {
+      "id": "st:6:belyaevo",
+      "name": "Беляево",
+      "lat": 55.642357,
+      "lng": 37.526115
+    },
+    {
+      "id": "st:6:botanicheskii-sad",
+      "name": "Ботанический сад",
+      "lat": 55.844597,
+      "lng": 37.637811
+    },
+    {
+      "id": "st:6:kaluzhskaya",
+      "name": "Калужская",
+      "lat": 55.656682,
+      "lng": 37.540075
+    },
+    {
+      "id": "st:6:kitai-gorod",
+      "name": "Китай-город",
+      "lat": 55.756498,
+      "lng": 37.631326
+    },
+    {
+      "id": "st:6:konkovo",
+      "name": "Коньково",
+      "lat": 55.631857,
+      "lng": 37.519156
+    },
+    {
+      "id": "st:6:leninskii-prospekt",
+      "name": "Ленинский проспект",
+      "lat": 55.70678,
+      "lng": 37.58499
+    },
+    {
+      "id": "st:6:medvedkovo",
+      "name": "Медведково",
+      "lat": 55.888103,
+      "lng": 37.661562
+    },
+    {
+      "id": "st:6:novoyasenevskaya",
+      "name": "Новоясеневская",
+      "lat": 55.601947,
+      "lng": 37.553017
+    },
+    {
+      "id": "st:6:novye-cheremushki",
+      "name": "Новые Черемушки",
+      "lat": 55.670077,
+      "lng": 37.554493
+    },
+    {
+      "id": "st:6:oktyabrskaya",
+      "name": "Октябрьская",
+      "lat": 55.731232,
+      "lng": 37.612851
+    },
+    {
+      "id": "st:6:profsoyuznaya",
+      "name": "Профсоюзная",
+      "lat": 55.677671,
+      "lng": 37.562595
+    },
+    {
+      "id": "st:6:prospekt-mira",
+      "name": "Проспект Мира",
+      "lat": 55.781827,
+      "lng": 37.633199
+    },
+    {
+      "id": "st:6:rizhskaya",
+      "name": "Рижская",
+      "lat": 55.792494,
+      "lng": 37.636114
+    },
+    {
+      "id": "st:6:shabolovskaya",
+      "name": "Шаболовская",
+      "lat": 55.718828,
+      "lng": 37.607892
+    },
+    {
+      "id": "st:6:sukharevskaya",
+      "name": "Сухаревская",
+      "lat": 55.772315,
+      "lng": 37.63285
+    },
+    {
+      "id": "st:6:sviblovo",
+      "name": "Свиблово",
+      "lat": 55.855558,
+      "lng": 37.653379
+    },
+    {
+      "id": "st:6:teplyi-stan",
+      "name": "Теплый Стан",
+      "lat": 55.61873,
+      "lng": 37.505912
+    },
+    {
+      "id": "st:6:tretyakovskaya",
+      "name": "Третьяковская",
+      "lat": 55.74073,
+      "lng": 37.625624
+    },
+    {
+      "id": "st:6:turgenevskaya",
+      "name": "Тургеневская",
+      "lat": 55.765371,
+      "lng": 37.636732
+    },
+    {
+      "id": "st:6:vdnkh",
+      "name": "ВДНХ",
+      "lat": 55.819626,
+      "lng": 37.640751
+    },
+    {
+      "id": "st:6:yasenevo",
+      "name": "Ясенево",
+      "lat": 55.606182,
+      "lng": 37.5334
+    },
+    {
+      "id": "st:7:barrikadnaya",
+      "name": "Баррикадная",
+      "lat": 55.760793,
+      "lng": 37.581242
+    },
+    {
+      "id": "st:7:begovaya",
+      "name": "Беговая",
+      "lat": 55.773505,
+      "lng": 37.545518
+    },
+    {
+      "id": "st:7:kitai-gorod",
+      "name": "Китай-город",
+      "lat": 55.75436,
+      "lng": 37.633877
+    },
+    {
+      "id": "st:7:kotelniki",
+      "name": "Котельники",
+      "lat": 55.6743,
+      "lng": 37.8582
+    },
+    {
+      "id": "st:7:kuzminki",
+      "name": "Кузьминки",
+      "lat": 55.705493,
+      "lng": 37.763295
+    },
+    {
+      "id": "st:7:kuznetskii-most",
+      "name": "Кузнецкий мост",
+      "lat": 55.761498,
+      "lng": 37.624423
+    },
+    {
+      "id": "st:7:lermontovskii-prospekt",
+      "name": "Лермонтовский проспект",
+      "lat": 55.702036,
+      "lng": 37.851044
+    },
+    {
+      "id": "st:7:oktyabrskoe-pole",
+      "name": "Октябрьское поле",
+      "lat": 55.793581,
+      "lng": 37.493317
+    },
+    {
+      "id": "st:7:planernaya",
+      "name": "Планерная",
+      "lat": 55.859676,
+      "lng": 37.436808
+    },
+    {
+      "id": "st:7:polezhaevskaya",
+      "name": "Полежаевская",
+      "lat": 55.777201,
+      "lng": 37.517895
+    },
+    {
+      "id": "st:7:proletarskaya",
+      "name": "Пролетарская",
+      "lat": 55.731546,
+      "lng": 37.666917
+    },
+    {
+      "id": "st:7:pushkinskaya",
+      "name": "Пушкинская",
+      "lat": 55.765607,
+      "lng": 37.604356
+    },
+    {
+      "id": "st:7:ryazanskii-prospekt",
+      "name": "Рязанский проспект",
+      "lat": 55.716139,
+      "lng": 37.792694
+    },
+    {
+      "id": "st:7:shchukinskaya",
+      "name": "Щукинская",
+      "lat": 55.8094,
+      "lng": 37.463241
+    },
+    {
+      "id": "st:7:skhodnenskaya",
+      "name": "Сходненская",
+      "lat": 55.84926,
+      "lng": 37.44076
+    },
+    {
+      "id": "st:7:spartak",
+      "name": "Спартак",
+      "lat": 55.8182,
+      "lng": 37.4352
+    },
+    {
+      "id": "st:7:taganskaya",
+      "name": "Таганская",
+      "lat": 55.739502,
+      "lng": 37.653605
+    },
+    {
+      "id": "st:7:tekstilshchiki",
+      "name": "Текстильщики",
+      "lat": 55.709211,
+      "lng": 37.732117
+    },
+    {
+      "id": "st:7:tushinskaya",
+      "name": "Тушинская",
+      "lat": 55.825479,
+      "lng": 37.437024
+    },
+    {
+      "id": "st:7:ulitsa-1905-goda",
+      "name": "Улица 1905 года",
+      "lat": 55.763944,
+      "lng": 37.562271
+    },
+    {
+      "id": "st:7:volgogradskii-prospekt",
+      "name": "Волгоградский проспект",
+      "lat": 55.725546,
+      "lng": 37.685197
+    },
+    {
+      "id": "st:7:vykhino",
+      "name": "Выхино",
+      "lat": 55.715983,
+      "lng": 37.816788
+    },
+    {
+      "id": "st:7:zhulebino",
+      "name": "Жулебино",
+      "lat": 55.684722,
+      "lng": 37.855833
+    },
+    {
+      "id": "st:8:aviamotornaya",
+      "name": "Авиамоторная",
+      "lat": 55.751933,
+      "lng": 37.717444
+    },
+    {
+      "id": "st:8:marksistskaya",
+      "name": "Марксистская",
+      "lat": 55.740746,
+      "lng": 37.65604
+    },
+    {
+      "id": "st:8:novogireevo",
+      "name": "Новогиреево",
+      "lat": 55.752237,
+      "lng": 37.814587
+    },
+    {
+      "id": "st:8:novokosino",
+      "name": "Новокосино",
+      "lat": 55.745113,
+      "lng": 37.864052
+    },
+    {
+      "id": "st:8:perovo",
+      "name": "Перово",
+      "lat": 55.75098,
+      "lng": 37.78422
+    },
+    {
+      "id": "st:8:ploshchad-ilicha",
+      "name": "Площадь Ильича",
+      "lat": 55.747115,
+      "lng": 37.680726
+    },
+    {
+      "id": "st:8:shosse-entuziastov",
+      "name": "Шоссе Энтузиастов",
+      "lat": 55.75809,
+      "lng": 37.751703
+    },
+    {
+      "id": "st:8:tretyakovskaya",
+      "name": "Третьяковская",
+      "lat": 55.741125,
+      "lng": 37.626142
+    },
+    {
+      "id": "st:8a:aeroport-vnukovo",
+      "name": "Аэропорт Внуково",
+      "lat": 55.606667,
+      "lng": 37.288333
+    },
+    {
+      "id": "st:8a:borovskoe-shosse",
+      "name": "Боровское шоссе",
+      "lat": 55.647,
+      "lng": 37.3701
+    },
+    {
+      "id": "st:8a:delovoi-tsentr",
+      "name": "Деловой центр",
+      "lat": 55.7491,
+      "lng": 37.5395
+    },
+    {
+      "id": "st:8a:govorovo",
+      "name": "Говорово",
+      "lat": 55.6588,
+      "lng": 37.4174
+    },
+    {
+      "id": "st:8a:lomonosovskii-prospekt",
+      "name": "Ломоносовский проспект",
+      "lat": 55.7055,
+      "lng": 37.5225
+    },
+    {
+      "id": "st:8a:michurinskii-prospekt",
+      "name": "Мичуринский проспект",
+      "lat": 55.6888,
+      "lng": 37.485
+    },
+    {
+      "id": "st:8a:minskaya",
+      "name": "Минская",
+      "lat": 55.7232,
+      "lng": 37.5038
+    },
+    {
+      "id": "st:8a:novoperedelkino",
+      "name": "Новопеределкино",
+      "lat": 55.6385,
+      "lng": 37.3544
+    },
+    {
+      "id": "st:8a:ozernaya",
+      "name": "Озёрная",
+      "lat": 55.6698,
+      "lng": 37.4495
+    },
+    {
+      "id": "st:8a:park-pobedy",
+      "name": "Парк Победы",
+      "lat": 55.736478,
+      "lng": 37.514401
+    },
+    {
+      "id": "st:8a:pykhtino",
+      "name": "Пыхтино",
+      "lat": 55.625,
+      "lng": 37.298056
+    },
+    {
+      "id": "st:8a:ramenki",
+      "name": "Раменки",
+      "lat": 55.6961,
+      "lng": 37.505
+    },
+    {
+      "id": "st:8a:rasskazovka",
+      "name": "Рассказовка",
+      "lat": 55.6324,
+      "lng": 37.3328
+    },
+    {
+      "id": "st:8a:solntsevo",
+      "name": "Солнцево",
+      "lat": 55.649,
+      "lng": 37.3911
+    },
+    {
+      "id": "st:9:altufevo",
+      "name": "Алтуфьево",
+      "lat": 55.899034,
+      "lng": 37.586473
+    },
+    {
+      "id": "st:9:annino",
+      "name": "Аннино",
+      "lat": 55.583477,
+      "lng": 37.596999
+    },
+    {
+      "id": "st:9:bibirevo",
+      "name": "Бибирево",
+      "lat": 55.883868,
+      "lng": 37.603011
+    },
+    {
+      "id": "st:9:borovitskaya",
+      "name": "Боровицкая",
+      "lat": 55.750399,
+      "lng": 37.60934
+    },
+    {
+      "id": "st:9:bulvar-dmitriya-donskogo",
+      "name": "Бульвар Дмитрия Донского",
+      "lat": 55.568201,
+      "lng": 37.576856
+    },
+    {
+      "id": "st:9:chekhovskaya",
+      "name": "Чеховская",
+      "lat": 55.765747,
+      "lng": 37.608493
+    },
+    {
+      "id": "st:9:chertanovskaya",
+      "name": "Чертановская",
+      "lat": 55.640538,
+      "lng": 37.606065
+    },
+    {
+      "id": "st:9:dmitrovskaya",
+      "name": "Дмитровская",
+      "lat": 55.808056,
+      "lng": 37.581734
+    },
+    {
+      "id": "st:9:mendeleevskaya",
+      "name": "Менделеевская",
+      "lat": 55.781999,
+      "lng": 37.599141
+    },
+    {
+      "id": "st:9:nagatinskaya",
+      "name": "Нагатинская",
+      "lat": 55.682099,
+      "lng": 37.620917
+    },
+    {
+      "id": "st:9:nagornaya",
+      "name": "Нагорная",
+      "lat": 55.672962,
+      "lng": 37.610397
+    },
+    {
+      "id": "st:9:nakhimovskii-prospekt",
+      "name": "Нахимовский проспект",
+      "lat": 55.662379,
+      "lng": 37.605274
+    },
+    {
+      "id": "st:9:otradnoe",
+      "name": "Отрадное",
+      "lat": 55.864273,
+      "lng": 37.605066
+    },
+    {
+      "id": "st:9:petrovsko-razumovskaya",
+      "name": "Петровско-Разумовская",
+      "lat": 55.836565,
+      "lng": 37.575512
+    },
+    {
+      "id": "st:9:polyanka",
+      "name": "Полянка",
+      "lat": 55.736795,
+      "lng": 37.618594
+    },
+    {
+      "id": "st:9:prazhskaya",
+      "name": "Пражская",
+      "lat": 55.610962,
+      "lng": 37.602386
+    },
+    {
+      "id": "st:9:savelovskaya",
+      "name": "Савёловская",
+      "lat": 55.794054,
+      "lng": 37.587163
+    },
+    {
+      "id": "st:9:serpukhovskaya",
+      "name": "Серпуховская",
+      "lat": 55.726548,
+      "lng": 37.624792
+    },
+    {
+      "id": "st:9:sevastopolskaya",
+      "name": "Севастопольская",
+      "lat": 55.651451,
+      "lng": 37.59809
+    },
+    {
+      "id": "st:9:timiryazevskaya",
+      "name": "Тимирязевская",
+      "lat": 55.81866,
+      "lng": 37.574498
+    },
+    {
+      "id": "st:9:tsvetnoi-bulvar",
+      "name": "Цветной бульвар",
+      "lat": 55.771653,
+      "lng": 37.620466
+    },
+    {
+      "id": "st:9:tulskaya",
+      "name": "Тульская",
+      "lat": 55.70961,
+      "lng": 37.622569
+    },
+    {
+      "id": "st:9:ulitsa-akademika-yangelya",
+      "name": "Улица Академика Янгеля",
+      "lat": 55.596753,
+      "lng": 37.601498
+    },
+    {
+      "id": "st:9:vladykino",
+      "name": "Владыкино",
+      "lat": 55.848236,
+      "lng": 37.590451
+    },
+    {
+      "id": "st:9:yuzhnaya",
+      "name": "Южная",
+      "lat": 55.622436,
+      "lng": 37.609047
+    },
+    {
+      "id": "st:d1:begovaya",
+      "name": "Беговая",
+      "lat": 55.773505,
+      "lng": 37.545518
+    },
+    {
+      "id": "st:d1:belorusskaya",
+      "name": "Белорусская",
+      "lat": 55.775179,
+      "lng": 37.582303
+    },
+    {
+      "id": "st:d1:beskudnikovo",
+      "name": "Бескудниково",
+      "lat": 55.882713,
+      "lng": 37.567768
+    },
+    {
+      "id": "st:d1:degunino",
+      "name": "Дегунино",
+      "lat": 55.86586,
+      "lng": 37.573235
+    },
+    {
+      "id": "st:d1:fili",
+      "name": "Фили",
+      "lat": 55.744263,
+      "lng": 37.514526
+    },
+    {
+      "id": "st:d1:kuntsevskaya",
+      "name": "Кунцевская",
+      "lat": 55.730554,
+      "lng": 37.445591
+    },
+    {
+      "id": "st:d1:lianozovo",
+      "name": "Лианозово",
+      "lat": 55.897316,
+      "lng": 37.553261
+    },
+    {
+      "id": "st:d1:mark",
+      "name": "Марк",
+      "lat": 55.904458,
+      "lng": 37.538242
+    },
+    {
+      "id": "st:d1:okruzhnaya",
+      "name": "Окружная",
+      "lat": 55.848889,
+      "lng": 37.571111
+    },
+    {
+      "id": "st:d1:rabochii-poselok",
+      "name": "Рабочий Посёлок",
+      "lat": 55.726957,
+      "lng": 37.415577
+    },
+    {
+      "id": "st:d1:savelovskaya",
+      "name": "Савёловская",
+      "lat": 55.793936,
+      "lng": 37.587038
+    },
+    {
+      "id": "st:d1:setun",
+      "name": "Сетунь",
+      "lat": 55.723713,
+      "lng": 37.397259
+    },
+    {
+      "id": "st:d1:skolkovo",
+      "name": "Сколково",
+      "lat": 55.666801,
+      "lng": 37.424618
+    },
+    {
+      "id": "st:d1:slavyanskii-bulvar",
+      "name": "Славянский бульвар",
+      "lat": 55.729722,
+      "lng": 37.470556
+    },
+    {
+      "id": "st:d1:testovskaya",
+      "name": "Тестовская",
+      "lat": 55.754292,
+      "lng": 37.531551
+    },
+    {
+      "id": "st:d1:timiryazevskaya",
+      "name": "Тимирязевская",
+      "lat": 55.81866,
+      "lng": 37.574498
+    },
+    {
+      "id": "st:d2:butovo",
+      "name": "Бутово",
+      "lat": 55.548279,
+      "lng": 37.555668
+    },
+    {
+      "id": "st:d2:depo",
+      "name": "Депо",
+      "lat": 55.674257,
+      "lng": 37.728446
+    },
+    {
+      "id": "st:d2:dmitrovskaya",
+      "name": "Дмитровская",
+      "lat": 55.808056,
+      "lng": 37.581734
+    },
+    {
+      "id": "st:d2:grazhdanskaya",
+      "name": "Гражданская",
+      "lat": 55.805527,
+      "lng": 37.55315
+    },
+    {
+      "id": "st:d2:kalitniki",
+      "name": "Калитники",
+      "lat": 55.733981,
+      "lng": 37.702203
+    },
+    {
+      "id": "st:d2:krasnyi-baltiets",
+      "name": "Красный Балтиец",
+      "lat": 55.815514,
+      "lng": 37.526367
+    },
+    {
+      "id": "st:d2:krasnyi-stroitel",
+      "name": "Красный строитель",
+      "lat": 55.589455,
+      "lng": 37.615093
+    },
+    {
+      "id": "st:d2:kurskaya",
+      "name": "Курская",
+      "lat": 55.757622,
+      "lng": 37.660767
+    },
+    {
+      "id": "st:d2:kuryanovo",
+      "name": "Курьяново",
+      "lat": 55.649722,
+      "lng": 37.701667
+    },
+    {
+      "id": "st:d2:lyublino",
+      "name": "Люблино",
+      "lat": 55.685112,
+      "lng": 37.733715
+    },
+    {
+      "id": "st:d2:marina-roshcha",
+      "name": "Марьина Роща",
+      "lat": 55.800833,
+      "lng": 37.618889
+    },
+    {
+      "id": "st:d2:moskva-tovarnaya",
+      "name": "Москва Товарная",
+      "lat": 55.745358,
+      "lng": 37.688839
+    },
+    {
+      "id": "st:d2:moskvoreche",
+      "name": "Москворечье",
+      "lat": 55.641239,
+      "lng": 37.689789
+    },
+    {
+      "id": "st:d2:novokhokhlovskaya",
+      "name": "Новохохловская",
+      "lat": 55.718523,
+      "lng": 37.719236
+    },
+    {
+      "id": "st:d2:ostafevo",
+      "name": "Остафьево",
+      "lat": 55.50337,
+      "lng": 37.520055
+    },
+    {
+      "id": "st:d2:penyagino",
+      "name": "Пенягино",
+      "lat": 55.822539,
+      "lng": 37.361049
+    },
+    {
+      "id": "st:d2:pererva",
+      "name": "Перерва",
+      "lat": 55.660809,
+      "lng": 37.716278
+    },
+    {
+      "id": "st:d2:ploshchad-trekh-vokzalov",
+      "name": "Площадь трёх вокзалов",
+      "lat": 55.776087,
+      "lng": 37.651861
+    },
+    {
+      "id": "st:d2:pokrovskoe",
+      "name": "Покровское",
+      "lat": 55.602761,
+      "lng": 37.631924
+    },
+    {
+      "id": "st:d2:pokrovskoe-streshnevo",
+      "name": "Покровское-Стрешнево",
+      "lat": 55.814247,
+      "lng": 37.47678
+    },
+    {
+      "id": "st:d2:rizhskaya",
+      "name": "Рижская",
+      "lat": 55.792494,
+      "lng": 37.636114
+    },
+    {
+      "id": "st:d2:shcherbinka",
+      "name": "Щербинка",
+      "lat": 55.509724,
+      "lng": 37.562008
+    },
+    {
+      "id": "st:d2:streshnevo",
+      "name": "Стрешнево",
+      "lat": 55.813611,
+      "lng": 37.486944
+    },
+    {
+      "id": "st:d2:tekstilshchiki",
+      "name": "Текстильщики",
+      "lat": 55.708934,
+      "lng": 37.731283
+    },
+    {
+      "id": "st:d2:trikotazhnaya",
+      "name": "Трикотажная",
+      "lat": 55.833137,
+      "lng": 37.398967
+    },
+    {
+      "id": "st:d2:tsaritsyno",
+      "name": "Царицыно",
+      "lat": 55.618309,
+      "lng": 37.668846
+    },
+    {
+      "id": "st:d2:tushinskaya",
+      "name": "Тушинская",
+      "lat": 55.825479,
+      "lng": 37.437024
+    },
+    {
+      "id": "st:d2:volokolamskaya",
+      "name": "Волоколамская",
+      "lat": 55.835154,
+      "lng": 37.382453
+    },
+    {
+      "id": "st:d3:andronovka",
+      "name": "Андроновка",
+      "lat": 55.744444,
+      "lng": 37.741111
+    },
+    {
+      "id": "st:d3:aviamotornaya",
+      "name": "Авиамоторная",
+      "lat": 55.750278,
+      "lng": 37.721944
+    },
+    {
+      "id": "st:d3:elektrozavodskaya",
+      "name": "Электрозаводская",
+      "lat": 55.781111,
+      "lng": 37.705278
+    },
+    {
+      "id": "st:d3:grachevskaya",
+      "name": "Грачёвская",
+      "lat": 55.869444,
+      "lng": 37.509167
+    },
+    {
+      "id": "st:d3:khovrino",
+      "name": "Ховрино",
+      "lat": 55.879444,
+      "lng": 37.486667
+    },
+    {
+      "id": "st:d3:kosino",
+      "name": "Косино",
+      "lat": 55.714167,
+      "lng": 37.8475
+    },
+    {
+      "id": "st:d3:kryukovo",
+      "name": "Крюково",
+      "lat": 55.979722,
+      "lng": 37.173611
+    },
+    {
+      "id": "st:d3:likhobory",
+      "name": "Лихоборы",
+      "lat": 55.85,
+      "lng": 37.5525
+    },
+    {
+      "id": "st:d3:mitkovo",
+      "name": "Митьково",
+      "lat": 55.786389,
+      "lng": 37.6675
+    },
+    {
+      "id": "st:d3:molzhaninovo",
+      "name": "Молжаниново",
+      "lat": 55.924167,
+      "lng": 37.380833
+    },
+    {
+      "id": "st:d3:mosselmash",
+      "name": "Моссельмаш",
+      "lat": 55.862222,
+      "lng": 37.526389
+    },
+    {
+      "id": "st:d3:novopodrezkovo",
+      "name": "Новоподрезково",
+      "lat": 55.936389,
+      "lng": 37.351667
+    },
+    {
+      "id": "st:d3:ostankino",
+      "name": "Останкино",
+      "lat": 55.817222,
+      "lng": 37.603611
+    },
+    {
+      "id": "st:d3:perovo",
+      "name": "Перово",
+      "lat": 55.735556,
+      "lng": 37.765
+    },
+    {
+      "id": "st:d3:petrovsko-razumovskaya",
+      "name": "Петровско-Разумовская",
+      "lat": 55.839722,
+      "lng": 37.568333
+    },
+    {
+      "id": "st:d3:plyushchevo",
+      "name": "Плющево",
+      "lat": 55.730556,
+      "lng": 37.774167
+    },
+    {
+      "id": "st:d3:rizhskaya",
+      "name": "Рижская",
+      "lat": 55.796944,
+      "lng": 37.639167
+    },
+    {
+      "id": "st:d3:sortirovochnaya",
+      "name": "Сортировочная",
+      "lat": 55.763611,
+      "lng": 37.720833
+    },
+    {
+      "id": "st:d3:veshnyaki",
+      "name": "Вешняки",
+      "lat": 55.721944,
+      "lng": 37.799167
+    },
+    {
+      "id": "st:d3:vykhino",
+      "name": "Выхино",
+      "lat": 55.716575,
+      "lng": 37.815911
+    },
+    {
+      "id": "st:d4:aminevskaya",
+      "name": "Аминьевская",
+      "lat": 55.699444,
+      "lng": 37.468056
+    },
+    {
+      "id": "st:d4:belorusskaya",
+      "name": "Белорусская",
+      "lat": 55.776389,
+      "lng": 37.580278
+    },
+    {
+      "id": "st:d4:ermakova-roshcha",
+      "name": "Ермакова Роща",
+      "lat": 55.765556,
+      "lng": 37.535278
+    },
+    {
+      "id": "st:d4:kokoshkino",
+      "name": "Кокошкино",
+      "lat": 55.599722,
+      "lng": 37.171389
+    },
+    {
+      "id": "st:d4:krekshino",
+      "name": "Крёкшино",
+      "lat": 55.577778,
+      "lng": 37.109722
+    },
+    {
+      "id": "st:d4:kurskaya",
+      "name": "Курская",
+      "lat": 55.740833,
+      "lng": 37.660556
+    },
+    {
+      "id": "st:d4:kuskovo",
+      "name": "Кусково",
+      "lat": 55.739722,
+      "lng": 37.795278
+    },
+    {
+      "id": "st:d4:kutuzovskaya",
+      "name": "Кутузовская",
+      "lat": 55.741944,
+      "lng": 37.533056
+    },
+    {
+      "id": "st:d4:marina-roshcha",
+      "name": "Марьина Роща",
+      "lat": 55.800833,
+      "lng": 37.618889
+    },
+    {
+      "id": "st:d4:matveevskoe",
+      "name": "Матвеевское",
+      "lat": 55.704722,
+      "lng": 37.482222
+    },
+    {
+      "id": "st:d4:meshcherskaya",
+      "name": "Мещерская",
+      "lat": 55.666667,
+      "lng": 37.424444
+    },
+    {
+      "id": "st:d4:michurinets",
+      "name": "Мичуринец",
+      "lat": 55.646111,
+      "lng": 37.315
+    },
+    {
+      "id": "st:d4:minskaya",
+      "name": "Минская",
+      "lat": 55.723333,
+      "lng": 37.533056
+    },
+    {
+      "id": "st:d4:nizhegorodskaya",
+      "name": "Нижегородская",
+      "lat": 55.733333,
+      "lng": 37.729444
+    },
+    {
+      "id": "st:d4:novogireevo",
+      "name": "Новогиреево",
+      "lat": 55.744444,
+      "lng": 37.818333
+    },
+    {
+      "id": "st:d4:novoperedelkino",
+      "name": "Новопеределкино",
+      "lat": 55.639167,
+      "lng": 37.381111
+    },
+    {
+      "id": "st:d4:ochakovo-i",
+      "name": "Очаково I",
+      "lat": 55.683611,
+      "lng": 37.451389
+    },
+    {
+      "id": "st:d4:peredelkino",
+      "name": "Переделкино",
+      "lat": 55.656111,
+      "lng": 37.353889
+    },
+    {
+      "id": "st:d4:ploshchad-trekh-vokzalov",
+      "name": "Площадь трёх вокзалов",
+      "lat": 55.776667,
+      "lng": 37.651111
+    },
+    {
+      "id": "st:d4:poklonnaya",
+      "name": "Поклонная",
+      "lat": 55.728333,
+      "lng": 37.511667
+    },
+    {
+      "id": "st:d4:rizhskaya",
+      "name": "Рижская",
+      "lat": 55.793889,
+      "lng": 37.638611
+    },
+    {
+      "id": "st:d4:sanino",
+      "name": "Санино",
+      "lat": 55.583889,
+      "lng": 37.138333
+    },
+    {
+      "id": "st:d4:savelovskaya",
+      "name": "Савёловская",
+      "lat": 55.794444,
+      "lng": 37.590278
+    },
+    {
+      "id": "st:d4:serp-i-molot",
+      "name": "Серп и Молот",
+      "lat": 55.748056,
+      "lng": 37.681944
+    },
+    {
+      "id": "st:d4:solnechnaya",
+      "name": "Солнечная",
+      "lat": 55.656944,
+      "lng": 37.383611
+    },
+    {
+      "id": "st:d4:testovskaya",
+      "name": "Тестовская",
+      "lat": 55.750833,
+      "lng": 37.530278
+    },
+    {
+      "id": "st:d4:tolstopaltsevo",
+      "name": "Толстопальцево",
+      "lat": 55.607778,
+      "lng": 37.186389
+    },
+    {
+      "id": "st:d4:vnukovo",
+      "name": "Внуково",
+      "lat": 55.648889,
+      "lng": 37.269722
+    },
+    {
+      "id": "st:mck:andronovka",
+      "name": "Андроновка",
+      "lat": 55.741111,
+      "lng": 37.734444
+    },
+    {
+      "id": "st:mck:avtozavodskaya",
+      "name": "Автозаводская",
+      "lat": 55.70631,
+      "lng": 37.66314
+    },
+    {
+      "id": "st:mck:baltiiskaya",
+      "name": "Балтийская",
+      "lat": 55.825833,
+      "lng": 37.496111
+    },
+    {
+      "id": "st:mck:belokamennaya",
+      "name": "Белокаменная",
+      "lat": 55.83,
+      "lng": 37.700556
+    },
+    {
+      "id": "st:mck:botanicheskii-sad",
+      "name": "Ботанический сад",
+      "lat": 55.845556,
+      "lng": 37.640278
+    },
+    {
+      "id": "st:mck:bulvar-rokossovskogo",
+      "name": "Бульвар Рокоссовского",
+      "lat": 55.817222,
+      "lng": 37.736944
+    },
+    {
+      "id": "st:mck:delovoi-tsentr",
+      "name": "Деловой центр",
+      "lat": 55.747222,
+      "lng": 37.532222
+    },
+    {
+      "id": "st:mck:dubrovka",
+      "name": "Дубровка",
+      "lat": 55.71268,
+      "lng": 37.677775
+    },
+    {
+      "id": "st:mck:izmailovo",
+      "name": "Измайлово",
+      "lat": 55.788611,
+      "lng": 37.742778
+    },
+    {
+      "id": "st:mck:khoroshevo",
+      "name": "Хорошево",
+      "lat": 55.777222,
+      "lng": 37.507222
+    },
+    {
+      "id": "st:mck:koptevo",
+      "name": "Коптево",
+      "lat": 55.839637,
+      "lng": 37.520037
+    },
+    {
+      "id": "st:mck:krymskaya",
+      "name": "Крымская",
+      "lat": 55.690038,
+      "lng": 37.605
+    },
+    {
+      "id": "st:mck:kutuzovskaya",
+      "name": "Кутузовская",
+      "lat": 55.740833,
+      "lng": 37.533333
+    },
+    {
+      "id": "st:mck:likhobory",
+      "name": "Лихоборы",
+      "lat": 55.847222,
+      "lng": 37.551389
+    },
+    {
+      "id": "st:mck:lokomotiv",
+      "name": "Локомотив",
+      "lat": 55.803219,
+      "lng": 37.745742
+    },
+    {
+      "id": "st:mck:luzhniki",
+      "name": "Лужники",
+      "lat": 55.720278,
+      "lng": 37.563056
+    },
+    {
+      "id": "st:mck:nizhegorodskaya",
+      "name": "Нижегородская",
+      "lat": 55.732222,
+      "lng": 37.72825
+    },
+    {
+      "id": "st:mck:novokhokhlovskaya",
+      "name": "Новохохловская",
+      "lat": 55.723889,
+      "lng": 37.716111
+    },
+    {
+      "id": "st:mck:okruzhnaya",
+      "name": "Окружная",
+      "lat": 55.848889,
+      "lng": 37.571111
+    },
+    {
+      "id": "st:mck:panfilovskaya",
+      "name": "Панфиловская",
+      "lat": 55.799167,
+      "lng": 37.498889
+    },
+    {
+      "id": "st:mck:ploshchad-gagarina",
+      "name": "Площадь Гагарина",
+      "lat": 55.706944,
+      "lng": 37.585833
+    },
+    {
+      "id": "st:mck:rostokino",
+      "name": "Ростокино",
+      "lat": 55.839444,
+      "lng": 37.667778
+    },
+    {
+      "id": "st:mck:shelepikha",
+      "name": "Шелепиха",
+      "lat": 55.7575,
+      "lng": 37.525556
+    },
+    {
+      "id": "st:mck:shosse-entuziastov",
+      "name": "Шоссе Энтузиастов",
+      "lat": 55.758633,
+      "lng": 37.748477
+    },
+    {
+      "id": "st:mck:sokolinaya-gora",
+      "name": "Соколиная Гора",
+      "lat": 55.77,
+      "lng": 37.745278
+    },
+    {
+      "id": "st:mck:streshnevo",
+      "name": "Стрешнево",
+      "lat": 55.813611,
+      "lng": 37.486944
+    },
+    {
+      "id": "st:mck:ugreshskaya",
+      "name": "Угрешская",
+      "lat": 55.718333,
+      "lng": 37.697778
+    },
+    {
+      "id": "st:mck:verkhnie-kotly",
+      "name": "Верхние Котлы",
+      "lat": 55.69,
+      "lng": 37.618889
+    },
+    {
+      "id": "st:mck:vladykino",
+      "name": "Владыкино",
+      "lat": 55.847222,
+      "lng": 37.591944
+    },
+    {
+      "id": "st:mck:zil",
+      "name": "ЗИЛ",
+      "lat": 55.698333,
+      "lng": 37.648333
+    },
+    {
+      "id": "st:mck:zorge",
+      "name": "Зорге",
+      "lat": 55.787778,
+      "lng": 37.504444
+    }
   ],
   "zones": [
-    {"id": "line-1", "kind": "line", "name": "красная ветка", "name_in": "на красной ветке",
-     "name_gen": "красной ветки", "stations": ["st:1:frunzenskaya", "st:1:sportivnaya"]},
-    {"id": "line-2", "kind": "line", "name": "зелёная ветка", "name_in": "на зелёной ветке",
-     "name_gen": "зелёной ветки", "stations": ["st:2:sokol"]},
-    {"id": "d-khamovniki", "kind": "district", "name": "Хамовники", "name_in": "в Хамовниках",
-     "name_gen": "Хамовников", "stations": ["st:1:frunzenskaya", "st:1:sportivnaya", "st:2:sokol"]},
-    {"id": "st-sokol", "kind": "station", "name": "Сокол", "name_in": "у метро Сокол",
-     "name_gen": "метро Сокол", "stations": ["st:2:sokol"]}
+    {
+      "id": "d-akademicheskii",
+      "kind": "district",
+      "name": "Академический",
+      "name_in": "в Академическом",
+      "name_gen": "Академического",
+      "stations": [
+        "st:16:akademicheskaya",
+        "st:16:krymskaya",
+        "st:6:akademicheskaya",
+        "st:6:leninskii-prospekt",
+        "st:6:profsoyuznaya",
+        "st:mck:krymskaya",
+        "st:mck:ploshchad-gagarina"
+      ]
+    },
+    {
+      "id": "d-alekseevskii",
+      "kind": "district",
+      "name": "Алексеевский",
+      "name_in": "в Алексеевском",
+      "name_gen": "Алексеевского",
+      "stations": [
+        "st:6:alekseevskaya",
+        "st:6:rizhskaya",
+        "st:6:vdnkh",
+        "st:d2:rizhskaya",
+        "st:d3:rizhskaya",
+        "st:d4:rizhskaya"
+      ]
+    },
+    {
+      "id": "d-altufevskii",
+      "kind": "district",
+      "name": "Алтуфьевский",
+      "name_in": "в Алтуфьевском",
+      "name_gen": "Алтуфьевского",
+      "stations": [
+        "st:9:bibirevo",
+        "st:d1:beskudnikovo"
+      ]
+    },
+    {
+      "id": "d-arbat",
+      "kind": "district",
+      "name": "Арбат",
+      "name_in": "на Арбате",
+      "name_gen": "Арбата",
+      "stations": [
+        "st:1:biblioteka-im-lenina",
+        "st:1:kropotkinskaya",
+        "st:1:okhotnyi-ryad",
+        "st:3:arbatskaya",
+        "st:3:smolenskaya",
+        "st:4:aleksandrovskii-sad",
+        "st:4:arbatskaya",
+        "st:4:smolenskaya",
+        "st:7:barrikadnaya",
+        "st:9:borovitskaya"
+      ]
+    },
+    {
+      "id": "d-aeroport",
+      "kind": "district",
+      "name": "Аэропорт",
+      "name_in": "на Аэропорте",
+      "name_gen": "Аэропорта",
+      "stations": [
+        "st:11:petrovskii-park",
+        "st:2:aeroport",
+        "st:2:dinamo",
+        "st:2:sokol",
+        "st:d2:grazhdanskaya",
+        "st:d2:krasnyi-baltiets"
+      ]
+    },
+    {
+      "id": "d-babushkinskii",
+      "kind": "district",
+      "name": "Бабушкинский",
+      "name_in": "в Бабушкинском",
+      "name_gen": "Бабушкинского",
+      "stations": [
+        "st:6:babushkinskaya",
+        "st:6:sviblovo"
+      ]
+    },
+    {
+      "id": "d-basmannyi",
+      "kind": "district",
+      "name": "Басманный",
+      "name_in": "в Басманном",
+      "name_gen": "Басманного",
+      "stations": [
+        "st:10:chkalovskaya",
+        "st:10:sretenskii-bulvar",
+        "st:11:elektrozavodskaya",
+        "st:1:chistye-prudy",
+        "st:1:krasnye-vorota",
+        "st:1:lubyanka",
+        "st:3:baumanskaya",
+        "st:3:elektrozavodskaya",
+        "st:3:kurskaya",
+        "st:5:kurskaya",
+        "st:6:kitai-gorod",
+        "st:6:turgenevskaya",
+        "st:7:kitai-gorod",
+        "st:7:kuznetskii-most",
+        "st:d2:kurskaya",
+        "st:d3:elektrozavodskaya"
+      ]
+    },
+    {
+      "id": "d-begovoi",
+      "kind": "district",
+      "name": "Беговой",
+      "name_in": "в Беговом",
+      "name_gen": "Бегового",
+      "stations": [
+        "st:11:petrovskii-park",
+        "st:11:savelovskaya",
+        "st:11:tsska",
+        "st:2:belorusskaya",
+        "st:2:dinamo",
+        "st:5:belorusskaya",
+        "st:7:begovaya",
+        "st:9:savelovskaya",
+        "st:d1:begovaya",
+        "st:d1:belorusskaya",
+        "st:d1:savelovskaya",
+        "st:d4:belorusskaya",
+        "st:d4:savelovskaya"
+      ]
+    },
+    {
+      "id": "d-beskudnikovskii",
+      "kind": "district",
+      "name": "Бескудниковский",
+      "name_in": "в Бескудниковском",
+      "name_gen": "Бескудниковского",
+      "stations": [
+        "st:10:okruzhnaya",
+        "st:10:seligerskaya",
+        "st:10:verkhnie-likhobory",
+        "st:10:yakhromskaya",
+        "st:d1:okruzhnaya",
+        "st:mck:okruzhnaya"
+      ]
+    },
+    {
+      "id": "d-bibirevo",
+      "kind": "district",
+      "name": "Бибирево",
+      "name_in": "в Бибиреве",
+      "name_gen": "Бибирева",
+      "stations": [
+        "st:9:altufevo",
+        "st:9:bibirevo"
+      ]
+    },
+    {
+      "id": "d-biryulevo-vostochnoe",
+      "kind": "district",
+      "name": "Бирюлёво Восточное",
+      "name_in": "в Бирюлёве Восточном",
+      "name_gen": "Бирюлёва Восточного",
+      "stations": [
+        "st:2:tsaritsyno",
+        "st:d2:tsaritsyno"
+      ]
+    },
+    {
+      "id": "d-biryulevo-zapadnoe",
+      "kind": "district",
+      "name": "Бирюлёво Западное",
+      "name_in": "в Бирюлёве Западном",
+      "name_gen": "Бирюлёва Западного",
+      "stations": [
+        "st:d2:krasnyi-stroitel",
+        "st:d2:pokrovskoe"
+      ]
+    },
+    {
+      "id": "d-bogorodskoe",
+      "kind": "district",
+      "name": "Богородское",
+      "name_in": "в Богородском",
+      "name_gen": "Богородского",
+      "stations": [
+        "st:1:bulvar-rokossovskogo",
+        "st:mck:belokamennaya",
+        "st:mck:bulvar-rokossovskogo",
+        "st:mck:rostokino"
+      ]
+    },
+    {
+      "id": "d-brateevo",
+      "kind": "district",
+      "name": "Братеево",
+      "name_in": "в Братееве",
+      "name_gen": "Братеева",
+      "stations": [
+        "st:10:borisovo",
+        "st:2:alma-atinskaya"
+      ]
+    },
+    {
+      "id": "d-butyrskii",
+      "kind": "district",
+      "name": "Бутырский",
+      "name_in": "в Бутырском",
+      "name_gen": "Бутырского",
+      "stations": [
+        "st:10:butyrskaya",
+        "st:10:fonvizinskaya",
+        "st:10:petrovsko-razumovskaya",
+        "st:11:savelovskaya",
+        "st:9:dmitrovskaya",
+        "st:9:petrovsko-razumovskaya",
+        "st:9:savelovskaya",
+        "st:9:timiryazevskaya",
+        "st:d1:savelovskaya",
+        "st:d1:timiryazevskaya",
+        "st:d2:dmitrovskaya",
+        "st:d3:ostankino",
+        "st:d4:savelovskaya"
+      ]
+    },
+    {
+      "id": "d-veshnyaki",
+      "kind": "district",
+      "name": "Вешняки",
+      "name_in": "в Вешняках",
+      "name_gen": "Вешняков",
+      "stations": [
+        "st:7:vykhino",
+        "st:d3:perovo",
+        "st:d3:plyushchevo",
+        "st:d3:veshnyaki",
+        "st:d3:vykhino",
+        "st:d4:kuskovo",
+        "st:d4:novogireevo"
+      ]
+    },
+    {
+      "id": "d-vnukovo",
+      "kind": "district",
+      "name": "Внуково",
+      "name_in": "во Внукове",
+      "name_gen": "Внукова",
+      "stations": [
+        "st:8a:aeroport-vnukovo",
+        "st:d4:tolstopaltsevo"
+      ]
+    },
+    {
+      "id": "d-voikovskii",
+      "kind": "district",
+      "name": "Войковский",
+      "name_in": "в Войковском",
+      "name_gen": "Войковского",
+      "stations": [
+        "st:2:vodnyi-stadion",
+        "st:2:voikovskaya",
+        "st:d2:krasnyi-baltiets",
+        "st:d2:streshnevo",
+        "st:mck:baltiiskaya",
+        "st:mck:streshnevo"
+      ]
+    },
+    {
+      "id": "d-vostochnoe-degunino",
+      "kind": "district",
+      "name": "Восточное Дегунино",
+      "name_in": "в Восточном Дегунине",
+      "name_gen": "Восточного Дегунина",
+      "stations": [
+        "st:10:verkhnie-likhobory",
+        "st:10:yakhromskaya",
+        "st:d1:beskudnikovo",
+        "st:d1:degunino",
+        "st:d1:lianozovo"
+      ]
+    },
+    {
+      "id": "d-vostochnoe-izmailovo",
+      "kind": "district",
+      "name": "Восточное Измайлово",
+      "name_in": "в Восточном Измайлове",
+      "name_gen": "Восточного Измайлова",
+      "stations": [
+        "st:3:pervomaiskaya"
+      ]
+    },
+    {
+      "id": "d-vostochnyi",
+      "kind": "district",
+      "name": "Восточный",
+      "name_in": "в Восточном",
+      "name_gen": "Восточного",
+      "stations": [
+        "st:3:izmailovskaya",
+        "st:3:pervomaiskaya",
+        "st:3:shchelkovskaya"
+      ]
+    },
+    {
+      "id": "d-vykhino-zhulebino",
+      "kind": "district",
+      "name": "Выхино-Жулебино",
+      "name_in": "в Выхино-Жулебине",
+      "name_gen": "Выхино-Жулебина",
+      "stations": [
+        "st:15:kosino",
+        "st:15:yugo-vostochnaya",
+        "st:7:kotelniki",
+        "st:7:lermontovskii-prospekt",
+        "st:7:ryazanskii-prospekt",
+        "st:7:vykhino",
+        "st:7:zhulebino",
+        "st:d3:veshnyaki",
+        "st:d3:vykhino"
+      ]
+    },
+    {
+      "id": "d-gagarinskii",
+      "kind": "district",
+      "name": "Гагаринский",
+      "name_in": "в Гагаринском",
+      "name_gen": "Гагаринского",
+      "stations": [
+        "st:16:vavilovskaya",
+        "st:1:universitet",
+        "st:1:vorobevy-gory",
+        "st:6:leninskii-prospekt",
+        "st:mck:ploshchad-gagarina"
+      ]
+    },
+    {
+      "id": "d-golovinskii",
+      "kind": "district",
+      "name": "Головинский",
+      "name_in": "в Головинском",
+      "name_gen": "Головинского",
+      "stations": [
+        "st:2:vodnyi-stadion",
+        "st:d3:grachevskaya",
+        "st:d3:likhobory",
+        "st:d3:mosselmash",
+        "st:mck:koptevo",
+        "st:mck:likhobory"
+      ]
+    },
+    {
+      "id": "d-golyanovo",
+      "kind": "district",
+      "name": "Гольяново",
+      "name_in": "в Гольянове",
+      "name_gen": "Гольянова",
+      "stations": [
+        "st:1:cherkizovskaya",
+        "st:3:shchelkovskaya",
+        "st:mck:lokomotiv"
+      ]
+    },
+    {
+      "id": "d-danilovskii",
+      "kind": "district",
+      "name": "Даниловский",
+      "name_in": "в Даниловском",
+      "name_gen": "Даниловского",
+      "stations": [
+        "st:16:zil",
+        "st:2:avtozavodskaya",
+        "st:2:tekhnopark",
+        "st:6:shabolovskaya",
+        "st:9:tulskaya",
+        "st:mck:avtozavodskaya",
+        "st:mck:zil"
+      ]
+    },
+    {
+      "id": "d-dmitrovskii",
+      "kind": "district",
+      "name": "Дмитровский",
+      "name_in": "в Дмитровском",
+      "name_gen": "Дмитровского",
+      "stations": [
+        "st:10:yakhromskaya",
+        "st:d1:lianozovo",
+        "st:d1:mark"
+      ]
+    },
+    {
+      "id": "d-donskoi",
+      "kind": "district",
+      "name": "Донской",
+      "name_in": "в Донском",
+      "name_gen": "Донского",
+      "stations": [
+        "st:16:krymskaya",
+        "st:6:leninskii-prospekt",
+        "st:6:shabolovskaya",
+        "st:mck:krymskaya",
+        "st:mck:ploshchad-gagarina",
+        "st:mck:verkhnie-kotly"
+      ]
+    },
+    {
+      "id": "d-dorogomilovo",
+      "kind": "district",
+      "name": "Дорогомилово",
+      "name_in": "в Дорогомилове",
+      "name_gen": "Дорогомилова",
+      "stations": [
+        "st:11:delovoi-tsentr",
+        "st:3:kievskaya",
+        "st:3:park-pobedy",
+        "st:4:delovoi-tsentr-vystavochnaya",
+        "st:4:fili",
+        "st:4:kievskaya",
+        "st:4:kutuzovskaya",
+        "st:4:moskva-siti",
+        "st:4:studencheskaya",
+        "st:5:kievskaya",
+        "st:8a:delovoi-tsentr",
+        "st:8a:minskaya",
+        "st:8a:park-pobedy",
+        "st:d1:fili",
+        "st:d4:kutuzovskaya",
+        "st:d4:poklonnaya",
+        "st:mck:delovoi-tsentr",
+        "st:mck:kutuzovskaya"
+      ]
+    },
+    {
+      "id": "d-zamoskvoreche",
+      "kind": "district",
+      "name": "Замоскворечье",
+      "name_in": "в Замоскворечье",
+      "name_gen": "Замоскворечья",
+      "stations": [
+        "st:2:novokuznetskaya",
+        "st:2:paveletskaya",
+        "st:5:dobryninskaya",
+        "st:5:oktyabrskaya",
+        "st:5:paveletskaya",
+        "st:6:tretyakovskaya",
+        "st:8:tretyakovskaya",
+        "st:9:polyanka",
+        "st:9:serpukhovskaya"
+      ]
+    },
+    {
+      "id": "d-zapadnoe-degunino",
+      "kind": "district",
+      "name": "Западное Дегунино",
+      "name_in": "в Западном Дегунине",
+      "name_gen": "Западного Дегунина",
+      "stations": [
+        "st:10:okruzhnaya",
+        "st:10:seligerskaya",
+        "st:10:verkhnie-likhobory",
+        "st:2:khovrino",
+        "st:d1:okruzhnaya",
+        "st:d3:grachevskaya",
+        "st:d3:khovrino",
+        "st:d3:likhobory",
+        "st:d3:mosselmash",
+        "st:mck:likhobory",
+        "st:mck:okruzhnaya"
+      ]
+    },
+    {
+      "id": "d-zyuzino",
+      "kind": "district",
+      "name": "Зюзино",
+      "name_in": "в Зюзине",
+      "name_gen": "Зюзина",
+      "stations": [
+        "st:11:kakhovskaya",
+        "st:11:zyuzino",
+        "st:9:chertanovskaya",
+        "st:9:nakhimovskii-prospekt",
+        "st:9:sevastopolskaya"
+      ]
+    },
+    {
+      "id": "d-zyablikovo",
+      "kind": "district",
+      "name": "Зябликово",
+      "name_in": "в Зябликове",
+      "name_gen": "Зябликова",
+      "stations": [
+        "st:10:borisovo",
+        "st:10:shipilovskaya",
+        "st:10:zyablikovo",
+        "st:2:krasnogvardeiskaya"
+      ]
+    },
+    {
+      "id": "d-ivanovskoe",
+      "kind": "district",
+      "name": "Ивановское",
+      "name_in": "в Ивановском",
+      "name_gen": "Ивановского",
+      "stations": [
+        "st:3:izmailovskaya",
+        "st:3:pervomaiskaya",
+        "st:8:novogireevo",
+        "st:d4:novogireevo"
+      ]
+    },
+    {
+      "id": "d-izmailovo",
+      "kind": "district",
+      "name": "Измайлово",
+      "name_in": "в Измайлове",
+      "name_gen": "Измайлова",
+      "stations": [
+        "st:1:cherkizovskaya",
+        "st:3:izmailovskaya",
+        "st:3:partizanskaya",
+        "st:3:pervomaiskaya",
+        "st:8:shosse-entuziastov",
+        "st:mck:izmailovo",
+        "st:mck:lokomotiv",
+        "st:mck:shosse-entuziastov",
+        "st:mck:sokolinaya-gora"
+      ]
+    },
+    {
+      "id": "d-kapotnya",
+      "kind": "district",
+      "name": "Капотня",
+      "name_in": "в Капотне",
+      "name_gen": "Капотни",
+      "stations": [
+        "st:10:bratislavskaya",
+        "st:10:marino",
+        "st:2:alma-atinskaya"
+      ]
+    },
+    {
+      "id": "d-konkovo",
+      "kind": "district",
+      "name": "Коньково",
+      "name_in": "в Конькове",
+      "name_gen": "Конькова",
+      "stations": [
+        "st:11:vorontsovskaya",
+        "st:16:universitet-druzhby-narodov",
+        "st:6:belyaevo",
+        "st:6:kaluzhskaya",
+        "st:6:konkovo"
+      ]
+    },
+    {
+      "id": "d-koptevo",
+      "kind": "district",
+      "name": "Коптево",
+      "name_in": "в Коптеве",
+      "name_gen": "Коптева",
+      "stations": [
+        "st:d2:krasnyi-baltiets",
+        "st:d3:likhobory",
+        "st:mck:koptevo",
+        "st:mck:likhobory"
+      ]
+    },
+    {
+      "id": "d-kosino-ukhtomskii",
+      "kind": "district",
+      "name": "Косино-Ухтомский",
+      "name_in": "в Косино-Ухтомском",
+      "name_gen": "Косино-Ухтомского",
+      "stations": [
+        "st:15:kosino",
+        "st:15:lukhmanovskaya",
+        "st:15:ulitsa-dmitrievskogo",
+        "st:7:lermontovskii-prospekt",
+        "st:d3:kosino"
+      ]
+    },
+    {
+      "id": "d-kotlovka",
+      "kind": "district",
+      "name": "Котловка",
+      "name_in": "в Котловке",
+      "name_gen": "Котловки",
+      "stations": [
+        "st:16:krymskaya",
+        "st:9:nagatinskaya",
+        "st:9:nagornaya",
+        "st:9:nakhimovskii-prospekt",
+        "st:mck:krymskaya"
+      ]
+    },
+    {
+      "id": "d-krasnoselskii",
+      "kind": "district",
+      "name": "Красносельский",
+      "name_in": "в Красносельском",
+      "name_gen": "Красносельского",
+      "stations": [
+        "st:10:sretenskii-bulvar",
+        "st:11:rizhskaya",
+        "st:1:chistye-prudy",
+        "st:1:komsomolskaya",
+        "st:1:krasnoselskaya",
+        "st:1:krasnye-vorota",
+        "st:1:lubyanka",
+        "st:5:komsomolskaya",
+        "st:6:kitai-gorod",
+        "st:6:rizhskaya",
+        "st:6:sukharevskaya",
+        "st:6:turgenevskaya",
+        "st:7:kuznetskii-most",
+        "st:d2:ploshchad-trekh-vokzalov",
+        "st:d2:rizhskaya",
+        "st:d3:mitkovo",
+        "st:d4:ploshchad-trekh-vokzalov",
+        "st:d4:rizhskaya"
+      ]
+    },
+    {
+      "id": "d-krylatskoe",
+      "kind": "district",
+      "name": "Крылатское",
+      "name_in": "в Крылатском",
+      "name_gen": "Крылатского",
+      "stations": [
+        "st:3:krylatskoe"
+      ]
+    },
+    {
+      "id": "d-kryukovo",
+      "kind": "district",
+      "name": "Крюково",
+      "name_in": "в Крюкове",
+      "name_gen": "Крюкова",
+      "stations": [
+        "st:d3:kryukovo"
+      ]
+    },
+    {
+      "id": "d-kuzminki",
+      "kind": "district",
+      "name": "Кузьминки",
+      "name_in": "в Кузьминках",
+      "name_gen": "Кузьминок",
+      "stations": [
+        "st:10:volzhskaya",
+        "st:7:kuzminki"
+      ]
+    },
+    {
+      "id": "d-kuntsevo",
+      "kind": "district",
+      "name": "Кунцево",
+      "name_in": "в Кунцеве",
+      "name_gen": "Кунцева",
+      "stations": [
+        "st:11:kuntsevskaya",
+        "st:3:kuntsevskaya",
+        "st:3:molodezhnaya",
+        "st:4:kuntsevskaya",
+        "st:d1:kuntsevskaya",
+        "st:d1:rabochii-poselok"
+      ]
+    },
+    {
+      "id": "d-kurkino",
+      "kind": "district",
+      "name": "Куркино",
+      "name_in": "в Куркине",
+      "name_gen": "Куркина",
+      "stations": [
+        "st:3:pyatnitskoe-shosse",
+        "st:7:planernaya",
+        "st:d3:molzhaninovo"
+      ]
+    },
+    {
+      "id": "d-levoberezhnyi",
+      "kind": "district",
+      "name": "Левобережный",
+      "name_in": "в Левобережном",
+      "name_gen": "Левобережного",
+      "stations": [
+        "st:2:belomorskaya",
+        "st:2:rechnoi-vokzal"
+      ]
+    },
+    {
+      "id": "d-lefortovo",
+      "kind": "district",
+      "name": "Лефортово",
+      "name_in": "в Лефортове",
+      "name_gen": "Лефортова",
+      "stations": [
+        "st:10:rimskaya",
+        "st:11:aviamotornaya",
+        "st:11:lefortovo",
+        "st:11:nizhegorodskaya",
+        "st:15:nizhegorodskaya",
+        "st:8:aviamotornaya",
+        "st:8:ploshchad-ilicha",
+        "st:d2:moskva-tovarnaya",
+        "st:d3:andronovka",
+        "st:d3:aviamotornaya",
+        "st:d3:sortirovochnaya",
+        "st:d4:nizhegorodskaya",
+        "st:d4:serp-i-molot",
+        "st:mck:andronovka",
+        "st:mck:nizhegorodskaya"
+      ]
+    },
+    {
+      "id": "d-lianozovo",
+      "kind": "district",
+      "name": "Лианозово",
+      "name_in": "в Лианозове",
+      "name_gen": "Лианозова",
+      "stations": [
+        "st:9:altufevo",
+        "st:d1:lianozovo",
+        "st:d1:mark"
+      ]
+    },
+    {
+      "id": "d-lomonosovskii",
+      "kind": "district",
+      "name": "Ломоносовский",
+      "name_in": "в Ломоносовском",
+      "name_gen": "Ломоносовского",
+      "stations": [
+        "st:16:vavilovskaya"
+      ]
+    },
+    {
+      "id": "d-losinoostrovskii",
+      "kind": "district",
+      "name": "Лосиноостровский",
+      "name_in": "в Лосиноостровском",
+      "name_gen": "Лосиноостровского",
+      "stations": [
+        "st:6:babushkinskaya",
+        "st:6:medvedkovo",
+        "st:6:sviblovo"
+      ]
+    },
+    {
+      "id": "d-lyublino",
+      "kind": "district",
+      "name": "Люблино",
+      "name_in": "в Люблине",
+      "name_gen": "Люблина",
+      "stations": [
+        "st:10:lyublino",
+        "st:10:pechatniki",
+        "st:10:volzhskaya",
+        "st:d2:depo",
+        "st:d2:lyublino",
+        "st:d2:pererva"
+      ]
+    },
+    {
+      "id": "d-marfino",
+      "kind": "district",
+      "name": "Марфино",
+      "name_in": "в Марфине",
+      "name_gen": "Марфина",
+      "stations": [
+        "st:10:fonvizinskaya",
+        "st:10:okruzhnaya",
+        "st:10:petrovsko-razumovskaya",
+        "st:9:petrovsko-razumovskaya",
+        "st:9:vladykino",
+        "st:d1:okruzhnaya",
+        "st:d3:ostankino",
+        "st:mck:okruzhnaya",
+        "st:mck:vladykino"
+      ]
+    },
+    {
+      "id": "d-marina-roshcha",
+      "kind": "district",
+      "name": "Марьина Роща",
+      "name_in": "в Марьиной Роще",
+      "name_gen": "Марьиной Рощи",
+      "stations": [
+        "st:10:dostoevskaya",
+        "st:10:marina-roshcha",
+        "st:11:marina-roshcha",
+        "st:11:rizhskaya",
+        "st:11:savelovskaya",
+        "st:6:rizhskaya",
+        "st:9:mendeleevskaya",
+        "st:9:savelovskaya",
+        "st:d1:savelovskaya",
+        "st:d2:marina-roshcha",
+        "st:d2:rizhskaya",
+        "st:d3:rizhskaya",
+        "st:d4:marina-roshcha",
+        "st:d4:rizhskaya",
+        "st:d4:savelovskaya"
+      ]
+    },
+    {
+      "id": "d-marino",
+      "kind": "district",
+      "name": "Марьино",
+      "name_in": "в Марьине",
+      "name_gen": "Марьина",
+      "stations": [
+        "st:10:bratislavskaya",
+        "st:10:marino",
+        "st:d2:kuryanovo",
+        "st:d2:moskvoreche",
+        "st:d2:pererva"
+      ]
+    },
+    {
+      "id": "d-matushkino",
+      "kind": "district",
+      "name": "Матушкино",
+      "name_in": "в Матушкине",
+      "name_gen": "Матушкина",
+      "stations": [
+        "st:d3:kryukovo",
+        "st:d3:molzhaninovo",
+        "st:d3:novopodrezkovo"
+      ]
+    },
+    {
+      "id": "d-metrogorodok",
+      "kind": "district",
+      "name": "Метрогородок",
+      "name_in": "в Метрогородке",
+      "name_gen": "Метрогородка",
+      "stations": [
+        "st:1:bulvar-rokossovskogo",
+        "st:mck:belokamennaya",
+        "st:mck:bulvar-rokossovskogo",
+        "st:mck:rostokino"
+      ]
+    },
+    {
+      "id": "d-meshchanskii",
+      "kind": "district",
+      "name": "Мещанский",
+      "name_in": "в Мещанском",
+      "name_gen": "Мещанского",
+      "stations": [
+        "st:10:dostoevskaya",
+        "st:10:marina-roshcha",
+        "st:10:sretenskii-bulvar",
+        "st:10:trubnaya",
+        "st:11:rizhskaya",
+        "st:1:lubyanka",
+        "st:2:teatralnaya",
+        "st:3:ploshchad-revolyutsii",
+        "st:5:prospekt-mira",
+        "st:6:prospekt-mira",
+        "st:6:rizhskaya",
+        "st:6:sukharevskaya",
+        "st:6:turgenevskaya",
+        "st:7:kuznetskii-most",
+        "st:9:tsvetnoi-bulvar",
+        "st:d2:rizhskaya",
+        "st:d3:rizhskaya",
+        "st:d4:rizhskaya"
+      ]
+    },
+    {
+      "id": "d-mitino",
+      "kind": "district",
+      "name": "Митино",
+      "name_in": "в Митине",
+      "name_gen": "Митина",
+      "stations": [
+        "st:3:mitino",
+        "st:3:pyatnitskoe-shosse",
+        "st:3:volokolamskaya",
+        "st:d2:penyagino",
+        "st:d2:trikotazhnaya",
+        "st:d2:volokolamskaya"
+      ]
+    },
+    {
+      "id": "d-mozhaiskii",
+      "kind": "district",
+      "name": "Можайский",
+      "name_in": "в Можайском",
+      "name_gen": "Можайского",
+      "stations": [
+        "st:11:davydkovo",
+        "st:11:kuntsevskaya",
+        "st:d1:rabochii-poselok",
+        "st:d1:setun"
+      ]
+    },
+    {
+      "id": "d-molzhaninovskii",
+      "kind": "district",
+      "name": "Молжаниновский",
+      "name_in": "в Молжаниновском",
+      "name_gen": "Молжаниновского",
+      "stations": [
+        "st:d3:molzhaninovo",
+        "st:d3:novopodrezkovo"
+      ]
+    },
+    {
+      "id": "d-moskvoreche-saburovo",
+      "kind": "district",
+      "name": "Москворечье-Сабурово",
+      "name_in": "в Москворечье-Сабурове",
+      "name_gen": "Москворечье-Сабурова",
+      "stations": [
+        "st:11:kashirskaya",
+        "st:11:varshavskaya",
+        "st:2:kantemirovskaya",
+        "st:2:kashirskaya",
+        "st:d2:moskvoreche"
+      ]
+    },
+    {
+      "id": "d-nagatino-sadovniki",
+      "kind": "district",
+      "name": "Нагатино-Садовники",
+      "name_in": "в Нагатино-Садовниках",
+      "name_gen": "Нагатино-Садовников",
+      "stations": [
+        "st:11:kashirskaya",
+        "st:2:kashirskaya",
+        "st:2:kolomenskaya",
+        "st:9:nagatinskaya",
+        "st:mck:verkhnie-kotly"
+      ]
+    },
+    {
+      "id": "d-nagatinskii-zaton",
+      "kind": "district",
+      "name": "Нагатинский Затон",
+      "name_in": "в Нагатинском Затоне",
+      "name_gen": "Нагатинского Затона",
+      "stations": [
+        "st:11:kashirskaya",
+        "st:11:klenovyi-bulvar",
+        "st:11:nagatinskii-zaton",
+        "st:2:kashirskaya",
+        "st:2:kolomenskaya",
+        "st:2:tekhnopark"
+      ]
+    },
+    {
+      "id": "d-nagornyi",
+      "kind": "district",
+      "name": "Нагорный",
+      "name_in": "в Нагорном",
+      "name_gen": "Нагорного",
+      "stations": [
+        "st:11:varshavskaya",
+        "st:16:krymskaya",
+        "st:9:chertanovskaya",
+        "st:9:nagatinskaya",
+        "st:9:nagornaya",
+        "st:9:nakhimovskii-prospekt",
+        "st:mck:krymskaya",
+        "st:mck:verkhnie-kotly"
+      ]
+    },
+    {
+      "id": "d-nekrasovka",
+      "kind": "district",
+      "name": "Некрасовка",
+      "name_in": "в Некрасовке",
+      "name_gen": "Некрасовки",
+      "stations": [
+        "st:15:lukhmanovskaya",
+        "st:15:nekrasovka"
+      ]
+    },
+    {
+      "id": "d-nizhegorodskii",
+      "kind": "district",
+      "name": "Нижегородский",
+      "name_in": "в Нижегородском",
+      "name_gen": "Нижегородского",
+      "stations": [
+        "st:11:nizhegorodskaya",
+        "st:15:nizhegorodskaya",
+        "st:15:stakhanovskaya",
+        "st:7:volgogradskii-prospekt",
+        "st:d2:kalitniki",
+        "st:d2:novokhokhlovskaya",
+        "st:d3:andronovka",
+        "st:d3:perovo",
+        "st:d4:nizhegorodskaya",
+        "st:mck:andronovka",
+        "st:mck:nizhegorodskaya",
+        "st:mck:novokhokhlovskaya",
+        "st:mck:ugreshskaya"
+      ]
+    },
+    {
+      "id": "d-novo-peredelkino",
+      "kind": "district",
+      "name": "Ново-Переделкино",
+      "name_in": "в Ново-Переделкине",
+      "name_gen": "Ново-Переделкина",
+      "stations": [
+        "st:8a:borovskoe-shosse",
+        "st:8a:novoperedelkino",
+        "st:8a:rasskazovka",
+        "st:d4:novoperedelkino",
+        "st:d4:peredelkino"
+      ]
+    },
+    {
+      "id": "d-novogireevo",
+      "kind": "district",
+      "name": "Новогиреево",
+      "name_in": "в Новогирееве",
+      "name_gen": "Новогиреева",
+      "stations": [
+        "st:8:novogireevo",
+        "st:8:perovo",
+        "st:d4:kuskovo",
+        "st:d4:novogireevo"
+      ]
+    },
+    {
+      "id": "d-novokosino",
+      "kind": "district",
+      "name": "Новокосино",
+      "name_in": "в Новокосине",
+      "name_gen": "Новокосина",
+      "stations": [
+        "st:8:novokosino"
+      ]
+    },
+    {
+      "id": "d-obruchevskii",
+      "kind": "district",
+      "name": "Обручевский",
+      "name_in": "в Обручевском",
+      "name_gen": "Обручевского",
+      "stations": [
+        "st:11:novatorskaya",
+        "st:11:vorontsovskaya",
+        "st:16:novatorskaya",
+        "st:16:universitet-druzhby-narodov",
+        "st:6:kaluzhskaya",
+        "st:6:novye-cheremushki"
+      ]
+    },
+    {
+      "id": "d-orekhovo-borisovo-severnoe",
+      "kind": "district",
+      "name": "Орехово-Борисово Северное",
+      "name_in": "в Орехово-Борисове Северном",
+      "name_gen": "Орехово-Борисова Северного",
+      "stations": [
+        "st:2:domodedovskaya",
+        "st:2:orekhovo",
+        "st:2:tsaritsyno",
+        "st:d2:tsaritsyno"
+      ]
+    },
+    {
+      "id": "d-orekhovo-borisovo-yuzhnoe",
+      "kind": "district",
+      "name": "Орехово-Борисово Южное",
+      "name_in": "в Орехово-Борисове Южном",
+      "name_gen": "Орехово-Борисова Южного",
+      "stations": [
+        "st:10:zyablikovo",
+        "st:2:domodedovskaya",
+        "st:2:krasnogvardeiskaya"
+      ]
+    },
+    {
+      "id": "d-ostankinskii",
+      "kind": "district",
+      "name": "Останкинский",
+      "name_in": "в Останкинском",
+      "name_gen": "Останкинского",
+      "stations": [
+        "st:10:butyrskaya",
+        "st:10:petrovsko-razumovskaya",
+        "st:6:alekseevskaya",
+        "st:6:botanicheskii-sad",
+        "st:6:vdnkh",
+        "st:9:petrovsko-razumovskaya",
+        "st:9:vladykino",
+        "st:d3:ostankino",
+        "st:d3:rizhskaya",
+        "st:mck:botanicheskii-sad",
+        "st:mck:vladykino"
+      ]
+    },
+    {
+      "id": "d-otradnoe",
+      "kind": "district",
+      "name": "Отрадное",
+      "name_in": "в Отрадном",
+      "name_gen": "Отрадного",
+      "stations": [
+        "st:10:okruzhnaya",
+        "st:9:otradnoe",
+        "st:9:vladykino",
+        "st:d1:degunino",
+        "st:d1:okruzhnaya",
+        "st:mck:okruzhnaya",
+        "st:mck:vladykino"
+      ]
+    },
+    {
+      "id": "d-ochakovo-matveevskoe",
+      "kind": "district",
+      "name": "Очаково-Матвеевское",
+      "name_in": "в Очаково-Матвеевском",
+      "name_gen": "Очаково-Матвеевского",
+      "stations": [
+        "st:11:aminevskaya",
+        "st:8a:ozernaya",
+        "st:d1:skolkovo",
+        "st:d4:aminevskaya",
+        "st:d4:matveevskoe",
+        "st:d4:meshcherskaya",
+        "st:d4:ochakovo-i"
+      ]
+    },
+    {
+      "id": "d-perovo",
+      "kind": "district",
+      "name": "Перово",
+      "name_in": "в Перове",
+      "name_gen": "Перова",
+      "stations": [
+        "st:11:aviamotornaya",
+        "st:8:aviamotornaya",
+        "st:8:perovo",
+        "st:8:shosse-entuziastov",
+        "st:d3:andronovka",
+        "st:d3:aviamotornaya",
+        "st:d3:perovo",
+        "st:mck:shosse-entuziastov"
+      ]
+    },
+    {
+      "id": "d-pechatniki",
+      "kind": "district",
+      "name": "Печатники",
+      "name_in": "в Печатниках",
+      "name_gen": "Печатников",
+      "stations": [
+        "st:10:kozhukhovskaya",
+        "st:10:pechatniki",
+        "st:11:pechatniki",
+        "st:11:tekstilshchiki",
+        "st:7:tekstilshchiki",
+        "st:d2:depo",
+        "st:d2:kuryanovo",
+        "st:d2:lyublino",
+        "st:d2:moskvoreche",
+        "st:d2:novokhokhlovskaya",
+        "st:d2:pererva",
+        "st:d2:tekstilshchiki",
+        "st:mck:dubrovka",
+        "st:mck:novokhokhlovskaya",
+        "st:mck:ugreshskaya"
+      ]
+    },
+    {
+      "id": "d-pokrovskoe-streshnevo",
+      "kind": "district",
+      "name": "Покровское-Стрешнево",
+      "name_in": "в Покровском-Стрешневе",
+      "name_gen": "Покровского-Стрешнева",
+      "stations": [
+        "st:7:shchukinskaya",
+        "st:7:spartak",
+        "st:7:tushinskaya",
+        "st:d2:pokrovskoe-streshnevo",
+        "st:d2:streshnevo",
+        "st:d2:trikotazhnaya",
+        "st:d2:tushinskaya",
+        "st:mck:baltiiskaya",
+        "st:mck:streshnevo"
+      ]
+    },
+    {
+      "id": "d-preobrazhenskoe",
+      "kind": "district",
+      "name": "Преображенское",
+      "name_in": "в Преображенском",
+      "name_gen": "Преображенского",
+      "stations": [
+        "st:11:elektrozavodskaya",
+        "st:1:cherkizovskaya",
+        "st:1:preobrazhenskaya-ploshchad",
+        "st:3:elektrozavodskaya",
+        "st:3:semenovskaya",
+        "st:d3:elektrozavodskaya",
+        "st:mck:lokomotiv"
+      ]
+    },
+    {
+      "id": "d-presnenskii",
+      "kind": "district",
+      "name": "Пресненский",
+      "name_in": "в Пресненском",
+      "name_gen": "Пресненского",
+      "stations": [
+        "st:11:delovoi-tsentr",
+        "st:11:shelepikha",
+        "st:1:biblioteka-im-lenina",
+        "st:1:okhotnyi-ryad",
+        "st:2:belorusskaya",
+        "st:2:mayakovskaya",
+        "st:2:tverskaya",
+        "st:3:arbatskaya",
+        "st:4:aleksandrovskii-sad",
+        "st:4:arbatskaya",
+        "st:4:delovoi-tsentr-vystavochnaya",
+        "st:4:moskva-siti",
+        "st:5:belorusskaya",
+        "st:5:krasnopresnenskaya",
+        "st:7:barrikadnaya",
+        "st:7:begovaya",
+        "st:7:pushkinskaya",
+        "st:7:ulitsa-1905-goda",
+        "st:8a:delovoi-tsentr",
+        "st:9:chekhovskaya",
+        "st:d1:begovaya",
+        "st:d1:belorusskaya",
+        "st:d1:testovskaya",
+        "st:d4:belorusskaya",
+        "st:d4:ermakova-roshcha",
+        "st:d4:kutuzovskaya",
+        "st:d4:testovskaya",
+        "st:mck:delovoi-tsentr",
+        "st:mck:kutuzovskaya",
+        "st:mck:shelepikha"
+      ]
+    },
+    {
+      "id": "d-prospekt-vernadskogo",
+      "kind": "district",
+      "name": "Проспект Вернадского",
+      "name_in": "на проспекте Вернадского",
+      "name_gen": "проспекта Вернадского",
+      "stations": [
+        "st:11:michurinskii-prospekt",
+        "st:11:novatorskaya",
+        "st:11:prospekt-vernadskogo",
+        "st:16:novatorskaya",
+        "st:1:prospekt-vernadskogo",
+        "st:8a:michurinskii-prospekt"
+      ]
+    },
+    {
+      "id": "d-ramenki",
+      "kind": "district",
+      "name": "Раменки",
+      "name_in": "в Раменках",
+      "name_gen": "Раменок",
+      "stations": [
+        "st:11:aminevskaya",
+        "st:11:michurinskii-prospekt",
+        "st:11:prospekt-vernadskogo",
+        "st:1:universitet",
+        "st:1:vorobevy-gory",
+        "st:8a:lomonosovskii-prospekt",
+        "st:8a:michurinskii-prospekt",
+        "st:8a:minskaya",
+        "st:8a:ramenki",
+        "st:d4:aminevskaya",
+        "st:d4:matveevskoe",
+        "st:d4:minskaya",
+        "st:d4:poklonnaya"
+      ]
+    },
+    {
+      "id": "d-rostokino",
+      "kind": "district",
+      "name": "Ростокино",
+      "name_in": "в Ростокине",
+      "name_gen": "Ростокина",
+      "stations": [
+        "st:6:botanicheskii-sad",
+        "st:mck:botanicheskii-sad",
+        "st:mck:rostokino"
+      ]
+    },
+    {
+      "id": "d-ryazanskii",
+      "kind": "district",
+      "name": "Рязанский",
+      "name_in": "в Рязанском",
+      "name_gen": "Рязанского",
+      "stations": [
+        "st:15:okskaya",
+        "st:15:stakhanovskaya",
+        "st:7:ryazanskii-prospekt",
+        "st:d3:perovo",
+        "st:d3:plyushchevo",
+        "st:d3:veshnyaki"
+      ]
+    },
+    {
+      "id": "d-savelki",
+      "kind": "district",
+      "name": "Савёлки",
+      "name_in": "в Савёлках",
+      "name_gen": "Савёлок",
+      "stations": [
+        "st:d3:kryukovo",
+        "st:d3:molzhaninovo",
+        "st:d3:novopodrezkovo"
+      ]
+    },
+    {
+      "id": "d-savelovskii",
+      "kind": "district",
+      "name": "Савёловский",
+      "name_in": "в Савёловском",
+      "name_gen": "Савёловского",
+      "stations": [
+        "st:11:petrovskii-park",
+        "st:11:savelovskaya",
+        "st:9:dmitrovskaya",
+        "st:9:savelovskaya",
+        "st:d1:savelovskaya",
+        "st:d2:dmitrovskaya",
+        "st:d2:grazhdanskaya",
+        "st:d4:savelovskaya"
+      ]
+    },
+    {
+      "id": "d-sviblovo",
+      "kind": "district",
+      "name": "Свиблово",
+      "name_in": "в Свиблове",
+      "name_gen": "Свиблова",
+      "stations": [
+        "st:6:botanicheskii-sad",
+        "st:6:sviblovo",
+        "st:mck:botanicheskii-sad",
+        "st:mck:rostokino"
+      ]
+    },
+    {
+      "id": "d-severnoe-butovo",
+      "kind": "district",
+      "name": "Северное Бутово",
+      "name_in": "в Северном Бутове",
+      "name_gen": "Северного Бутова",
+      "stations": [
+        "st:12:lesoparkovaya",
+        "st:12:ulitsa-starokachalovskaya",
+        "st:9:bulvar-dmitriya-donskogo"
+      ]
+    },
+    {
+      "id": "d-severnoe-izmailovo",
+      "kind": "district",
+      "name": "Северное Измайлово",
+      "name_in": "в Северном Измайлове",
+      "name_gen": "Северного Измайлова",
+      "stations": [
+        "st:1:cherkizovskaya",
+        "st:3:shchelkovskaya",
+        "st:mck:lokomotiv"
+      ]
+    },
+    {
+      "id": "d-severnoe-medvedkovo",
+      "kind": "district",
+      "name": "Северное Медведково",
+      "name_in": "в Северном Медведкове",
+      "name_gen": "Северного Медведкова",
+      "stations": [
+        "st:6:medvedkovo"
+      ]
+    },
+    {
+      "id": "d-severnoe-tushino",
+      "kind": "district",
+      "name": "Северное Тушино",
+      "name_in": "в Северном Тушине",
+      "name_gen": "Северного Тушина",
+      "stations": [
+        "st:7:planernaya",
+        "st:7:skhodnenskaya"
+      ]
+    },
+    {
+      "id": "d-severnyi",
+      "kind": "district",
+      "name": "Северный",
+      "name_in": "в Северном",
+      "name_gen": "Северного",
+      "stations": [
+        "st:10:fiztekh",
+        "st:10:lianozovo",
+        "st:d1:mark"
+      ]
+    },
+    {
+      "id": "d-silino",
+      "kind": "district",
+      "name": "Силино",
+      "name_in": "в Силине",
+      "name_gen": "Силина",
+      "stations": [
+        "st:d3:kryukovo"
+      ]
+    },
+    {
+      "id": "d-sokol",
+      "kind": "district",
+      "name": "Сокол",
+      "name_in": "на Соколе",
+      "name_gen": "Сокола",
+      "stations": [
+        "st:2:sokol",
+        "st:d2:streshnevo",
+        "st:mck:panfilovskaya",
+        "st:mck:streshnevo",
+        "st:mck:zorge"
+      ]
+    },
+    {
+      "id": "d-sokolinaya-gora",
+      "kind": "district",
+      "name": "Соколиная Гора",
+      "name_in": "на Соколиной Горе",
+      "name_gen": "Соколиной Горы",
+      "stations": [
+        "st:11:aviamotornaya",
+        "st:11:elektrozavodskaya",
+        "st:3:elektrozavodskaya",
+        "st:3:partizanskaya",
+        "st:3:semenovskaya",
+        "st:8:aviamotornaya",
+        "st:8:shosse-entuziastov",
+        "st:d3:aviamotornaya",
+        "st:d3:elektrozavodskaya",
+        "st:d3:sortirovochnaya",
+        "st:mck:izmailovo",
+        "st:mck:shosse-entuziastov",
+        "st:mck:sokolinaya-gora"
+      ]
+    },
+    {
+      "id": "d-sokolniki",
+      "kind": "district",
+      "name": "Сокольники",
+      "name_in": "в Сокольниках",
+      "name_gen": "Сокольников",
+      "stations": [
+        "st:11:elektrozavodskaya",
+        "st:11:sokolniki",
+        "st:1:sokolniki",
+        "st:3:elektrozavodskaya",
+        "st:d3:elektrozavodskaya",
+        "st:d3:mitkovo"
+      ]
+    },
+    {
+      "id": "d-solntsevo",
+      "kind": "district",
+      "name": "Солнцево",
+      "name_in": "в Солнцеве",
+      "name_gen": "Солнцева",
+      "stations": [
+        "st:8a:borovskoe-shosse",
+        "st:8a:govorovo",
+        "st:8a:solntsevo",
+        "st:d1:skolkovo",
+        "st:d4:meshcherskaya",
+        "st:d4:novoperedelkino",
+        "st:d4:solnechnaya"
+      ]
+    },
+    {
+      "id": "d-staroe-kryukovo",
+      "kind": "district",
+      "name": "Старое Крюково",
+      "name_in": "в Старом Крюкове",
+      "name_gen": "Старого Крюкова",
+      "stations": [
+        "st:d3:kryukovo"
+      ]
+    },
+    {
+      "id": "d-strogino",
+      "kind": "district",
+      "name": "Строгино",
+      "name_in": "в Строгине",
+      "name_gen": "Строгина",
+      "stations": [
+        "st:3:strogino"
+      ]
+    },
+    {
+      "id": "d-taganskii",
+      "kind": "district",
+      "name": "Таганский",
+      "name_in": "в Таганском",
+      "name_gen": "Таганского",
+      "stations": [
+        "st:10:chkalovskaya",
+        "st:10:krestyanskaya-zastava",
+        "st:10:rimskaya",
+        "st:5:taganskaya",
+        "st:6:kitai-gorod",
+        "st:7:kitai-gorod",
+        "st:7:proletarskaya",
+        "st:7:taganskaya",
+        "st:7:volgogradskii-prospekt",
+        "st:8:marksistskaya",
+        "st:8:ploshchad-ilicha",
+        "st:d2:kalitniki",
+        "st:d2:kurskaya",
+        "st:d2:moskva-tovarnaya",
+        "st:d4:kurskaya",
+        "st:d4:serp-i-molot"
+      ]
+    },
+    {
+      "id": "d-tverskoi",
+      "kind": "district",
+      "name": "Тверской",
+      "name_in": "в Тверском",
+      "name_gen": "Тверского",
+      "stations": [
+        "st:10:dostoevskaya",
+        "st:10:trubnaya",
+        "st:11:savelovskaya",
+        "st:1:biblioteka-im-lenina",
+        "st:1:lubyanka",
+        "st:1:okhotnyi-ryad",
+        "st:2:belorusskaya",
+        "st:2:mayakovskaya",
+        "st:2:teatralnaya",
+        "st:2:tverskaya",
+        "st:3:ploshchad-revolyutsii",
+        "st:4:aleksandrovskii-sad",
+        "st:5:belorusskaya",
+        "st:5:novoslobodskaya",
+        "st:6:kitai-gorod",
+        "st:7:kitai-gorod",
+        "st:7:kuznetskii-most",
+        "st:7:pushkinskaya",
+        "st:9:borovitskaya",
+        "st:9:chekhovskaya",
+        "st:9:mendeleevskaya",
+        "st:9:savelovskaya",
+        "st:9:tsvetnoi-bulvar",
+        "st:d1:belorusskaya",
+        "st:d1:savelovskaya",
+        "st:d4:belorusskaya",
+        "st:d4:savelovskaya"
+      ]
+    },
+    {
+      "id": "d-tekstilshchiki",
+      "kind": "district",
+      "name": "Текстильщики",
+      "name_in": "в Текстильщиках",
+      "name_gen": "Текстильщиков",
+      "stations": [
+        "st:10:pechatniki",
+        "st:10:volzhskaya",
+        "st:11:pechatniki",
+        "st:11:tekstilshchiki",
+        "st:7:tekstilshchiki",
+        "st:d2:novokhokhlovskaya",
+        "st:d2:tekstilshchiki",
+        "st:mck:novokhokhlovskaya"
+      ]
+    },
+    {
+      "id": "d-timiryazevskii",
+      "kind": "district",
+      "name": "Тимирязевский",
+      "name_in": "в Тимирязевском",
+      "name_gen": "Тимирязевского",
+      "stations": [
+        "st:10:okruzhnaya",
+        "st:10:petrovsko-razumovskaya",
+        "st:9:dmitrovskaya",
+        "st:9:petrovsko-razumovskaya",
+        "st:9:timiryazevskaya",
+        "st:d1:okruzhnaya",
+        "st:d1:timiryazevskaya",
+        "st:d2:dmitrovskaya",
+        "st:d2:grazhdanskaya",
+        "st:d3:likhobory",
+        "st:d3:petrovsko-razumovskaya",
+        "st:mck:likhobory",
+        "st:mck:okruzhnaya"
+      ]
+    },
+    {
+      "id": "d-troparevo-nikulino",
+      "kind": "district",
+      "name": "Тропарёво-Никулино",
+      "name_in": "в Тропарёво-Никулине",
+      "name_gen": "Тропарёво-Никулина",
+      "stations": [
+        "st:1:troparevo",
+        "st:1:yugo-zapadnaya",
+        "st:8a:ozernaya"
+      ]
+    },
+    {
+      "id": "d-teplyi-stan",
+      "kind": "district",
+      "name": "Тёплый Стан",
+      "name_in": "в Тёплом Стане",
+      "name_gen": "Тёплого Стана",
+      "stations": [
+        "st:16:generala-tyuleneva",
+        "st:16:tyutchevskaya",
+        "st:1:troparevo",
+        "st:6:konkovo",
+        "st:6:teplyi-stan"
+      ]
+    },
+    {
+      "id": "d-fili-davydkovo",
+      "kind": "district",
+      "name": "Фили-Давыдково",
+      "name_in": "в Фили-Давыдкове",
+      "name_gen": "Фили-Давыдкова",
+      "stations": [
+        "st:11:davydkovo",
+        "st:11:kuntsevskaya",
+        "st:3:kuntsevskaya",
+        "st:3:slavyanskii-bulvar",
+        "st:4:filevskii-park",
+        "st:4:kuntsevskaya",
+        "st:4:pionerskaya",
+        "st:8a:minskaya",
+        "st:d1:kuntsevskaya",
+        "st:d1:slavyanskii-bulvar"
+      ]
+    },
+    {
+      "id": "d-filevskii-park",
+      "kind": "district",
+      "name": "Филёвский Парк",
+      "name_in": "в Филёвском Парке",
+      "name_gen": "Филёвского Парка",
+      "stations": [
+        "st:11:mnevniki",
+        "st:4:bagrationovskaya",
+        "st:4:filevskii-park",
+        "st:4:fili",
+        "st:4:pionerskaya",
+        "st:d1:fili"
+      ]
+    },
+    {
+      "id": "d-khamovniki",
+      "kind": "district",
+      "name": "Хамовники",
+      "name_in": "в Хамовниках",
+      "name_gen": "Хамовников",
+      "stations": [
+        "st:1:biblioteka-im-lenina",
+        "st:1:frunzenskaya",
+        "st:1:kropotkinskaya",
+        "st:1:park-kultury",
+        "st:1:sportivnaya",
+        "st:1:vorobevy-gory",
+        "st:3:arbatskaya",
+        "st:3:smolenskaya",
+        "st:4:aleksandrovskii-sad",
+        "st:4:arbatskaya",
+        "st:4:kievskaya",
+        "st:4:smolenskaya",
+        "st:5:kievskaya",
+        "st:5:park-kultury",
+        "st:9:borovitskaya",
+        "st:mck:luzhniki"
+      ]
+    },
+    {
+      "id": "d-khovrino",
+      "kind": "district",
+      "name": "Ховрино",
+      "name_in": "в Ховрине",
+      "name_gen": "Ховрина",
+      "stations": [
+        "st:2:belomorskaya",
+        "st:2:khovrino",
+        "st:d3:grachevskaya",
+        "st:d3:khovrino"
+      ]
+    },
+    {
+      "id": "d-khoroshevo-mnevniki",
+      "kind": "district",
+      "name": "Хорошёво-Мнёвники",
+      "name_in": "в Хорошёво-Мнёвниках",
+      "name_gen": "Хорошёво-Мнёвников",
+      "stations": [
+        "st:11:mnevniki",
+        "st:11:narodnoe-opolchenie",
+        "st:11:terekhovo",
+        "st:mck:khoroshevo",
+        "st:mck:zorge"
+      ]
+    },
+    {
+      "id": "d-khoroshevskii",
+      "kind": "district",
+      "name": "Хорошёвский",
+      "name_in": "в Хорошёвском",
+      "name_gen": "Хорошёвского",
+      "stations": [
+        "st:11:khoroshevskaya",
+        "st:11:shelepikha",
+        "st:11:tsska",
+        "st:2:aeroport",
+        "st:2:sokol",
+        "st:7:begovaya",
+        "st:7:polezhaevskaya",
+        "st:d1:begovaya",
+        "st:d4:ermakova-roshcha",
+        "st:mck:khoroshevo",
+        "st:mck:shelepikha",
+        "st:mck:zorge"
+      ]
+    },
+    {
+      "id": "d-tsaritsyno",
+      "kind": "district",
+      "name": "Царицыно",
+      "name_in": "в Царицыне",
+      "name_gen": "Царицына",
+      "stations": [
+        "st:2:kantemirovskaya",
+        "st:2:tsaritsyno",
+        "st:d2:tsaritsyno"
+      ]
+    },
+    {
+      "id": "d-chertanovo-severnoe",
+      "kind": "district",
+      "name": "Чертаново Северное",
+      "name_in": "в Чертанове Северном",
+      "name_gen": "Чертанова Северного",
+      "stations": [
+        "st:9:chertanovskaya",
+        "st:9:yuzhnaya"
+      ]
+    },
+    {
+      "id": "d-chertanovo-tsentralnoe",
+      "kind": "district",
+      "name": "Чертаново Центральное",
+      "name_in": "в Чертанове Центральном",
+      "name_gen": "Чертанова Центрального",
+      "stations": [
+        "st:9:prazhskaya",
+        "st:9:yuzhnaya",
+        "st:d2:pokrovskoe"
+      ]
+    },
+    {
+      "id": "d-chertanovo-yuzhnoe",
+      "kind": "district",
+      "name": "Чертаново Южное",
+      "name_in": "в Чертанове Южном",
+      "name_gen": "Чертанова Южного",
+      "stations": [
+        "st:12:lesoparkovaya",
+        "st:9:annino",
+        "st:9:ulitsa-akademika-yangelya",
+        "st:d2:krasnyi-stroitel",
+        "st:d2:pokrovskoe"
+      ]
+    },
+    {
+      "id": "d-cheremushki",
+      "kind": "district",
+      "name": "Черёмушки",
+      "name_in": "в Черёмушках",
+      "name_gen": "Черёмушек",
+      "stations": [
+        "st:11:vorontsovskaya",
+        "st:11:zyuzino",
+        "st:6:kaluzhskaya",
+        "st:6:novye-cheremushki",
+        "st:6:profsoyuznaya"
+      ]
+    },
+    {
+      "id": "d-shchukino",
+      "kind": "district",
+      "name": "Щукино",
+      "name_in": "в Щукине",
+      "name_gen": "Щукина",
+      "stations": [
+        "st:7:oktyabrskoe-pole",
+        "st:7:shchukinskaya",
+        "st:d2:pokrovskoe-streshnevo",
+        "st:d2:streshnevo",
+        "st:mck:panfilovskaya",
+        "st:mck:streshnevo",
+        "st:mck:zorge"
+      ]
+    },
+    {
+      "id": "d-yuzhnoe-butovo",
+      "kind": "district",
+      "name": "Южное Бутово",
+      "name_in": "в Южном Бутове",
+      "name_gen": "Южного Бутова",
+      "stations": [
+        "st:12:bulvar-admirala-ushakova",
+        "st:12:buninskaya-alleya",
+        "st:12:ulitsa-gorchakova",
+        "st:12:ulitsa-skobelevskaya",
+        "st:d2:butovo"
+      ]
+    },
+    {
+      "id": "d-yuzhnoe-medvedkovo",
+      "kind": "district",
+      "name": "Южное Медведково",
+      "name_in": "в Южном Медведкове",
+      "name_gen": "Южного Медведкова",
+      "stations": [
+        "st:6:babushkinskaya",
+        "st:9:bibirevo",
+        "st:9:otradnoe"
+      ]
+    },
+    {
+      "id": "d-yuzhnoe-tushino",
+      "kind": "district",
+      "name": "Южное Тушино",
+      "name_in": "в Южном Тушине",
+      "name_gen": "Южного Тушина",
+      "stations": [
+        "st:7:skhodnenskaya",
+        "st:d2:trikotazhnaya"
+      ]
+    },
+    {
+      "id": "d-yuzhnoportovyi",
+      "kind": "district",
+      "name": "Южнопортовый",
+      "name_in": "в Южнопортовом",
+      "name_gen": "Южнопортового",
+      "stations": [
+        "st:10:dubrovka",
+        "st:10:kozhukhovskaya",
+        "st:10:krestyanskaya-zastava",
+        "st:7:proletarskaya",
+        "st:7:volgogradskii-prospekt",
+        "st:mck:avtozavodskaya",
+        "st:mck:dubrovka",
+        "st:mck:ugreshskaya"
+      ]
+    },
+    {
+      "id": "d-yakimanka",
+      "kind": "district",
+      "name": "Якиманка",
+      "name_in": "на Якиманке",
+      "name_gen": "Якиманки",
+      "stations": [
+        "st:1:kropotkinskaya",
+        "st:1:park-kultury",
+        "st:2:novokuznetskaya",
+        "st:5:dobryninskaya",
+        "st:5:oktyabrskaya",
+        "st:5:park-kultury",
+        "st:6:oktyabrskaya",
+        "st:6:shabolovskaya",
+        "st:6:tretyakovskaya",
+        "st:8:tretyakovskaya",
+        "st:9:polyanka",
+        "st:9:serpukhovskaya"
+      ]
+    },
+    {
+      "id": "d-yaroslavskii",
+      "kind": "district",
+      "name": "Ярославский",
+      "name_in": "в Ярославском",
+      "name_gen": "Ярославского",
+      "stations": [
+        "st:mck:rostokino"
+      ]
+    },
+    {
+      "id": "d-yasenevo",
+      "kind": "district",
+      "name": "Ясенево",
+      "name_in": "в Ясеневе",
+      "name_gen": "Ясенева",
+      "stations": [
+        "st:12:bittsevskii-park",
+        "st:12:lesoparkovaya",
+        "st:6:novoyasenevskaya",
+        "st:6:teplyi-stan",
+        "st:6:yasenevo"
+      ]
+    },
+    {
+      "id": "line-11",
+      "kind": "line",
+      "name": "БКЛ",
+      "name_in": "на БКЛ",
+      "name_gen": "БКЛ",
+      "stations": [
+        "st:11:aminevskaya",
+        "st:11:aviamotornaya",
+        "st:11:davydkovo",
+        "st:11:delovoi-tsentr",
+        "st:11:elektrozavodskaya",
+        "st:11:kakhovskaya",
+        "st:11:kashirskaya",
+        "st:11:khoroshevskaya",
+        "st:11:klenovyi-bulvar",
+        "st:11:kuntsevskaya",
+        "st:11:lefortovo",
+        "st:11:marina-roshcha",
+        "st:11:michurinskii-prospekt",
+        "st:11:mnevniki",
+        "st:11:nagatinskii-zaton",
+        "st:11:narodnoe-opolchenie",
+        "st:11:nizhegorodskaya",
+        "st:11:novatorskaya",
+        "st:11:pechatniki",
+        "st:11:petrovskii-park",
+        "st:11:prospekt-vernadskogo",
+        "st:11:rizhskaya",
+        "st:11:savelovskaya",
+        "st:11:shelepikha",
+        "st:11:sokolniki",
+        "st:11:tekstilshchiki",
+        "st:11:terekhovo",
+        "st:11:tsska",
+        "st:11:varshavskaya",
+        "st:11:vorontsovskaya",
+        "st:11:zyuzino"
+      ]
+    },
+    {
+      "id": "line-12",
+      "kind": "line",
+      "name": "Бутовская ветка",
+      "name_in": "на Бутовской ветке",
+      "name_gen": "Бутовской ветки",
+      "stations": [
+        "st:12:bittsevskii-park",
+        "st:12:bulvar-admirala-ushakova",
+        "st:12:buninskaya-alleya",
+        "st:12:lesoparkovaya",
+        "st:12:ulitsa-gorchakova",
+        "st:12:ulitsa-skobelevskaya",
+        "st:12:ulitsa-starokachalovskaya"
+      ]
+    },
+    {
+      "id": "line-d1",
+      "kind": "line",
+      "name": "МЦД-1",
+      "name_in": "на МЦД-1",
+      "name_gen": "МЦД-1",
+      "stations": [
+        "st:d1:begovaya",
+        "st:d1:belorusskaya",
+        "st:d1:beskudnikovo",
+        "st:d1:degunino",
+        "st:d1:fili",
+        "st:d1:kuntsevskaya",
+        "st:d1:lianozovo",
+        "st:d1:mark",
+        "st:d1:okruzhnaya",
+        "st:d1:rabochii-poselok",
+        "st:d1:savelovskaya",
+        "st:d1:setun",
+        "st:d1:skolkovo",
+        "st:d1:slavyanskii-bulvar",
+        "st:d1:testovskaya",
+        "st:d1:timiryazevskaya"
+      ]
+    },
+    {
+      "id": "line-d2",
+      "kind": "line",
+      "name": "МЦД-2",
+      "name_in": "на МЦД-2",
+      "name_gen": "МЦД-2",
+      "stations": [
+        "st:d2:butovo",
+        "st:d2:depo",
+        "st:d2:dmitrovskaya",
+        "st:d2:grazhdanskaya",
+        "st:d2:kalitniki",
+        "st:d2:krasnyi-baltiets",
+        "st:d2:krasnyi-stroitel",
+        "st:d2:kurskaya",
+        "st:d2:kuryanovo",
+        "st:d2:lyublino",
+        "st:d2:marina-roshcha",
+        "st:d2:moskva-tovarnaya",
+        "st:d2:moskvoreche",
+        "st:d2:novokhokhlovskaya",
+        "st:d2:ostafevo",
+        "st:d2:penyagino",
+        "st:d2:pererva",
+        "st:d2:ploshchad-trekh-vokzalov",
+        "st:d2:pokrovskoe",
+        "st:d2:pokrovskoe-streshnevo",
+        "st:d2:rizhskaya",
+        "st:d2:shcherbinka",
+        "st:d2:streshnevo",
+        "st:d2:tekstilshchiki",
+        "st:d2:trikotazhnaya",
+        "st:d2:tsaritsyno",
+        "st:d2:tushinskaya",
+        "st:d2:volokolamskaya"
+      ]
+    },
+    {
+      "id": "line-d3",
+      "kind": "line",
+      "name": "МЦД-3",
+      "name_in": "на МЦД-3",
+      "name_gen": "МЦД-3",
+      "stations": [
+        "st:d3:andronovka",
+        "st:d3:aviamotornaya",
+        "st:d3:elektrozavodskaya",
+        "st:d3:grachevskaya",
+        "st:d3:khovrino",
+        "st:d3:kosino",
+        "st:d3:kryukovo",
+        "st:d3:likhobory",
+        "st:d3:mitkovo",
+        "st:d3:molzhaninovo",
+        "st:d3:mosselmash",
+        "st:d3:novopodrezkovo",
+        "st:d3:ostankino",
+        "st:d3:perovo",
+        "st:d3:petrovsko-razumovskaya",
+        "st:d3:plyushchevo",
+        "st:d3:rizhskaya",
+        "st:d3:sortirovochnaya",
+        "st:d3:veshnyaki",
+        "st:d3:vykhino"
+      ]
+    },
+    {
+      "id": "line-d4",
+      "kind": "line",
+      "name": "МЦД-4",
+      "name_in": "на МЦД-4",
+      "name_gen": "МЦД-4",
+      "stations": [
+        "st:d4:aminevskaya",
+        "st:d4:belorusskaya",
+        "st:d4:ermakova-roshcha",
+        "st:d4:kokoshkino",
+        "st:d4:krekshino",
+        "st:d4:kurskaya",
+        "st:d4:kuskovo",
+        "st:d4:kutuzovskaya",
+        "st:d4:marina-roshcha",
+        "st:d4:matveevskoe",
+        "st:d4:meshcherskaya",
+        "st:d4:michurinets",
+        "st:d4:minskaya",
+        "st:d4:nizhegorodskaya",
+        "st:d4:novogireevo",
+        "st:d4:novoperedelkino",
+        "st:d4:ochakovo-i",
+        "st:d4:peredelkino",
+        "st:d4:ploshchad-trekh-vokzalov",
+        "st:d4:poklonnaya",
+        "st:d4:rizhskaya",
+        "st:d4:sanino",
+        "st:d4:savelovskaya",
+        "st:d4:serp-i-molot",
+        "st:d4:solnechnaya",
+        "st:d4:testovskaya",
+        "st:d4:tolstopaltsevo",
+        "st:d4:vnukovo"
+      ]
+    },
+    {
+      "id": "line-mck",
+      "kind": "line",
+      "name": "МЦК",
+      "name_in": "на МЦК",
+      "name_gen": "МЦК",
+      "stations": [
+        "st:mck:andronovka",
+        "st:mck:avtozavodskaya",
+        "st:mck:baltiiskaya",
+        "st:mck:belokamennaya",
+        "st:mck:botanicheskii-sad",
+        "st:mck:bulvar-rokossovskogo",
+        "st:mck:delovoi-tsentr",
+        "st:mck:dubrovka",
+        "st:mck:izmailovo",
+        "st:mck:khoroshevo",
+        "st:mck:koptevo",
+        "st:mck:krymskaya",
+        "st:mck:kutuzovskaya",
+        "st:mck:likhobory",
+        "st:mck:lokomotiv",
+        "st:mck:luzhniki",
+        "st:mck:nizhegorodskaya",
+        "st:mck:novokhokhlovskaya",
+        "st:mck:okruzhnaya",
+        "st:mck:panfilovskaya",
+        "st:mck:ploshchad-gagarina",
+        "st:mck:rostokino",
+        "st:mck:shelepikha",
+        "st:mck:shosse-entuziastov",
+        "st:mck:sokolinaya-gora",
+        "st:mck:streshnevo",
+        "st:mck:ugreshskaya",
+        "st:mck:verkhnie-kotly",
+        "st:mck:vladykino",
+        "st:mck:zil",
+        "st:mck:zorge"
+      ]
+    },
+    {
+      "id": "line-16",
+      "kind": "line",
+      "name": "Троицкая ветка",
+      "name_in": "на Троицкой ветке",
+      "name_gen": "Троицкой ветки",
+      "stations": [
+        "st:16:akademicheskaya",
+        "st:16:generala-tyuleneva",
+        "st:16:kommunarka",
+        "st:16:kornilovskaya",
+        "st:16:krymskaya",
+        "st:16:novatorskaya",
+        "st:16:novomoskovskaya",
+        "st:16:tyutchevskaya",
+        "st:16:universitet-druzhby-narodov",
+        "st:16:vavilovskaya",
+        "st:16:zil"
+      ]
+    },
+    {
+      "id": "line-4",
+      "kind": "line",
+      "name": "голубая ветка",
+      "name_in": "на голубой ветке",
+      "name_gen": "голубой ветки",
+      "stations": [
+        "st:4:aleksandrovskii-sad",
+        "st:4:arbatskaya",
+        "st:4:bagrationovskaya",
+        "st:4:delovoi-tsentr-vystavochnaya",
+        "st:4:filevskii-park",
+        "st:4:fili",
+        "st:4:kievskaya",
+        "st:4:kuntsevskaya",
+        "st:4:kutuzovskaya",
+        "st:4:moskva-siti",
+        "st:4:pionerskaya",
+        "st:4:smolenskaya",
+        "st:4:studencheskaya"
+      ]
+    },
+    {
+      "id": "line-8",
+      "kind": "line",
+      "name": "жёлтая ветка",
+      "name_in": "на жёлтой ветке",
+      "name_gen": "жёлтой ветки",
+      "stations": [
+        "st:8:aviamotornaya",
+        "st:8:marksistskaya",
+        "st:8:novogireevo",
+        "st:8:novokosino",
+        "st:8:perovo",
+        "st:8:ploshchad-ilicha",
+        "st:8:shosse-entuziastov",
+        "st:8:tretyakovskaya"
+      ]
+    },
+    {
+      "id": "line-8a",
+      "kind": "line",
+      "name": "жёлтая ветка (Солнцевская)",
+      "name_in": "на жёлтой ветке",
+      "name_gen": "жёлтой ветки",
+      "stations": [
+        "st:8a:aeroport-vnukovo",
+        "st:8a:borovskoe-shosse",
+        "st:8a:delovoi-tsentr",
+        "st:8a:govorovo",
+        "st:8a:lomonosovskii-prospekt",
+        "st:8a:michurinskii-prospekt",
+        "st:8a:minskaya",
+        "st:8a:novoperedelkino",
+        "st:8a:ozernaya",
+        "st:8a:park-pobedy",
+        "st:8a:pykhtino",
+        "st:8a:ramenki",
+        "st:8a:rasskazovka",
+        "st:8a:solntsevo"
+      ]
+    },
+    {
+      "id": "line-2",
+      "kind": "line",
+      "name": "зелёная ветка",
+      "name_in": "на зелёной ветке",
+      "name_gen": "зелёной ветки",
+      "stations": [
+        "st:2:aeroport",
+        "st:2:alma-atinskaya",
+        "st:2:avtozavodskaya",
+        "st:2:belomorskaya",
+        "st:2:belorusskaya",
+        "st:2:dinamo",
+        "st:2:domodedovskaya",
+        "st:2:kantemirovskaya",
+        "st:2:kashirskaya",
+        "st:2:khovrino",
+        "st:2:kolomenskaya",
+        "st:2:krasnogvardeiskaya",
+        "st:2:mayakovskaya",
+        "st:2:novokuznetskaya",
+        "st:2:orekhovo",
+        "st:2:paveletskaya",
+        "st:2:rechnoi-vokzal",
+        "st:2:sokol",
+        "st:2:teatralnaya",
+        "st:2:tekhnopark",
+        "st:2:tsaritsyno",
+        "st:2:tverskaya",
+        "st:2:vodnyi-stadion",
+        "st:2:voikovskaya"
+      ]
+    },
+    {
+      "id": "line-5",
+      "kind": "line",
+      "name": "кольцевая ветка",
+      "name_in": "на кольцевой ветке",
+      "name_gen": "кольцевой ветки",
+      "stations": [
+        "st:5:belorusskaya",
+        "st:5:dobryninskaya",
+        "st:5:kievskaya",
+        "st:5:komsomolskaya",
+        "st:5:krasnopresnenskaya",
+        "st:5:kurskaya",
+        "st:5:novoslobodskaya",
+        "st:5:oktyabrskaya",
+        "st:5:park-kultury",
+        "st:5:paveletskaya",
+        "st:5:prospekt-mira",
+        "st:5:taganskaya"
+      ]
+    },
+    {
+      "id": "line-1",
+      "kind": "line",
+      "name": "красная ветка",
+      "name_in": "на красной ветке",
+      "name_gen": "красной ветки",
+      "stations": [
+        "st:1:biblioteka-im-lenina",
+        "st:1:bulvar-rokossovskogo",
+        "st:1:cherkizovskaya",
+        "st:1:chistye-prudy",
+        "st:1:filatov-lug",
+        "st:1:frunzenskaya",
+        "st:1:komsomolskaya",
+        "st:1:krasnoselskaya",
+        "st:1:krasnye-vorota",
+        "st:1:kropotkinskaya",
+        "st:1:lubyanka",
+        "st:1:novomoskovskaya-kommunarka",
+        "st:1:okhotnyi-ryad",
+        "st:1:olkhovaya",
+        "st:1:park-kultury",
+        "st:1:potapovo",
+        "st:1:preobrazhenskaya-ploshchad",
+        "st:1:prokshino",
+        "st:1:prospekt-vernadskogo",
+        "st:1:rumyantsevo",
+        "st:1:salarevo",
+        "st:1:sokolniki",
+        "st:1:sportivnaya",
+        "st:1:troparevo",
+        "st:1:universitet",
+        "st:1:vorobevy-gory",
+        "st:1:yugo-zapadnaya"
+      ]
+    },
+    {
+      "id": "line-6",
+      "kind": "line",
+      "name": "оранжевая ветка",
+      "name_in": "на оранжевой ветке",
+      "name_gen": "оранжевой ветки",
+      "stations": [
+        "st:6:akademicheskaya",
+        "st:6:alekseevskaya",
+        "st:6:babushkinskaya",
+        "st:6:belyaevo",
+        "st:6:botanicheskii-sad",
+        "st:6:kaluzhskaya",
+        "st:6:kitai-gorod",
+        "st:6:konkovo",
+        "st:6:leninskii-prospekt",
+        "st:6:medvedkovo",
+        "st:6:novoyasenevskaya",
+        "st:6:novye-cheremushki",
+        "st:6:oktyabrskaya",
+        "st:6:profsoyuznaya",
+        "st:6:prospekt-mira",
+        "st:6:rizhskaya",
+        "st:6:shabolovskaya",
+        "st:6:sukharevskaya",
+        "st:6:sviblovo",
+        "st:6:teplyi-stan",
+        "st:6:tretyakovskaya",
+        "st:6:turgenevskaya",
+        "st:6:vdnkh",
+        "st:6:yasenevo"
+      ]
+    },
+    {
+      "id": "line-15",
+      "kind": "line",
+      "name": "розовая ветка",
+      "name_in": "на розовой ветке",
+      "name_gen": "розовой ветки",
+      "stations": [
+        "st:15:kosino",
+        "st:15:lukhmanovskaya",
+        "st:15:nekrasovka",
+        "st:15:nizhegorodskaya",
+        "st:15:okskaya",
+        "st:15:stakhanovskaya",
+        "st:15:ulitsa-dmitrievskogo",
+        "st:15:yugo-vostochnaya"
+      ]
+    },
+    {
+      "id": "line-10",
+      "kind": "line",
+      "name": "салатовая ветка",
+      "name_in": "на салатовой ветке",
+      "name_gen": "салатовой ветки",
+      "stations": [
+        "st:10:borisovo",
+        "st:10:bratislavskaya",
+        "st:10:butyrskaya",
+        "st:10:chkalovskaya",
+        "st:10:dostoevskaya",
+        "st:10:dubrovka",
+        "st:10:fiztekh",
+        "st:10:fonvizinskaya",
+        "st:10:kozhukhovskaya",
+        "st:10:krestyanskaya-zastava",
+        "st:10:lianozovo",
+        "st:10:lyublino",
+        "st:10:marina-roshcha",
+        "st:10:marino",
+        "st:10:okruzhnaya",
+        "st:10:pechatniki",
+        "st:10:petrovsko-razumovskaya",
+        "st:10:rimskaya",
+        "st:10:seligerskaya",
+        "st:10:shipilovskaya",
+        "st:10:sretenskii-bulvar",
+        "st:10:trubnaya",
+        "st:10:verkhnie-likhobory",
+        "st:10:volzhskaya",
+        "st:10:yakhromskaya",
+        "st:10:zyablikovo"
+      ]
+    },
+    {
+      "id": "line-9",
+      "kind": "line",
+      "name": "серая ветка",
+      "name_in": "на серой ветке",
+      "name_gen": "серой ветки",
+      "stations": [
+        "st:9:altufevo",
+        "st:9:annino",
+        "st:9:bibirevo",
+        "st:9:borovitskaya",
+        "st:9:bulvar-dmitriya-donskogo",
+        "st:9:chekhovskaya",
+        "st:9:chertanovskaya",
+        "st:9:dmitrovskaya",
+        "st:9:mendeleevskaya",
+        "st:9:nagatinskaya",
+        "st:9:nagornaya",
+        "st:9:nakhimovskii-prospekt",
+        "st:9:otradnoe",
+        "st:9:petrovsko-razumovskaya",
+        "st:9:polyanka",
+        "st:9:prazhskaya",
+        "st:9:savelovskaya",
+        "st:9:serpukhovskaya",
+        "st:9:sevastopolskaya",
+        "st:9:timiryazevskaya",
+        "st:9:tsvetnoi-bulvar",
+        "st:9:tulskaya",
+        "st:9:ulitsa-akademika-yangelya",
+        "st:9:vladykino",
+        "st:9:yuzhnaya"
+      ]
+    },
+    {
+      "id": "line-3",
+      "kind": "line",
+      "name": "синяя ветка",
+      "name_in": "на синей ветке",
+      "name_gen": "синей ветки",
+      "stations": [
+        "st:3:arbatskaya",
+        "st:3:baumanskaya",
+        "st:3:elektrozavodskaya",
+        "st:3:izmailovskaya",
+        "st:3:kievskaya",
+        "st:3:krylatskoe",
+        "st:3:kuntsevskaya",
+        "st:3:kurskaya",
+        "st:3:mitino",
+        "st:3:molodezhnaya",
+        "st:3:myakinino",
+        "st:3:park-pobedy",
+        "st:3:partizanskaya",
+        "st:3:pervomaiskaya",
+        "st:3:ploshchad-revolyutsii",
+        "st:3:pyatnitskoe-shosse",
+        "st:3:semenovskaya",
+        "st:3:shchelkovskaya",
+        "st:3:slavyanskii-bulvar",
+        "st:3:smolenskaya",
+        "st:3:strogino",
+        "st:3:volokolamskaya"
+      ]
+    },
+    {
+      "id": "line-7",
+      "kind": "line",
+      "name": "фиолетовая ветка",
+      "name_in": "на фиолетовой ветке",
+      "name_gen": "фиолетовой ветки",
+      "stations": [
+        "st:7:barrikadnaya",
+        "st:7:begovaya",
+        "st:7:kitai-gorod",
+        "st:7:kotelniki",
+        "st:7:kuzminki",
+        "st:7:kuznetskii-most",
+        "st:7:lermontovskii-prospekt",
+        "st:7:oktyabrskoe-pole",
+        "st:7:planernaya",
+        "st:7:polezhaevskaya",
+        "st:7:proletarskaya",
+        "st:7:pushkinskaya",
+        "st:7:ryazanskii-prospekt",
+        "st:7:shchukinskaya",
+        "st:7:skhodnenskaya",
+        "st:7:spartak",
+        "st:7:taganskaya",
+        "st:7:tekstilshchiki",
+        "st:7:tushinskaya",
+        "st:7:ulitsa-1905-goda",
+        "st:7:volgogradskii-prospekt",
+        "st:7:vykhino",
+        "st:7:zhulebino"
+      ]
+    },
+    {
+      "id": "st-aviamotornaya",
+      "kind": "station",
+      "name": "Авиамоторная",
+      "name_in": "у метро Авиамоторная",
+      "name_gen": "метро Авиамоторная",
+      "stations": [
+        "st:11:aviamotornaya",
+        "st:8:aviamotornaya",
+        "st:d3:aviamotornaya"
+      ]
+    },
+    {
+      "id": "st-avtozavodskaya",
+      "kind": "station",
+      "name": "Автозаводская",
+      "name_in": "у метро Автозаводская",
+      "name_gen": "метро Автозаводская",
+      "stations": [
+        "st:2:avtozavodskaya",
+        "st:mck:avtozavodskaya"
+      ]
+    },
+    {
+      "id": "st-akademicheskaya",
+      "kind": "station",
+      "name": "Академическая",
+      "name_in": "у метро Академическая",
+      "name_gen": "метро Академическая",
+      "stations": [
+        "st:16:akademicheskaya",
+        "st:6:akademicheskaya"
+      ]
+    },
+    {
+      "id": "st-aleksandrovskii-sad",
+      "kind": "station",
+      "name": "Александровский сад",
+      "name_in": "у метро Александровский сад",
+      "name_gen": "метро Александровский сад",
+      "stations": [
+        "st:4:aleksandrovskii-sad"
+      ]
+    },
+    {
+      "id": "st-alekseevskaya",
+      "kind": "station",
+      "name": "Алексеевская",
+      "name_in": "у метро Алексеевская",
+      "name_gen": "метро Алексеевская",
+      "stations": [
+        "st:6:alekseevskaya"
+      ]
+    },
+    {
+      "id": "st-alma-atinskaya",
+      "kind": "station",
+      "name": "Алма-Атинская",
+      "name_in": "у метро Алма-Атинская",
+      "name_gen": "метро Алма-Атинская",
+      "stations": [
+        "st:2:alma-atinskaya"
+      ]
+    },
+    {
+      "id": "st-altufevo",
+      "kind": "station",
+      "name": "Алтуфьево",
+      "name_in": "у метро Алтуфьево",
+      "name_gen": "метро Алтуфьево",
+      "stations": [
+        "st:9:altufevo"
+      ]
+    },
+    {
+      "id": "st-aminevskaya",
+      "kind": "station",
+      "name": "Аминьевская",
+      "name_in": "у метро Аминьевская",
+      "name_gen": "метро Аминьевская",
+      "stations": [
+        "st:11:aminevskaya",
+        "st:d4:aminevskaya"
+      ]
+    },
+    {
+      "id": "st-andronovka",
+      "kind": "station",
+      "name": "Андроновка",
+      "name_in": "у метро Андроновка",
+      "name_gen": "метро Андроновка",
+      "stations": [
+        "st:d3:andronovka",
+        "st:mck:andronovka"
+      ]
+    },
+    {
+      "id": "st-annino",
+      "kind": "station",
+      "name": "Аннино",
+      "name_in": "у метро Аннино",
+      "name_gen": "метро Аннино",
+      "stations": [
+        "st:9:annino"
+      ]
+    },
+    {
+      "id": "st-arbatskaya",
+      "kind": "station",
+      "name": "Арбатская",
+      "name_in": "у метро Арбатская",
+      "name_gen": "метро Арбатская",
+      "stations": [
+        "st:3:arbatskaya",
+        "st:4:arbatskaya"
+      ]
+    },
+    {
+      "id": "st-aeroport",
+      "kind": "station",
+      "name": "Аэропорт",
+      "name_in": "у метро Аэропорт",
+      "name_gen": "метро Аэропорт",
+      "stations": [
+        "st:2:aeroport"
+      ]
+    },
+    {
+      "id": "st-aeroport-vnukovo",
+      "kind": "station",
+      "name": "Аэропорт Внуково",
+      "name_in": "у метро Аэропорт Внуково",
+      "name_gen": "метро Аэропорт Внуково",
+      "stations": [
+        "st:8a:aeroport-vnukovo"
+      ]
+    },
+    {
+      "id": "st-babushkinskaya",
+      "kind": "station",
+      "name": "Бабушкинская",
+      "name_in": "у метро Бабушкинская",
+      "name_gen": "метро Бабушкинская",
+      "stations": [
+        "st:6:babushkinskaya"
+      ]
+    },
+    {
+      "id": "st-bagrationovskaya",
+      "kind": "station",
+      "name": "Багратионовская",
+      "name_in": "у метро Багратионовская",
+      "name_gen": "метро Багратионовская",
+      "stations": [
+        "st:4:bagrationovskaya"
+      ]
+    },
+    {
+      "id": "st-baltiiskaya",
+      "kind": "station",
+      "name": "Балтийская",
+      "name_in": "у метро Балтийская",
+      "name_gen": "метро Балтийская",
+      "stations": [
+        "st:mck:baltiiskaya"
+      ]
+    },
+    {
+      "id": "st-barrikadnaya",
+      "kind": "station",
+      "name": "Баррикадная",
+      "name_in": "у метро Баррикадная",
+      "name_gen": "метро Баррикадная",
+      "stations": [
+        "st:7:barrikadnaya"
+      ]
+    },
+    {
+      "id": "st-baumanskaya",
+      "kind": "station",
+      "name": "Бауманская",
+      "name_in": "у метро Бауманская",
+      "name_gen": "метро Бауманская",
+      "stations": [
+        "st:3:baumanskaya"
+      ]
+    },
+    {
+      "id": "st-begovaya",
+      "kind": "station",
+      "name": "Беговая",
+      "name_in": "у метро Беговая",
+      "name_gen": "метро Беговая",
+      "stations": [
+        "st:7:begovaya",
+        "st:d1:begovaya"
+      ]
+    },
+    {
+      "id": "st-belokamennaya",
+      "kind": "station",
+      "name": "Белокаменная",
+      "name_in": "у метро Белокаменная",
+      "name_gen": "метро Белокаменная",
+      "stations": [
+        "st:mck:belokamennaya"
+      ]
+    },
+    {
+      "id": "st-belomorskaya",
+      "kind": "station",
+      "name": "Беломорская",
+      "name_in": "у метро Беломорская",
+      "name_gen": "метро Беломорская",
+      "stations": [
+        "st:2:belomorskaya"
+      ]
+    },
+    {
+      "id": "st-belorusskaya",
+      "kind": "station",
+      "name": "Белорусская",
+      "name_in": "у метро Белорусская",
+      "name_gen": "метро Белорусская",
+      "stations": [
+        "st:2:belorusskaya",
+        "st:5:belorusskaya",
+        "st:d1:belorusskaya",
+        "st:d4:belorusskaya"
+      ]
+    },
+    {
+      "id": "st-belyaevo",
+      "kind": "station",
+      "name": "Беляево",
+      "name_in": "у метро Беляево",
+      "name_gen": "метро Беляево",
+      "stations": [
+        "st:6:belyaevo"
+      ]
+    },
+    {
+      "id": "st-beskudnikovo",
+      "kind": "station",
+      "name": "Бескудниково",
+      "name_in": "у метро Бескудниково",
+      "name_gen": "метро Бескудниково",
+      "stations": [
+        "st:d1:beskudnikovo"
+      ]
+    },
+    {
+      "id": "st-bibirevo",
+      "kind": "station",
+      "name": "Бибирево",
+      "name_in": "у метро Бибирево",
+      "name_gen": "метро Бибирево",
+      "stations": [
+        "st:9:bibirevo"
+      ]
+    },
+    {
+      "id": "st-biblioteka-im-lenina",
+      "kind": "station",
+      "name": "Библиотека им.Ленина",
+      "name_in": "у метро Библиотека им.Ленина",
+      "name_gen": "метро Библиотека им.Ленина",
+      "stations": [
+        "st:1:biblioteka-im-lenina"
+      ]
+    },
+    {
+      "id": "st-bittsevskii-park",
+      "kind": "station",
+      "name": "Битцевский Парк",
+      "name_in": "у метро Битцевский Парк",
+      "name_gen": "метро Битцевский Парк",
+      "stations": [
+        "st:12:bittsevskii-park"
+      ]
+    },
+    {
+      "id": "st-borisovo",
+      "kind": "station",
+      "name": "Борисово",
+      "name_in": "у метро Борисово",
+      "name_gen": "метро Борисово",
+      "stations": [
+        "st:10:borisovo"
+      ]
+    },
+    {
+      "id": "st-borovitskaya",
+      "kind": "station",
+      "name": "Боровицкая",
+      "name_in": "у метро Боровицкая",
+      "name_gen": "метро Боровицкая",
+      "stations": [
+        "st:9:borovitskaya"
+      ]
+    },
+    {
+      "id": "st-borovskoe-shosse",
+      "kind": "station",
+      "name": "Боровское шоссе",
+      "name_in": "у метро Боровское шоссе",
+      "name_gen": "метро Боровское шоссе",
+      "stations": [
+        "st:8a:borovskoe-shosse"
+      ]
+    },
+    {
+      "id": "st-botanicheskii-sad",
+      "kind": "station",
+      "name": "Ботанический сад",
+      "name_in": "у метро Ботанический сад",
+      "name_gen": "метро Ботанический сад",
+      "stations": [
+        "st:6:botanicheskii-sad",
+        "st:mck:botanicheskii-sad"
+      ]
+    },
+    {
+      "id": "st-bratislavskaya",
+      "kind": "station",
+      "name": "Братиславская",
+      "name_in": "у метро Братиславская",
+      "name_gen": "метро Братиславская",
+      "stations": [
+        "st:10:bratislavskaya"
+      ]
+    },
+    {
+      "id": "st-bulvar-admirala-ushakova",
+      "kind": "station",
+      "name": "Бульвар Адмирала Ушакова",
+      "name_in": "у метро Бульвар Адмирала Ушакова",
+      "name_gen": "метро Бульвар Адмирала Ушакова",
+      "stations": [
+        "st:12:bulvar-admirala-ushakova"
+      ]
+    },
+    {
+      "id": "st-bulvar-dmitriya-donskogo",
+      "kind": "station",
+      "name": "Бульвар Дмитрия Донского",
+      "name_in": "у метро Бульвар Дмитрия Донского",
+      "name_gen": "метро Бульвар Дмитрия Донского",
+      "stations": [
+        "st:9:bulvar-dmitriya-donskogo"
+      ]
+    },
+    {
+      "id": "st-bulvar-rokossovskogo",
+      "kind": "station",
+      "name": "Бульвар Рокоссовского",
+      "name_in": "у метро Бульвар Рокоссовского",
+      "name_gen": "метро Бульвар Рокоссовского",
+      "stations": [
+        "st:1:bulvar-rokossovskogo",
+        "st:mck:bulvar-rokossovskogo"
+      ]
+    },
+    {
+      "id": "st-buninskaya-alleya",
+      "kind": "station",
+      "name": "Бунинская аллея",
+      "name_in": "у метро Бунинская аллея",
+      "name_gen": "метро Бунинская аллея",
+      "stations": [
+        "st:12:buninskaya-alleya"
+      ]
+    },
+    {
+      "id": "st-butovo",
+      "kind": "station",
+      "name": "Бутово",
+      "name_in": "у метро Бутово",
+      "name_gen": "метро Бутово",
+      "stations": [
+        "st:d2:butovo"
+      ]
+    },
+    {
+      "id": "st-butyrskaya",
+      "kind": "station",
+      "name": "Бутырская",
+      "name_in": "у метро Бутырская",
+      "name_gen": "метро Бутырская",
+      "stations": [
+        "st:10:butyrskaya"
+      ]
+    },
+    {
+      "id": "st-vdnkh",
+      "kind": "station",
+      "name": "ВДНХ",
+      "name_in": "у метро ВДНХ",
+      "name_gen": "метро ВДНХ",
+      "stations": [
+        "st:6:vdnkh"
+      ]
+    },
+    {
+      "id": "st-vavilovskaya",
+      "kind": "station",
+      "name": "Вавиловская",
+      "name_in": "у метро Вавиловская",
+      "name_gen": "метро Вавиловская",
+      "stations": [
+        "st:16:vavilovskaya"
+      ]
+    },
+    {
+      "id": "st-varshavskaya",
+      "kind": "station",
+      "name": "Варшавская",
+      "name_in": "у метро Варшавская",
+      "name_gen": "метро Варшавская",
+      "stations": [
+        "st:11:varshavskaya"
+      ]
+    },
+    {
+      "id": "st-verkhnie-kotly",
+      "kind": "station",
+      "name": "Верхние Котлы",
+      "name_in": "у метро Верхние Котлы",
+      "name_gen": "метро Верхние Котлы",
+      "stations": [
+        "st:mck:verkhnie-kotly"
+      ]
+    },
+    {
+      "id": "st-verkhnie-likhobory",
+      "kind": "station",
+      "name": "Верхние Лихоборы",
+      "name_in": "у метро Верхние Лихоборы",
+      "name_gen": "метро Верхние Лихоборы",
+      "stations": [
+        "st:10:verkhnie-likhobory"
+      ]
+    },
+    {
+      "id": "st-veshnyaki",
+      "kind": "station",
+      "name": "Вешняки",
+      "name_in": "у метро Вешняки",
+      "name_gen": "метро Вешняки",
+      "stations": [
+        "st:d3:veshnyaki"
+      ]
+    },
+    {
+      "id": "st-vladykino",
+      "kind": "station",
+      "name": "Владыкино",
+      "name_in": "у метро Владыкино",
+      "name_gen": "метро Владыкино",
+      "stations": [
+        "st:9:vladykino",
+        "st:mck:vladykino"
+      ]
+    },
+    {
+      "id": "st-vnukovo",
+      "kind": "station",
+      "name": "Внуково",
+      "name_in": "у метро Внуково",
+      "name_gen": "метро Внуково",
+      "stations": [
+        "st:d4:vnukovo"
+      ]
+    },
+    {
+      "id": "st-vodnyi-stadion",
+      "kind": "station",
+      "name": "Водный стадион",
+      "name_in": "у метро Водный стадион",
+      "name_gen": "метро Водный стадион",
+      "stations": [
+        "st:2:vodnyi-stadion"
+      ]
+    },
+    {
+      "id": "st-voikovskaya",
+      "kind": "station",
+      "name": "Войковская",
+      "name_in": "у метро Войковская",
+      "name_gen": "метро Войковская",
+      "stations": [
+        "st:2:voikovskaya"
+      ]
+    },
+    {
+      "id": "st-volgogradskii-prospekt",
+      "kind": "station",
+      "name": "Волгоградский проспект",
+      "name_in": "у метро Волгоградский проспект",
+      "name_gen": "метро Волгоградский проспект",
+      "stations": [
+        "st:7:volgogradskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-volzhskaya",
+      "kind": "station",
+      "name": "Волжская",
+      "name_in": "у метро Волжская",
+      "name_gen": "метро Волжская",
+      "stations": [
+        "st:10:volzhskaya"
+      ]
+    },
+    {
+      "id": "st-volokolamskaya",
+      "kind": "station",
+      "name": "Волоколамская",
+      "name_in": "у метро Волоколамская",
+      "name_gen": "метро Волоколамская",
+      "stations": [
+        "st:3:volokolamskaya",
+        "st:d2:volokolamskaya"
+      ]
+    },
+    {
+      "id": "st-vorobevy-gory",
+      "kind": "station",
+      "name": "Воробьевы горы",
+      "name_in": "у метро Воробьевы горы",
+      "name_gen": "метро Воробьевы горы",
+      "stations": [
+        "st:1:vorobevy-gory"
+      ]
+    },
+    {
+      "id": "st-vorontsovskaya",
+      "kind": "station",
+      "name": "Воронцовская",
+      "name_in": "у метро Воронцовская",
+      "name_gen": "метро Воронцовская",
+      "stations": [
+        "st:11:vorontsovskaya"
+      ]
+    },
+    {
+      "id": "st-vykhino",
+      "kind": "station",
+      "name": "Выхино",
+      "name_in": "у метро Выхино",
+      "name_gen": "метро Выхино",
+      "stations": [
+        "st:7:vykhino",
+        "st:d3:vykhino"
+      ]
+    },
+    {
+      "id": "st-generala-tyuleneva",
+      "kind": "station",
+      "name": "Генерала Тюленева",
+      "name_in": "у метро Генерала Тюленева",
+      "name_gen": "метро Генерала Тюленева",
+      "stations": [
+        "st:16:generala-tyuleneva"
+      ]
+    },
+    {
+      "id": "st-govorovo",
+      "kind": "station",
+      "name": "Говорово",
+      "name_in": "у метро Говорово",
+      "name_gen": "метро Говорово",
+      "stations": [
+        "st:8a:govorovo"
+      ]
+    },
+    {
+      "id": "st-grazhdanskaya",
+      "kind": "station",
+      "name": "Гражданская",
+      "name_in": "у метро Гражданская",
+      "name_gen": "метро Гражданская",
+      "stations": [
+        "st:d2:grazhdanskaya"
+      ]
+    },
+    {
+      "id": "st-grachevskaya",
+      "kind": "station",
+      "name": "Грачёвская",
+      "name_in": "у метро Грачёвская",
+      "name_gen": "метро Грачёвская",
+      "stations": [
+        "st:d3:grachevskaya"
+      ]
+    },
+    {
+      "id": "st-davydkovo",
+      "kind": "station",
+      "name": "Давыдково",
+      "name_in": "у метро Давыдково",
+      "name_gen": "метро Давыдково",
+      "stations": [
+        "st:11:davydkovo"
+      ]
+    },
+    {
+      "id": "st-degunino",
+      "kind": "station",
+      "name": "Дегунино",
+      "name_in": "у метро Дегунино",
+      "name_gen": "метро Дегунино",
+      "stations": [
+        "st:d1:degunino"
+      ]
+    },
+    {
+      "id": "st-delovoi-tsentr",
+      "kind": "station",
+      "name": "Деловой центр",
+      "name_in": "у метро Деловой центр",
+      "name_gen": "метро Деловой центр",
+      "stations": [
+        "st:11:delovoi-tsentr",
+        "st:8a:delovoi-tsentr",
+        "st:mck:delovoi-tsentr"
+      ]
+    },
+    {
+      "id": "st-delovoi-tsentr-vystavochnaya",
+      "kind": "station",
+      "name": "Деловой центр (Выставочная)",
+      "name_in": "у метро Деловой центр (Выставочная)",
+      "name_gen": "метро Деловой центр (Выставочная)",
+      "stations": [
+        "st:4:delovoi-tsentr-vystavochnaya"
+      ]
+    },
+    {
+      "id": "st-depo",
+      "kind": "station",
+      "name": "Депо",
+      "name_in": "у метро Депо",
+      "name_gen": "метро Депо",
+      "stations": [
+        "st:d2:depo"
+      ]
+    },
+    {
+      "id": "st-dinamo",
+      "kind": "station",
+      "name": "Динамо",
+      "name_in": "у метро Динамо",
+      "name_gen": "метро Динамо",
+      "stations": [
+        "st:2:dinamo"
+      ]
+    },
+    {
+      "id": "st-dmitrovskaya",
+      "kind": "station",
+      "name": "Дмитровская",
+      "name_in": "у метро Дмитровская",
+      "name_gen": "метро Дмитровская",
+      "stations": [
+        "st:9:dmitrovskaya",
+        "st:d2:dmitrovskaya"
+      ]
+    },
+    {
+      "id": "st-dobryninskaya",
+      "kind": "station",
+      "name": "Добрынинская",
+      "name_in": "у метро Добрынинская",
+      "name_gen": "метро Добрынинская",
+      "stations": [
+        "st:5:dobryninskaya"
+      ]
+    },
+    {
+      "id": "st-domodedovskaya",
+      "kind": "station",
+      "name": "Домодедовская",
+      "name_in": "у метро Домодедовская",
+      "name_gen": "метро Домодедовская",
+      "stations": [
+        "st:2:domodedovskaya"
+      ]
+    },
+    {
+      "id": "st-dostoevskaya",
+      "kind": "station",
+      "name": "Достоевская",
+      "name_in": "у метро Достоевская",
+      "name_gen": "метро Достоевская",
+      "stations": [
+        "st:10:dostoevskaya"
+      ]
+    },
+    {
+      "id": "st-dubrovka",
+      "kind": "station",
+      "name": "Дубровка",
+      "name_in": "у метро Дубровка",
+      "name_gen": "метро Дубровка",
+      "stations": [
+        "st:10:dubrovka",
+        "st:mck:dubrovka"
+      ]
+    },
+    {
+      "id": "st-ermakova-roshcha",
+      "kind": "station",
+      "name": "Ермакова Роща",
+      "name_in": "у метро Ермакова Роща",
+      "name_gen": "метро Ермакова Роща",
+      "stations": [
+        "st:d4:ermakova-roshcha"
+      ]
+    },
+    {
+      "id": "st-zhulebino",
+      "kind": "station",
+      "name": "Жулебино",
+      "name_in": "у метро Жулебино",
+      "name_gen": "метро Жулебино",
+      "stations": [
+        "st:7:zhulebino"
+      ]
+    },
+    {
+      "id": "st-zil",
+      "kind": "station",
+      "name": "ЗИЛ",
+      "name_in": "у метро ЗИЛ",
+      "name_gen": "метро ЗИЛ",
+      "stations": [
+        "st:16:zil",
+        "st:mck:zil"
+      ]
+    },
+    {
+      "id": "st-zorge",
+      "kind": "station",
+      "name": "Зорге",
+      "name_in": "у метро Зорге",
+      "name_gen": "метро Зорге",
+      "stations": [
+        "st:mck:zorge"
+      ]
+    },
+    {
+      "id": "st-zyuzino",
+      "kind": "station",
+      "name": "Зюзино",
+      "name_in": "у метро Зюзино",
+      "name_gen": "метро Зюзино",
+      "stations": [
+        "st:11:zyuzino"
+      ]
+    },
+    {
+      "id": "st-zyablikovo",
+      "kind": "station",
+      "name": "Зябликово",
+      "name_in": "у метро Зябликово",
+      "name_gen": "метро Зябликово",
+      "stations": [
+        "st:10:zyablikovo"
+      ]
+    },
+    {
+      "id": "st-izmailovo",
+      "kind": "station",
+      "name": "Измайлово",
+      "name_in": "у метро Измайлово",
+      "name_gen": "метро Измайлово",
+      "stations": [
+        "st:mck:izmailovo"
+      ]
+    },
+    {
+      "id": "st-izmailovskaya",
+      "kind": "station",
+      "name": "Измайловская",
+      "name_in": "у метро Измайловская",
+      "name_gen": "метро Измайловская",
+      "stations": [
+        "st:3:izmailovskaya"
+      ]
+    },
+    {
+      "id": "st-kalitniki",
+      "kind": "station",
+      "name": "Калитники",
+      "name_in": "у метро Калитники",
+      "name_gen": "метро Калитники",
+      "stations": [
+        "st:d2:kalitniki"
+      ]
+    },
+    {
+      "id": "st-kaluzhskaya",
+      "kind": "station",
+      "name": "Калужская",
+      "name_in": "у метро Калужская",
+      "name_gen": "метро Калужская",
+      "stations": [
+        "st:6:kaluzhskaya"
+      ]
+    },
+    {
+      "id": "st-kantemirovskaya",
+      "kind": "station",
+      "name": "Кантемировская",
+      "name_in": "у метро Кантемировская",
+      "name_gen": "метро Кантемировская",
+      "stations": [
+        "st:2:kantemirovskaya"
+      ]
+    },
+    {
+      "id": "st-kakhovskaya",
+      "kind": "station",
+      "name": "Каховская",
+      "name_in": "у метро Каховская",
+      "name_gen": "метро Каховская",
+      "stations": [
+        "st:11:kakhovskaya"
+      ]
+    },
+    {
+      "id": "st-kashirskaya",
+      "kind": "station",
+      "name": "Каширская",
+      "name_in": "у метро Каширская",
+      "name_gen": "метро Каширская",
+      "stations": [
+        "st:11:kashirskaya",
+        "st:2:kashirskaya"
+      ]
+    },
+    {
+      "id": "st-kievskaya",
+      "kind": "station",
+      "name": "Киевская",
+      "name_in": "у метро Киевская",
+      "name_gen": "метро Киевская",
+      "stations": [
+        "st:3:kievskaya",
+        "st:4:kievskaya",
+        "st:5:kievskaya"
+      ]
+    },
+    {
+      "id": "st-kitai-gorod",
+      "kind": "station",
+      "name": "Китай-город",
+      "name_in": "у метро Китай-город",
+      "name_gen": "метро Китай-город",
+      "stations": [
+        "st:6:kitai-gorod",
+        "st:7:kitai-gorod"
+      ]
+    },
+    {
+      "id": "st-klenovyi-bulvar",
+      "kind": "station",
+      "name": "Кленовый бульвар",
+      "name_in": "у метро Кленовый бульвар",
+      "name_gen": "метро Кленовый бульвар",
+      "stations": [
+        "st:11:klenovyi-bulvar"
+      ]
+    },
+    {
+      "id": "st-kozhukhovskaya",
+      "kind": "station",
+      "name": "Кожуховская",
+      "name_in": "у метро Кожуховская",
+      "name_gen": "метро Кожуховская",
+      "stations": [
+        "st:10:kozhukhovskaya"
+      ]
+    },
+    {
+      "id": "st-kokoshkino",
+      "kind": "station",
+      "name": "Кокошкино",
+      "name_in": "у метро Кокошкино",
+      "name_gen": "метро Кокошкино",
+      "stations": [
+        "st:d4:kokoshkino"
+      ]
+    },
+    {
+      "id": "st-kolomenskaya",
+      "kind": "station",
+      "name": "Коломенская",
+      "name_in": "у метро Коломенская",
+      "name_gen": "метро Коломенская",
+      "stations": [
+        "st:2:kolomenskaya"
+      ]
+    },
+    {
+      "id": "st-kommunarka",
+      "kind": "station",
+      "name": "Коммунарка",
+      "name_in": "у метро Коммунарка",
+      "name_gen": "метро Коммунарка",
+      "stations": [
+        "st:16:kommunarka"
+      ]
+    },
+    {
+      "id": "st-komsomolskaya",
+      "kind": "station",
+      "name": "Комсомольская",
+      "name_in": "у метро Комсомольская",
+      "name_gen": "метро Комсомольская",
+      "stations": [
+        "st:1:komsomolskaya",
+        "st:5:komsomolskaya"
+      ]
+    },
+    {
+      "id": "st-konkovo",
+      "kind": "station",
+      "name": "Коньково",
+      "name_in": "у метро Коньково",
+      "name_gen": "метро Коньково",
+      "stations": [
+        "st:6:konkovo"
+      ]
+    },
+    {
+      "id": "st-koptevo",
+      "kind": "station",
+      "name": "Коптево",
+      "name_in": "у метро Коптево",
+      "name_gen": "метро Коптево",
+      "stations": [
+        "st:mck:koptevo"
+      ]
+    },
+    {
+      "id": "st-kornilovskaya",
+      "kind": "station",
+      "name": "Корниловская",
+      "name_in": "у метро Корниловская",
+      "name_gen": "метро Корниловская",
+      "stations": [
+        "st:16:kornilovskaya"
+      ]
+    },
+    {
+      "id": "st-kosino",
+      "kind": "station",
+      "name": "Косино",
+      "name_in": "у метро Косино",
+      "name_gen": "метро Косино",
+      "stations": [
+        "st:15:kosino",
+        "st:d3:kosino"
+      ]
+    },
+    {
+      "id": "st-kotelniki",
+      "kind": "station",
+      "name": "Котельники",
+      "name_in": "у метро Котельники",
+      "name_gen": "метро Котельники",
+      "stations": [
+        "st:7:kotelniki"
+      ]
+    },
+    {
+      "id": "st-krasnogvardeiskaya",
+      "kind": "station",
+      "name": "Красногвардейская",
+      "name_in": "у метро Красногвардейская",
+      "name_gen": "метро Красногвардейская",
+      "stations": [
+        "st:2:krasnogvardeiskaya"
+      ]
+    },
+    {
+      "id": "st-krasnopresnenskaya",
+      "kind": "station",
+      "name": "Краснопресненская",
+      "name_in": "у метро Краснопресненская",
+      "name_gen": "метро Краснопресненская",
+      "stations": [
+        "st:5:krasnopresnenskaya"
+      ]
+    },
+    {
+      "id": "st-krasnoselskaya",
+      "kind": "station",
+      "name": "Красносельская",
+      "name_in": "у метро Красносельская",
+      "name_gen": "метро Красносельская",
+      "stations": [
+        "st:1:krasnoselskaya"
+      ]
+    },
+    {
+      "id": "st-krasnye-vorota",
+      "kind": "station",
+      "name": "Красные ворота",
+      "name_in": "у метро Красные ворота",
+      "name_gen": "метро Красные ворота",
+      "stations": [
+        "st:1:krasnye-vorota"
+      ]
+    },
+    {
+      "id": "st-krasnyi-baltiets",
+      "kind": "station",
+      "name": "Красный Балтиец",
+      "name_in": "у метро Красный Балтиец",
+      "name_gen": "метро Красный Балтиец",
+      "stations": [
+        "st:d2:krasnyi-baltiets"
+      ]
+    },
+    {
+      "id": "st-krasnyi-stroitel",
+      "kind": "station",
+      "name": "Красный строитель",
+      "name_in": "у метро Красный строитель",
+      "name_gen": "метро Красный строитель",
+      "stations": [
+        "st:d2:krasnyi-stroitel"
+      ]
+    },
+    {
+      "id": "st-krestyanskaya-zastava",
+      "kind": "station",
+      "name": "Крестьянская застава",
+      "name_in": "у метро Крестьянская застава",
+      "name_gen": "метро Крестьянская застава",
+      "stations": [
+        "st:10:krestyanskaya-zastava"
+      ]
+    },
+    {
+      "id": "st-kropotkinskaya",
+      "kind": "station",
+      "name": "Кропоткинская",
+      "name_in": "у метро Кропоткинская",
+      "name_gen": "метро Кропоткинская",
+      "stations": [
+        "st:1:kropotkinskaya"
+      ]
+    },
+    {
+      "id": "st-krylatskoe",
+      "kind": "station",
+      "name": "Крылатское",
+      "name_in": "у метро Крылатское",
+      "name_gen": "метро Крылатское",
+      "stations": [
+        "st:3:krylatskoe"
+      ]
+    },
+    {
+      "id": "st-krymskaya",
+      "kind": "station",
+      "name": "Крымская",
+      "name_in": "у метро Крымская",
+      "name_gen": "метро Крымская",
+      "stations": [
+        "st:16:krymskaya",
+        "st:mck:krymskaya"
+      ]
+    },
+    {
+      "id": "st-kryukovo",
+      "kind": "station",
+      "name": "Крюково",
+      "name_in": "у метро Крюково",
+      "name_gen": "метро Крюково",
+      "stations": [
+        "st:d3:kryukovo"
+      ]
+    },
+    {
+      "id": "st-krekshino",
+      "kind": "station",
+      "name": "Крёкшино",
+      "name_in": "у метро Крёкшино",
+      "name_gen": "метро Крёкшино",
+      "stations": [
+        "st:d4:krekshino"
+      ]
+    },
+    {
+      "id": "st-kuznetskii-most",
+      "kind": "station",
+      "name": "Кузнецкий мост",
+      "name_in": "у метро Кузнецкий мост",
+      "name_gen": "метро Кузнецкий мост",
+      "stations": [
+        "st:7:kuznetskii-most"
+      ]
+    },
+    {
+      "id": "st-kuzminki",
+      "kind": "station",
+      "name": "Кузьминки",
+      "name_in": "у метро Кузьминки",
+      "name_gen": "метро Кузьминки",
+      "stations": [
+        "st:7:kuzminki"
+      ]
+    },
+    {
+      "id": "st-kuntsevskaya",
+      "kind": "station",
+      "name": "Кунцевская",
+      "name_in": "у метро Кунцевская",
+      "name_gen": "метро Кунцевская",
+      "stations": [
+        "st:11:kuntsevskaya",
+        "st:3:kuntsevskaya",
+        "st:4:kuntsevskaya",
+        "st:d1:kuntsevskaya"
+      ]
+    },
+    {
+      "id": "st-kurskaya",
+      "kind": "station",
+      "name": "Курская",
+      "name_in": "у метро Курская",
+      "name_gen": "метро Курская",
+      "stations": [
+        "st:3:kurskaya",
+        "st:5:kurskaya",
+        "st:d2:kurskaya",
+        "st:d4:kurskaya"
+      ]
+    },
+    {
+      "id": "st-kuryanovo",
+      "kind": "station",
+      "name": "Курьяново",
+      "name_in": "у метро Курьяново",
+      "name_gen": "метро Курьяново",
+      "stations": [
+        "st:d2:kuryanovo"
+      ]
+    },
+    {
+      "id": "st-kuskovo",
+      "kind": "station",
+      "name": "Кусково",
+      "name_in": "у метро Кусково",
+      "name_gen": "метро Кусково",
+      "stations": [
+        "st:d4:kuskovo"
+      ]
+    },
+    {
+      "id": "st-kutuzovskaya",
+      "kind": "station",
+      "name": "Кутузовская",
+      "name_in": "у метро Кутузовская",
+      "name_gen": "метро Кутузовская",
+      "stations": [
+        "st:4:kutuzovskaya",
+        "st:d4:kutuzovskaya",
+        "st:mck:kutuzovskaya"
+      ]
+    },
+    {
+      "id": "st-leninskii-prospekt",
+      "kind": "station",
+      "name": "Ленинский проспект",
+      "name_in": "у метро Ленинский проспект",
+      "name_gen": "метро Ленинский проспект",
+      "stations": [
+        "st:6:leninskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-lermontovskii-prospekt",
+      "kind": "station",
+      "name": "Лермонтовский проспект",
+      "name_in": "у метро Лермонтовский проспект",
+      "name_gen": "метро Лермонтовский проспект",
+      "stations": [
+        "st:7:lermontovskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-lesoparkovaya",
+      "kind": "station",
+      "name": "Лесопарковая",
+      "name_in": "у метро Лесопарковая",
+      "name_gen": "метро Лесопарковая",
+      "stations": [
+        "st:12:lesoparkovaya"
+      ]
+    },
+    {
+      "id": "st-lefortovo",
+      "kind": "station",
+      "name": "Лефортово",
+      "name_in": "у метро Лефортово",
+      "name_gen": "метро Лефортово",
+      "stations": [
+        "st:11:lefortovo"
+      ]
+    },
+    {
+      "id": "st-lianozovo",
+      "kind": "station",
+      "name": "Лианозово",
+      "name_in": "у метро Лианозово",
+      "name_gen": "метро Лианозово",
+      "stations": [
+        "st:10:lianozovo",
+        "st:d1:lianozovo"
+      ]
+    },
+    {
+      "id": "st-likhobory",
+      "kind": "station",
+      "name": "Лихоборы",
+      "name_in": "у метро Лихоборы",
+      "name_gen": "метро Лихоборы",
+      "stations": [
+        "st:d3:likhobory",
+        "st:mck:likhobory"
+      ]
+    },
+    {
+      "id": "st-lokomotiv",
+      "kind": "station",
+      "name": "Локомотив",
+      "name_in": "у метро Локомотив",
+      "name_gen": "метро Локомотив",
+      "stations": [
+        "st:mck:lokomotiv"
+      ]
+    },
+    {
+      "id": "st-lomonosovskii-prospekt",
+      "kind": "station",
+      "name": "Ломоносовский проспект",
+      "name_in": "у метро Ломоносовский проспект",
+      "name_gen": "метро Ломоносовский проспект",
+      "stations": [
+        "st:8a:lomonosovskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-lubyanka",
+      "kind": "station",
+      "name": "Лубянка",
+      "name_in": "у метро Лубянка",
+      "name_gen": "метро Лубянка",
+      "stations": [
+        "st:1:lubyanka"
+      ]
+    },
+    {
+      "id": "st-luzhniki",
+      "kind": "station",
+      "name": "Лужники",
+      "name_in": "у метро Лужники",
+      "name_gen": "метро Лужники",
+      "stations": [
+        "st:mck:luzhniki"
+      ]
+    },
+    {
+      "id": "st-lukhmanovskaya",
+      "kind": "station",
+      "name": "Лухмановская",
+      "name_in": "у метро Лухмановская",
+      "name_gen": "метро Лухмановская",
+      "stations": [
+        "st:15:lukhmanovskaya"
+      ]
+    },
+    {
+      "id": "st-lyublino",
+      "kind": "station",
+      "name": "Люблино",
+      "name_in": "у метро Люблино",
+      "name_gen": "метро Люблино",
+      "stations": [
+        "st:10:lyublino",
+        "st:d2:lyublino"
+      ]
+    },
+    {
+      "id": "st-mark",
+      "kind": "station",
+      "name": "Марк",
+      "name_in": "у метро Марк",
+      "name_gen": "метро Марк",
+      "stations": [
+        "st:d1:mark"
+      ]
+    },
+    {
+      "id": "st-marksistskaya",
+      "kind": "station",
+      "name": "Марксистская",
+      "name_in": "у метро Марксистская",
+      "name_gen": "метро Марксистская",
+      "stations": [
+        "st:8:marksistskaya"
+      ]
+    },
+    {
+      "id": "st-marina-roshcha",
+      "kind": "station",
+      "name": "Марьина Роща",
+      "name_in": "у метро Марьина Роща",
+      "name_gen": "метро Марьина Роща",
+      "stations": [
+        "st:10:marina-roshcha",
+        "st:11:marina-roshcha",
+        "st:d2:marina-roshcha",
+        "st:d4:marina-roshcha"
+      ]
+    },
+    {
+      "id": "st-marino",
+      "kind": "station",
+      "name": "Марьино",
+      "name_in": "у метро Марьино",
+      "name_gen": "метро Марьино",
+      "stations": [
+        "st:10:marino"
+      ]
+    },
+    {
+      "id": "st-matveevskoe",
+      "kind": "station",
+      "name": "Матвеевское",
+      "name_in": "у метро Матвеевское",
+      "name_gen": "метро Матвеевское",
+      "stations": [
+        "st:d4:matveevskoe"
+      ]
+    },
+    {
+      "id": "st-mayakovskaya",
+      "kind": "station",
+      "name": "Маяковская",
+      "name_in": "у метро Маяковская",
+      "name_gen": "метро Маяковская",
+      "stations": [
+        "st:2:mayakovskaya"
+      ]
+    },
+    {
+      "id": "st-medvedkovo",
+      "kind": "station",
+      "name": "Медведково",
+      "name_in": "у метро Медведково",
+      "name_gen": "метро Медведково",
+      "stations": [
+        "st:6:medvedkovo"
+      ]
+    },
+    {
+      "id": "st-mendeleevskaya",
+      "kind": "station",
+      "name": "Менделеевская",
+      "name_in": "у метро Менделеевская",
+      "name_gen": "метро Менделеевская",
+      "stations": [
+        "st:9:mendeleevskaya"
+      ]
+    },
+    {
+      "id": "st-meshcherskaya",
+      "kind": "station",
+      "name": "Мещерская",
+      "name_in": "у метро Мещерская",
+      "name_gen": "метро Мещерская",
+      "stations": [
+        "st:d4:meshcherskaya"
+      ]
+    },
+    {
+      "id": "st-minskaya",
+      "kind": "station",
+      "name": "Минская",
+      "name_in": "у метро Минская",
+      "name_gen": "метро Минская",
+      "stations": [
+        "st:8a:minskaya",
+        "st:d4:minskaya"
+      ]
+    },
+    {
+      "id": "st-mitino",
+      "kind": "station",
+      "name": "Митино",
+      "name_in": "у метро Митино",
+      "name_gen": "метро Митино",
+      "stations": [
+        "st:3:mitino"
+      ]
+    },
+    {
+      "id": "st-mitkovo",
+      "kind": "station",
+      "name": "Митьково",
+      "name_in": "у метро Митьково",
+      "name_gen": "метро Митьково",
+      "stations": [
+        "st:d3:mitkovo"
+      ]
+    },
+    {
+      "id": "st-michurinets",
+      "kind": "station",
+      "name": "Мичуринец",
+      "name_in": "у метро Мичуринец",
+      "name_gen": "метро Мичуринец",
+      "stations": [
+        "st:d4:michurinets"
+      ]
+    },
+    {
+      "id": "st-michurinskii-prospekt",
+      "kind": "station",
+      "name": "Мичуринский проспект",
+      "name_in": "у метро Мичуринский проспект",
+      "name_gen": "метро Мичуринский проспект",
+      "stations": [
+        "st:11:michurinskii-prospekt",
+        "st:8a:michurinskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-mnevniki",
+      "kind": "station",
+      "name": "Мнёвники",
+      "name_in": "у метро Мнёвники",
+      "name_gen": "метро Мнёвники",
+      "stations": [
+        "st:11:mnevniki"
+      ]
+    },
+    {
+      "id": "st-molzhaninovo",
+      "kind": "station",
+      "name": "Молжаниново",
+      "name_in": "у метро Молжаниново",
+      "name_gen": "метро Молжаниново",
+      "stations": [
+        "st:d3:molzhaninovo"
+      ]
+    },
+    {
+      "id": "st-molodezhnaya",
+      "kind": "station",
+      "name": "Молодежная",
+      "name_in": "у метро Молодежная",
+      "name_gen": "метро Молодежная",
+      "stations": [
+        "st:3:molodezhnaya"
+      ]
+    },
+    {
+      "id": "st-moskva-tovarnaya",
+      "kind": "station",
+      "name": "Москва Товарная",
+      "name_in": "у метро Москва Товарная",
+      "name_gen": "метро Москва Товарная",
+      "stations": [
+        "st:d2:moskva-tovarnaya"
+      ]
+    },
+    {
+      "id": "st-moskva-siti",
+      "kind": "station",
+      "name": "Москва-Сити",
+      "name_in": "у метро Москва-Сити",
+      "name_gen": "метро Москва-Сити",
+      "stations": [
+        "st:4:moskva-siti"
+      ]
+    },
+    {
+      "id": "st-moskvoreche",
+      "kind": "station",
+      "name": "Москворечье",
+      "name_in": "у метро Москворечье",
+      "name_gen": "метро Москворечье",
+      "stations": [
+        "st:d2:moskvoreche"
+      ]
+    },
+    {
+      "id": "st-mosselmash",
+      "kind": "station",
+      "name": "Моссельмаш",
+      "name_in": "у метро Моссельмаш",
+      "name_gen": "метро Моссельмаш",
+      "stations": [
+        "st:d3:mosselmash"
+      ]
+    },
+    {
+      "id": "st-myakinino",
+      "kind": "station",
+      "name": "Мякинино",
+      "name_in": "у метро Мякинино",
+      "name_gen": "метро Мякинино",
+      "stations": [
+        "st:3:myakinino"
+      ]
+    },
+    {
+      "id": "st-nagatinskaya",
+      "kind": "station",
+      "name": "Нагатинская",
+      "name_in": "у метро Нагатинская",
+      "name_gen": "метро Нагатинская",
+      "stations": [
+        "st:9:nagatinskaya"
+      ]
+    },
+    {
+      "id": "st-nagatinskii-zaton",
+      "kind": "station",
+      "name": "Нагатинский Затон",
+      "name_in": "у метро Нагатинский Затон",
+      "name_gen": "метро Нагатинский Затон",
+      "stations": [
+        "st:11:nagatinskii-zaton"
+      ]
+    },
+    {
+      "id": "st-nagornaya",
+      "kind": "station",
+      "name": "Нагорная",
+      "name_in": "у метро Нагорная",
+      "name_gen": "метро Нагорная",
+      "stations": [
+        "st:9:nagornaya"
+      ]
+    },
+    {
+      "id": "st-narodnoe-opolchenie",
+      "kind": "station",
+      "name": "Народное Ополчение",
+      "name_in": "у метро Народное Ополчение",
+      "name_gen": "метро Народное Ополчение",
+      "stations": [
+        "st:11:narodnoe-opolchenie"
+      ]
+    },
+    {
+      "id": "st-nakhimovskii-prospekt",
+      "kind": "station",
+      "name": "Нахимовский проспект",
+      "name_in": "у метро Нахимовский проспект",
+      "name_gen": "метро Нахимовский проспект",
+      "stations": [
+        "st:9:nakhimovskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-nekrasovka",
+      "kind": "station",
+      "name": "Некрасовка",
+      "name_in": "у метро Некрасовка",
+      "name_gen": "метро Некрасовка",
+      "stations": [
+        "st:15:nekrasovka"
+      ]
+    },
+    {
+      "id": "st-nizhegorodskaya",
+      "kind": "station",
+      "name": "Нижегородская",
+      "name_in": "у метро Нижегородская",
+      "name_gen": "метро Нижегородская",
+      "stations": [
+        "st:11:nizhegorodskaya",
+        "st:15:nizhegorodskaya",
+        "st:d4:nizhegorodskaya",
+        "st:mck:nizhegorodskaya"
+      ]
+    },
+    {
+      "id": "st-novatorskaya",
+      "kind": "station",
+      "name": "Новаторская",
+      "name_in": "у метро Новаторская",
+      "name_gen": "метро Новаторская",
+      "stations": [
+        "st:11:novatorskaya",
+        "st:16:novatorskaya"
+      ]
+    },
+    {
+      "id": "st-novogireevo",
+      "kind": "station",
+      "name": "Новогиреево",
+      "name_in": "у метро Новогиреево",
+      "name_gen": "метро Новогиреево",
+      "stations": [
+        "st:8:novogireevo",
+        "st:d4:novogireevo"
+      ]
+    },
+    {
+      "id": "st-novokosino",
+      "kind": "station",
+      "name": "Новокосино",
+      "name_in": "у метро Новокосино",
+      "name_gen": "метро Новокосино",
+      "stations": [
+        "st:8:novokosino"
+      ]
+    },
+    {
+      "id": "st-novokuznetskaya",
+      "kind": "station",
+      "name": "Новокузнецкая",
+      "name_in": "у метро Новокузнецкая",
+      "name_gen": "метро Новокузнецкая",
+      "stations": [
+        "st:2:novokuznetskaya"
+      ]
+    },
+    {
+      "id": "st-novomoskovskaya",
+      "kind": "station",
+      "name": "Новомосковская",
+      "name_in": "у метро Новомосковская",
+      "name_gen": "метро Новомосковская",
+      "stations": [
+        "st:16:novomoskovskaya"
+      ]
+    },
+    {
+      "id": "st-novomoskovskaya-kommunarka",
+      "kind": "station",
+      "name": "Новомосковская (Коммунарка)",
+      "name_in": "у метро Новомосковская (Коммунарка)",
+      "name_gen": "метро Новомосковская (Коммунарка)",
+      "stations": [
+        "st:1:novomoskovskaya-kommunarka"
+      ]
+    },
+    {
+      "id": "st-novoperedelkino",
+      "kind": "station",
+      "name": "Новопеределкино",
+      "name_in": "у метро Новопеределкино",
+      "name_gen": "метро Новопеределкино",
+      "stations": [
+        "st:8a:novoperedelkino",
+        "st:d4:novoperedelkino"
+      ]
+    },
+    {
+      "id": "st-novopodrezkovo",
+      "kind": "station",
+      "name": "Новоподрезково",
+      "name_in": "у метро Новоподрезково",
+      "name_gen": "метро Новоподрезково",
+      "stations": [
+        "st:d3:novopodrezkovo"
+      ]
+    },
+    {
+      "id": "st-novoslobodskaya",
+      "kind": "station",
+      "name": "Новослободская",
+      "name_in": "у метро Новослободская",
+      "name_gen": "метро Новослободская",
+      "stations": [
+        "st:5:novoslobodskaya"
+      ]
+    },
+    {
+      "id": "st-novokhokhlovskaya",
+      "kind": "station",
+      "name": "Новохохловская",
+      "name_in": "у метро Новохохловская",
+      "name_gen": "метро Новохохловская",
+      "stations": [
+        "st:d2:novokhokhlovskaya",
+        "st:mck:novokhokhlovskaya"
+      ]
+    },
+    {
+      "id": "st-novoyasenevskaya",
+      "kind": "station",
+      "name": "Новоясеневская",
+      "name_in": "у метро Новоясеневская",
+      "name_gen": "метро Новоясеневская",
+      "stations": [
+        "st:6:novoyasenevskaya"
+      ]
+    },
+    {
+      "id": "st-novye-cheremushki",
+      "kind": "station",
+      "name": "Новые Черемушки",
+      "name_in": "у метро Новые Черемушки",
+      "name_gen": "метро Новые Черемушки",
+      "stations": [
+        "st:6:novye-cheremushki"
+      ]
+    },
+    {
+      "id": "st-ozernaya",
+      "kind": "station",
+      "name": "Озёрная",
+      "name_in": "у метро Озёрная",
+      "name_gen": "метро Озёрная",
+      "stations": [
+        "st:8a:ozernaya"
+      ]
+    },
+    {
+      "id": "st-okruzhnaya",
+      "kind": "station",
+      "name": "Окружная",
+      "name_in": "у метро Окружная",
+      "name_gen": "метро Окружная",
+      "stations": [
+        "st:10:okruzhnaya",
+        "st:d1:okruzhnaya",
+        "st:mck:okruzhnaya"
+      ]
+    },
+    {
+      "id": "st-okskaya",
+      "kind": "station",
+      "name": "Окская",
+      "name_in": "у метро Окская",
+      "name_gen": "метро Окская",
+      "stations": [
+        "st:15:okskaya"
+      ]
+    },
+    {
+      "id": "st-oktyabrskaya",
+      "kind": "station",
+      "name": "Октябрьская",
+      "name_in": "у метро Октябрьская",
+      "name_gen": "метро Октябрьская",
+      "stations": [
+        "st:5:oktyabrskaya",
+        "st:6:oktyabrskaya"
+      ]
+    },
+    {
+      "id": "st-oktyabrskoe-pole",
+      "kind": "station",
+      "name": "Октябрьское поле",
+      "name_in": "у метро Октябрьское поле",
+      "name_gen": "метро Октябрьское поле",
+      "stations": [
+        "st:7:oktyabrskoe-pole"
+      ]
+    },
+    {
+      "id": "st-olkhovaya",
+      "kind": "station",
+      "name": "Ольховая",
+      "name_in": "у метро Ольховая",
+      "name_gen": "метро Ольховая",
+      "stations": [
+        "st:1:olkhovaya"
+      ]
+    },
+    {
+      "id": "st-orekhovo",
+      "kind": "station",
+      "name": "Орехово",
+      "name_in": "у метро Орехово",
+      "name_gen": "метро Орехово",
+      "stations": [
+        "st:2:orekhovo"
+      ]
+    },
+    {
+      "id": "st-ostankino",
+      "kind": "station",
+      "name": "Останкино",
+      "name_in": "у метро Останкино",
+      "name_gen": "метро Останкино",
+      "stations": [
+        "st:d3:ostankino"
+      ]
+    },
+    {
+      "id": "st-ostafevo",
+      "kind": "station",
+      "name": "Остафьево",
+      "name_in": "у метро Остафьево",
+      "name_gen": "метро Остафьево",
+      "stations": [
+        "st:d2:ostafevo"
+      ]
+    },
+    {
+      "id": "st-otradnoe",
+      "kind": "station",
+      "name": "Отрадное",
+      "name_in": "у метро Отрадное",
+      "name_gen": "метро Отрадное",
+      "stations": [
+        "st:9:otradnoe"
+      ]
+    },
+    {
+      "id": "st-okhotnyi-ryad",
+      "kind": "station",
+      "name": "Охотный ряд",
+      "name_in": "у метро Охотный ряд",
+      "name_gen": "метро Охотный ряд",
+      "stations": [
+        "st:1:okhotnyi-ryad"
+      ]
+    },
+    {
+      "id": "st-ochakovo-i",
+      "kind": "station",
+      "name": "Очаково I",
+      "name_in": "у метро Очаково I",
+      "name_gen": "метро Очаково I",
+      "stations": [
+        "st:d4:ochakovo-i"
+      ]
+    },
+    {
+      "id": "st-paveletskaya",
+      "kind": "station",
+      "name": "Павелецкая",
+      "name_in": "у метро Павелецкая",
+      "name_gen": "метро Павелецкая",
+      "stations": [
+        "st:2:paveletskaya",
+        "st:5:paveletskaya"
+      ]
+    },
+    {
+      "id": "st-panfilovskaya",
+      "kind": "station",
+      "name": "Панфиловская",
+      "name_in": "у метро Панфиловская",
+      "name_gen": "метро Панфиловская",
+      "stations": [
+        "st:mck:panfilovskaya"
+      ]
+    },
+    {
+      "id": "st-park-pobedy",
+      "kind": "station",
+      "name": "Парк Победы",
+      "name_in": "у метро Парк Победы",
+      "name_gen": "метро Парк Победы",
+      "stations": [
+        "st:3:park-pobedy",
+        "st:8a:park-pobedy"
+      ]
+    },
+    {
+      "id": "st-park-kultury",
+      "kind": "station",
+      "name": "Парк культуры",
+      "name_in": "у метро Парк культуры",
+      "name_gen": "метро Парк культуры",
+      "stations": [
+        "st:1:park-kultury",
+        "st:5:park-kultury"
+      ]
+    },
+    {
+      "id": "st-partizanskaya",
+      "kind": "station",
+      "name": "Партизанская",
+      "name_in": "у метро Партизанская",
+      "name_gen": "метро Партизанская",
+      "stations": [
+        "st:3:partizanskaya"
+      ]
+    },
+    {
+      "id": "st-penyagino",
+      "kind": "station",
+      "name": "Пенягино",
+      "name_in": "у метро Пенягино",
+      "name_gen": "метро Пенягино",
+      "stations": [
+        "st:d2:penyagino"
+      ]
+    },
+    {
+      "id": "st-pervomaiskaya",
+      "kind": "station",
+      "name": "Первомайская",
+      "name_in": "у метро Первомайская",
+      "name_gen": "метро Первомайская",
+      "stations": [
+        "st:3:pervomaiskaya"
+      ]
+    },
+    {
+      "id": "st-peredelkino",
+      "kind": "station",
+      "name": "Переделкино",
+      "name_in": "у метро Переделкино",
+      "name_gen": "метро Переделкино",
+      "stations": [
+        "st:d4:peredelkino"
+      ]
+    },
+    {
+      "id": "st-pererva",
+      "kind": "station",
+      "name": "Перерва",
+      "name_in": "у метро Перерва",
+      "name_gen": "метро Перерва",
+      "stations": [
+        "st:d2:pererva"
+      ]
+    },
+    {
+      "id": "st-perovo",
+      "kind": "station",
+      "name": "Перово",
+      "name_in": "у метро Перово",
+      "name_gen": "метро Перово",
+      "stations": [
+        "st:8:perovo",
+        "st:d3:perovo"
+      ]
+    },
+    {
+      "id": "st-petrovskii-park",
+      "kind": "station",
+      "name": "Петровский парк",
+      "name_in": "у метро Петровский парк",
+      "name_gen": "метро Петровский парк",
+      "stations": [
+        "st:11:petrovskii-park"
+      ]
+    },
+    {
+      "id": "st-petrovsko-razumovskaya",
+      "kind": "station",
+      "name": "Петровско-Разумовская",
+      "name_in": "у метро Петровско-Разумовская",
+      "name_gen": "метро Петровско-Разумовская",
+      "stations": [
+        "st:10:petrovsko-razumovskaya",
+        "st:9:petrovsko-razumovskaya",
+        "st:d3:petrovsko-razumovskaya"
+      ]
+    },
+    {
+      "id": "st-pechatniki",
+      "kind": "station",
+      "name": "Печатники",
+      "name_in": "у метро Печатники",
+      "name_gen": "метро Печатники",
+      "stations": [
+        "st:10:pechatniki",
+        "st:11:pechatniki"
+      ]
+    },
+    {
+      "id": "st-pionerskaya",
+      "kind": "station",
+      "name": "Пионерская",
+      "name_in": "у метро Пионерская",
+      "name_gen": "метро Пионерская",
+      "stations": [
+        "st:4:pionerskaya"
+      ]
+    },
+    {
+      "id": "st-planernaya",
+      "kind": "station",
+      "name": "Планерная",
+      "name_in": "у метро Планерная",
+      "name_gen": "метро Планерная",
+      "stations": [
+        "st:7:planernaya"
+      ]
+    },
+    {
+      "id": "st-ploshchad-gagarina",
+      "kind": "station",
+      "name": "Площадь Гагарина",
+      "name_in": "у метро Площадь Гагарина",
+      "name_gen": "метро Площадь Гагарина",
+      "stations": [
+        "st:mck:ploshchad-gagarina"
+      ]
+    },
+    {
+      "id": "st-ploshchad-ilicha",
+      "kind": "station",
+      "name": "Площадь Ильича",
+      "name_in": "у метро Площадь Ильича",
+      "name_gen": "метро Площадь Ильича",
+      "stations": [
+        "st:8:ploshchad-ilicha"
+      ]
+    },
+    {
+      "id": "st-ploshchad-revolyutsii",
+      "kind": "station",
+      "name": "Площадь Революции",
+      "name_in": "у метро Площадь Революции",
+      "name_gen": "метро Площадь Революции",
+      "stations": [
+        "st:3:ploshchad-revolyutsii"
+      ]
+    },
+    {
+      "id": "st-ploshchad-trekh-vokzalov",
+      "kind": "station",
+      "name": "Площадь трёх вокзалов",
+      "name_in": "у метро Площадь трёх вокзалов",
+      "name_gen": "метро Площадь трёх вокзалов",
+      "stations": [
+        "st:d2:ploshchad-trekh-vokzalov",
+        "st:d4:ploshchad-trekh-vokzalov"
+      ]
+    },
+    {
+      "id": "st-plyushchevo",
+      "kind": "station",
+      "name": "Плющево",
+      "name_in": "у метро Плющево",
+      "name_gen": "метро Плющево",
+      "stations": [
+        "st:d3:plyushchevo"
+      ]
+    },
+    {
+      "id": "st-poklonnaya",
+      "kind": "station",
+      "name": "Поклонная",
+      "name_in": "у метро Поклонная",
+      "name_gen": "метро Поклонная",
+      "stations": [
+        "st:d4:poklonnaya"
+      ]
+    },
+    {
+      "id": "st-pokrovskoe",
+      "kind": "station",
+      "name": "Покровское",
+      "name_in": "у метро Покровское",
+      "name_gen": "метро Покровское",
+      "stations": [
+        "st:d2:pokrovskoe"
+      ]
+    },
+    {
+      "id": "st-pokrovskoe-streshnevo",
+      "kind": "station",
+      "name": "Покровское-Стрешнево",
+      "name_in": "у метро Покровское-Стрешнево",
+      "name_gen": "метро Покровское-Стрешнево",
+      "stations": [
+        "st:d2:pokrovskoe-streshnevo"
+      ]
+    },
+    {
+      "id": "st-polezhaevskaya",
+      "kind": "station",
+      "name": "Полежаевская",
+      "name_in": "у метро Полежаевская",
+      "name_gen": "метро Полежаевская",
+      "stations": [
+        "st:7:polezhaevskaya"
+      ]
+    },
+    {
+      "id": "st-polyanka",
+      "kind": "station",
+      "name": "Полянка",
+      "name_in": "у метро Полянка",
+      "name_gen": "метро Полянка",
+      "stations": [
+        "st:9:polyanka"
+      ]
+    },
+    {
+      "id": "st-potapovo",
+      "kind": "station",
+      "name": "Потапово",
+      "name_in": "у метро Потапово",
+      "name_gen": "метро Потапово",
+      "stations": [
+        "st:1:potapovo"
+      ]
+    },
+    {
+      "id": "st-prazhskaya",
+      "kind": "station",
+      "name": "Пражская",
+      "name_in": "у метро Пражская",
+      "name_gen": "метро Пражская",
+      "stations": [
+        "st:9:prazhskaya"
+      ]
+    },
+    {
+      "id": "st-preobrazhenskaya-ploshchad",
+      "kind": "station",
+      "name": "Преображенская площадь",
+      "name_in": "у метро Преображенская площадь",
+      "name_gen": "метро Преображенская площадь",
+      "stations": [
+        "st:1:preobrazhenskaya-ploshchad"
+      ]
+    },
+    {
+      "id": "st-prokshino",
+      "kind": "station",
+      "name": "Прокшино",
+      "name_in": "у метро Прокшино",
+      "name_gen": "метро Прокшино",
+      "stations": [
+        "st:1:prokshino"
+      ]
+    },
+    {
+      "id": "st-proletarskaya",
+      "kind": "station",
+      "name": "Пролетарская",
+      "name_in": "у метро Пролетарская",
+      "name_gen": "метро Пролетарская",
+      "stations": [
+        "st:7:proletarskaya"
+      ]
+    },
+    {
+      "id": "st-prospekt-vernadskogo",
+      "kind": "station",
+      "name": "Проспект Вернадского",
+      "name_in": "у метро Проспект Вернадского",
+      "name_gen": "метро Проспект Вернадского",
+      "stations": [
+        "st:11:prospekt-vernadskogo",
+        "st:1:prospekt-vernadskogo"
+      ]
+    },
+    {
+      "id": "st-prospekt-mira",
+      "kind": "station",
+      "name": "Проспект Мира",
+      "name_in": "у метро Проспект Мира",
+      "name_gen": "метро Проспект Мира",
+      "stations": [
+        "st:5:prospekt-mira",
+        "st:6:prospekt-mira"
+      ]
+    },
+    {
+      "id": "st-profsoyuznaya",
+      "kind": "station",
+      "name": "Профсоюзная",
+      "name_in": "у метро Профсоюзная",
+      "name_gen": "метро Профсоюзная",
+      "stations": [
+        "st:6:profsoyuznaya"
+      ]
+    },
+    {
+      "id": "st-pushkinskaya",
+      "kind": "station",
+      "name": "Пушкинская",
+      "name_in": "у метро Пушкинская",
+      "name_gen": "метро Пушкинская",
+      "stations": [
+        "st:7:pushkinskaya"
+      ]
+    },
+    {
+      "id": "st-pykhtino",
+      "kind": "station",
+      "name": "Пыхтино",
+      "name_in": "у метро Пыхтино",
+      "name_gen": "метро Пыхтино",
+      "stations": [
+        "st:8a:pykhtino"
+      ]
+    },
+    {
+      "id": "st-pyatnitskoe-shosse",
+      "kind": "station",
+      "name": "Пятницкое шоссе",
+      "name_in": "у метро Пятницкое шоссе",
+      "name_gen": "метро Пятницкое шоссе",
+      "stations": [
+        "st:3:pyatnitskoe-shosse"
+      ]
+    },
+    {
+      "id": "st-rabochii-poselok",
+      "kind": "station",
+      "name": "Рабочий Посёлок",
+      "name_in": "у метро Рабочий Посёлок",
+      "name_gen": "метро Рабочий Посёлок",
+      "stations": [
+        "st:d1:rabochii-poselok"
+      ]
+    },
+    {
+      "id": "st-ramenki",
+      "kind": "station",
+      "name": "Раменки",
+      "name_in": "у метро Раменки",
+      "name_gen": "метро Раменки",
+      "stations": [
+        "st:8a:ramenki"
+      ]
+    },
+    {
+      "id": "st-rasskazovka",
+      "kind": "station",
+      "name": "Рассказовка",
+      "name_in": "у метро Рассказовка",
+      "name_gen": "метро Рассказовка",
+      "stations": [
+        "st:8a:rasskazovka"
+      ]
+    },
+    {
+      "id": "st-rechnoi-vokzal",
+      "kind": "station",
+      "name": "Речной вокзал",
+      "name_in": "у метро Речной вокзал",
+      "name_gen": "метро Речной вокзал",
+      "stations": [
+        "st:2:rechnoi-vokzal"
+      ]
+    },
+    {
+      "id": "st-rizhskaya",
+      "kind": "station",
+      "name": "Рижская",
+      "name_in": "у метро Рижская",
+      "name_gen": "метро Рижская",
+      "stations": [
+        "st:11:rizhskaya",
+        "st:6:rizhskaya",
+        "st:d2:rizhskaya",
+        "st:d3:rizhskaya",
+        "st:d4:rizhskaya"
+      ]
+    },
+    {
+      "id": "st-rimskaya",
+      "kind": "station",
+      "name": "Римская",
+      "name_in": "у метро Римская",
+      "name_gen": "метро Римская",
+      "stations": [
+        "st:10:rimskaya"
+      ]
+    },
+    {
+      "id": "st-rostokino",
+      "kind": "station",
+      "name": "Ростокино",
+      "name_in": "у метро Ростокино",
+      "name_gen": "метро Ростокино",
+      "stations": [
+        "st:mck:rostokino"
+      ]
+    },
+    {
+      "id": "st-rumyantsevo",
+      "kind": "station",
+      "name": "Румянцево",
+      "name_in": "у метро Румянцево",
+      "name_gen": "метро Румянцево",
+      "stations": [
+        "st:1:rumyantsevo"
+      ]
+    },
+    {
+      "id": "st-ryazanskii-prospekt",
+      "kind": "station",
+      "name": "Рязанский проспект",
+      "name_in": "у метро Рязанский проспект",
+      "name_gen": "метро Рязанский проспект",
+      "stations": [
+        "st:7:ryazanskii-prospekt"
+      ]
+    },
+    {
+      "id": "st-savelovskaya",
+      "kind": "station",
+      "name": "Савёловская",
+      "name_in": "у метро Савёловская",
+      "name_gen": "метро Савёловская",
+      "stations": [
+        "st:11:savelovskaya",
+        "st:9:savelovskaya",
+        "st:d1:savelovskaya",
+        "st:d4:savelovskaya"
+      ]
+    },
+    {
+      "id": "st-salarevo",
+      "kind": "station",
+      "name": "Саларьево",
+      "name_in": "у метро Саларьево",
+      "name_gen": "метро Саларьево",
+      "stations": [
+        "st:1:salarevo"
+      ]
+    },
+    {
+      "id": "st-sanino",
+      "kind": "station",
+      "name": "Санино",
+      "name_in": "у метро Санино",
+      "name_gen": "метро Санино",
+      "stations": [
+        "st:d4:sanino"
+      ]
+    },
+    {
+      "id": "st-sviblovo",
+      "kind": "station",
+      "name": "Свиблово",
+      "name_in": "у метро Свиблово",
+      "name_gen": "метро Свиблово",
+      "stations": [
+        "st:6:sviblovo"
+      ]
+    },
+    {
+      "id": "st-sevastopolskaya",
+      "kind": "station",
+      "name": "Севастопольская",
+      "name_in": "у метро Севастопольская",
+      "name_gen": "метро Севастопольская",
+      "stations": [
+        "st:9:sevastopolskaya"
+      ]
+    },
+    {
+      "id": "st-seligerskaya",
+      "kind": "station",
+      "name": "Селигерская",
+      "name_in": "у метро Селигерская",
+      "name_gen": "метро Селигерская",
+      "stations": [
+        "st:10:seligerskaya"
+      ]
+    },
+    {
+      "id": "st-semenovskaya",
+      "kind": "station",
+      "name": "Семеновская",
+      "name_in": "у метро Семеновская",
+      "name_gen": "метро Семеновская",
+      "stations": [
+        "st:3:semenovskaya"
+      ]
+    },
+    {
+      "id": "st-serp-i-molot",
+      "kind": "station",
+      "name": "Серп и Молот",
+      "name_in": "у метро Серп и Молот",
+      "name_gen": "метро Серп и Молот",
+      "stations": [
+        "st:d4:serp-i-molot"
+      ]
+    },
+    {
+      "id": "st-serpukhovskaya",
+      "kind": "station",
+      "name": "Серпуховская",
+      "name_in": "у метро Серпуховская",
+      "name_gen": "метро Серпуховская",
+      "stations": [
+        "st:9:serpukhovskaya"
+      ]
+    },
+    {
+      "id": "st-setun",
+      "kind": "station",
+      "name": "Сетунь",
+      "name_in": "у метро Сетунь",
+      "name_gen": "метро Сетунь",
+      "stations": [
+        "st:d1:setun"
+      ]
+    },
+    {
+      "id": "st-skolkovo",
+      "kind": "station",
+      "name": "Сколково",
+      "name_in": "у метро Сколково",
+      "name_gen": "метро Сколково",
+      "stations": [
+        "st:d1:skolkovo"
+      ]
+    },
+    {
+      "id": "st-slavyanskii-bulvar",
+      "kind": "station",
+      "name": "Славянский бульвар",
+      "name_in": "у метро Славянский бульвар",
+      "name_gen": "метро Славянский бульвар",
+      "stations": [
+        "st:3:slavyanskii-bulvar",
+        "st:d1:slavyanskii-bulvar"
+      ]
+    },
+    {
+      "id": "st-smolenskaya",
+      "kind": "station",
+      "name": "Смоленская",
+      "name_in": "у метро Смоленская",
+      "name_gen": "метро Смоленская",
+      "stations": [
+        "st:3:smolenskaya",
+        "st:4:smolenskaya"
+      ]
+    },
+    {
+      "id": "st-sokol",
+      "kind": "station",
+      "name": "Сокол",
+      "name_in": "у метро Сокол",
+      "name_gen": "метро Сокол",
+      "stations": [
+        "st:2:sokol"
+      ]
+    },
+    {
+      "id": "st-sokolinaya-gora",
+      "kind": "station",
+      "name": "Соколиная Гора",
+      "name_in": "у метро Соколиная Гора",
+      "name_gen": "метро Соколиная Гора",
+      "stations": [
+        "st:mck:sokolinaya-gora"
+      ]
+    },
+    {
+      "id": "st-sokolniki",
+      "kind": "station",
+      "name": "Сокольники",
+      "name_in": "у метро Сокольники",
+      "name_gen": "метро Сокольники",
+      "stations": [
+        "st:11:sokolniki",
+        "st:1:sokolniki"
+      ]
+    },
+    {
+      "id": "st-solnechnaya",
+      "kind": "station",
+      "name": "Солнечная",
+      "name_in": "у метро Солнечная",
+      "name_gen": "метро Солнечная",
+      "stations": [
+        "st:d4:solnechnaya"
+      ]
+    },
+    {
+      "id": "st-solntsevo",
+      "kind": "station",
+      "name": "Солнцево",
+      "name_in": "у метро Солнцево",
+      "name_gen": "метро Солнцево",
+      "stations": [
+        "st:8a:solntsevo"
+      ]
+    },
+    {
+      "id": "st-sortirovochnaya",
+      "kind": "station",
+      "name": "Сортировочная",
+      "name_in": "у метро Сортировочная",
+      "name_gen": "метро Сортировочная",
+      "stations": [
+        "st:d3:sortirovochnaya"
+      ]
+    },
+    {
+      "id": "st-spartak",
+      "kind": "station",
+      "name": "Спартак",
+      "name_in": "у метро Спартак",
+      "name_gen": "метро Спартак",
+      "stations": [
+        "st:7:spartak"
+      ]
+    },
+    {
+      "id": "st-sportivnaya",
+      "kind": "station",
+      "name": "Спортивная",
+      "name_in": "у метро Спортивная",
+      "name_gen": "метро Спортивная",
+      "stations": [
+        "st:1:sportivnaya"
+      ]
+    },
+    {
+      "id": "st-sretenskii-bulvar",
+      "kind": "station",
+      "name": "Сретенский бульвар",
+      "name_in": "у метро Сретенский бульвар",
+      "name_gen": "метро Сретенский бульвар",
+      "stations": [
+        "st:10:sretenskii-bulvar"
+      ]
+    },
+    {
+      "id": "st-stakhanovskaya",
+      "kind": "station",
+      "name": "Стахановская",
+      "name_in": "у метро Стахановская",
+      "name_gen": "метро Стахановская",
+      "stations": [
+        "st:15:stakhanovskaya"
+      ]
+    },
+    {
+      "id": "st-streshnevo",
+      "kind": "station",
+      "name": "Стрешнево",
+      "name_in": "у метро Стрешнево",
+      "name_gen": "метро Стрешнево",
+      "stations": [
+        "st:d2:streshnevo",
+        "st:mck:streshnevo"
+      ]
+    },
+    {
+      "id": "st-strogino",
+      "kind": "station",
+      "name": "Строгино",
+      "name_in": "у метро Строгино",
+      "name_gen": "метро Строгино",
+      "stations": [
+        "st:3:strogino"
+      ]
+    },
+    {
+      "id": "st-studencheskaya",
+      "kind": "station",
+      "name": "Студенческая",
+      "name_in": "у метро Студенческая",
+      "name_gen": "метро Студенческая",
+      "stations": [
+        "st:4:studencheskaya"
+      ]
+    },
+    {
+      "id": "st-sukharevskaya",
+      "kind": "station",
+      "name": "Сухаревская",
+      "name_in": "у метро Сухаревская",
+      "name_gen": "метро Сухаревская",
+      "stations": [
+        "st:6:sukharevskaya"
+      ]
+    },
+    {
+      "id": "st-skhodnenskaya",
+      "kind": "station",
+      "name": "Сходненская",
+      "name_in": "у метро Сходненская",
+      "name_gen": "метро Сходненская",
+      "stations": [
+        "st:7:skhodnenskaya"
+      ]
+    },
+    {
+      "id": "st-taganskaya",
+      "kind": "station",
+      "name": "Таганская",
+      "name_in": "у метро Таганская",
+      "name_gen": "метро Таганская",
+      "stations": [
+        "st:5:taganskaya",
+        "st:7:taganskaya"
+      ]
+    },
+    {
+      "id": "st-tverskaya",
+      "kind": "station",
+      "name": "Тверская",
+      "name_in": "у метро Тверская",
+      "name_gen": "метро Тверская",
+      "stations": [
+        "st:2:tverskaya"
+      ]
+    },
+    {
+      "id": "st-teatralnaya",
+      "kind": "station",
+      "name": "Театральная",
+      "name_in": "у метро Театральная",
+      "name_gen": "метро Театральная",
+      "stations": [
+        "st:2:teatralnaya"
+      ]
+    },
+    {
+      "id": "st-tekstilshchiki",
+      "kind": "station",
+      "name": "Текстильщики",
+      "name_in": "у метро Текстильщики",
+      "name_gen": "метро Текстильщики",
+      "stations": [
+        "st:11:tekstilshchiki",
+        "st:7:tekstilshchiki",
+        "st:d2:tekstilshchiki"
+      ]
+    },
+    {
+      "id": "st-teplyi-stan",
+      "kind": "station",
+      "name": "Теплый Стан",
+      "name_in": "у метро Теплый Стан",
+      "name_gen": "метро Теплый Стан",
+      "stations": [
+        "st:6:teplyi-stan"
+      ]
+    },
+    {
+      "id": "st-terekhovo",
+      "kind": "station",
+      "name": "Терехово",
+      "name_in": "у метро Терехово",
+      "name_gen": "метро Терехово",
+      "stations": [
+        "st:11:terekhovo"
+      ]
+    },
+    {
+      "id": "st-testovskaya",
+      "kind": "station",
+      "name": "Тестовская",
+      "name_in": "у метро Тестовская",
+      "name_gen": "метро Тестовская",
+      "stations": [
+        "st:d1:testovskaya",
+        "st:d4:testovskaya"
+      ]
+    },
+    {
+      "id": "st-tekhnopark",
+      "kind": "station",
+      "name": "Технопарк",
+      "name_in": "у метро Технопарк",
+      "name_gen": "метро Технопарк",
+      "stations": [
+        "st:2:tekhnopark"
+      ]
+    },
+    {
+      "id": "st-timiryazevskaya",
+      "kind": "station",
+      "name": "Тимирязевская",
+      "name_in": "у метро Тимирязевская",
+      "name_gen": "метро Тимирязевская",
+      "stations": [
+        "st:9:timiryazevskaya",
+        "st:d1:timiryazevskaya"
+      ]
+    },
+    {
+      "id": "st-tolstopaltsevo",
+      "kind": "station",
+      "name": "Толстопальцево",
+      "name_in": "у метро Толстопальцево",
+      "name_gen": "метро Толстопальцево",
+      "stations": [
+        "st:d4:tolstopaltsevo"
+      ]
+    },
+    {
+      "id": "st-tretyakovskaya",
+      "kind": "station",
+      "name": "Третьяковская",
+      "name_in": "у метро Третьяковская",
+      "name_gen": "метро Третьяковская",
+      "stations": [
+        "st:6:tretyakovskaya",
+        "st:8:tretyakovskaya"
+      ]
+    },
+    {
+      "id": "st-trikotazhnaya",
+      "kind": "station",
+      "name": "Трикотажная",
+      "name_in": "у метро Трикотажная",
+      "name_gen": "метро Трикотажная",
+      "stations": [
+        "st:d2:trikotazhnaya"
+      ]
+    },
+    {
+      "id": "st-troparevo",
+      "kind": "station",
+      "name": "Тропарево",
+      "name_in": "у метро Тропарево",
+      "name_gen": "метро Тропарево",
+      "stations": [
+        "st:1:troparevo"
+      ]
+    },
+    {
+      "id": "st-trubnaya",
+      "kind": "station",
+      "name": "Трубная",
+      "name_in": "у метро Трубная",
+      "name_gen": "метро Трубная",
+      "stations": [
+        "st:10:trubnaya"
+      ]
+    },
+    {
+      "id": "st-tulskaya",
+      "kind": "station",
+      "name": "Тульская",
+      "name_in": "у метро Тульская",
+      "name_gen": "метро Тульская",
+      "stations": [
+        "st:9:tulskaya"
+      ]
+    },
+    {
+      "id": "st-turgenevskaya",
+      "kind": "station",
+      "name": "Тургеневская",
+      "name_in": "у метро Тургеневская",
+      "name_gen": "метро Тургеневская",
+      "stations": [
+        "st:6:turgenevskaya"
+      ]
+    },
+    {
+      "id": "st-tushinskaya",
+      "kind": "station",
+      "name": "Тушинская",
+      "name_in": "у метро Тушинская",
+      "name_gen": "метро Тушинская",
+      "stations": [
+        "st:7:tushinskaya",
+        "st:d2:tushinskaya"
+      ]
+    },
+    {
+      "id": "st-tyutchevskaya",
+      "kind": "station",
+      "name": "Тютчевская",
+      "name_in": "у метро Тютчевская",
+      "name_gen": "метро Тютчевская",
+      "stations": [
+        "st:16:tyutchevskaya"
+      ]
+    },
+    {
+      "id": "st-ugreshskaya",
+      "kind": "station",
+      "name": "Угрешская",
+      "name_in": "у метро Угрешская",
+      "name_gen": "метро Угрешская",
+      "stations": [
+        "st:mck:ugreshskaya"
+      ]
+    },
+    {
+      "id": "st-ulitsa-1905-goda",
+      "kind": "station",
+      "name": "Улица 1905 года",
+      "name_in": "у метро Улица 1905 года",
+      "name_gen": "метро Улица 1905 года",
+      "stations": [
+        "st:7:ulitsa-1905-goda"
+      ]
+    },
+    {
+      "id": "st-ulitsa-akademika-yangelya",
+      "kind": "station",
+      "name": "Улица Академика Янгеля",
+      "name_in": "у метро Улица Академика Янгеля",
+      "name_gen": "метро Улица Академика Янгеля",
+      "stations": [
+        "st:9:ulitsa-akademika-yangelya"
+      ]
+    },
+    {
+      "id": "st-ulitsa-gorchakova",
+      "kind": "station",
+      "name": "Улица Горчакова",
+      "name_in": "у метро Улица Горчакова",
+      "name_gen": "метро Улица Горчакова",
+      "stations": [
+        "st:12:ulitsa-gorchakova"
+      ]
+    },
+    {
+      "id": "st-ulitsa-dmitrievskogo",
+      "kind": "station",
+      "name": "Улица Дмитриевского",
+      "name_in": "у метро Улица Дмитриевского",
+      "name_gen": "метро Улица Дмитриевского",
+      "stations": [
+        "st:15:ulitsa-dmitrievskogo"
+      ]
+    },
+    {
+      "id": "st-ulitsa-skobelevskaya",
+      "kind": "station",
+      "name": "Улица Скобелевская",
+      "name_in": "у метро Улица Скобелевская",
+      "name_gen": "метро Улица Скобелевская",
+      "stations": [
+        "st:12:ulitsa-skobelevskaya"
+      ]
+    },
+    {
+      "id": "st-ulitsa-starokachalovskaya",
+      "kind": "station",
+      "name": "Улица Старокачаловская",
+      "name_in": "у метро Улица Старокачаловская",
+      "name_gen": "метро Улица Старокачаловская",
+      "stations": [
+        "st:12:ulitsa-starokachalovskaya"
+      ]
+    },
+    {
+      "id": "st-universitet",
+      "kind": "station",
+      "name": "Университет",
+      "name_in": "у метро Университет",
+      "name_gen": "метро Университет",
+      "stations": [
+        "st:1:universitet"
+      ]
+    },
+    {
+      "id": "st-universitet-druzhby-narodov",
+      "kind": "station",
+      "name": "Университет дружбы народов",
+      "name_in": "у метро Университет дружбы народов",
+      "name_gen": "метро Университет дружбы народов",
+      "stations": [
+        "st:16:universitet-druzhby-narodov"
+      ]
+    },
+    {
+      "id": "st-fiztekh",
+      "kind": "station",
+      "name": "Физтех",
+      "name_in": "у метро Физтех",
+      "name_gen": "метро Физтех",
+      "stations": [
+        "st:10:fiztekh"
+      ]
+    },
+    {
+      "id": "st-filatov-lug",
+      "kind": "station",
+      "name": "Филатов луг",
+      "name_in": "у метро Филатов луг",
+      "name_gen": "метро Филатов луг",
+      "stations": [
+        "st:1:filatov-lug"
+      ]
+    },
+    {
+      "id": "st-filevskii-park",
+      "kind": "station",
+      "name": "Филевский парк",
+      "name_in": "у метро Филевский парк",
+      "name_gen": "метро Филевский парк",
+      "stations": [
+        "st:4:filevskii-park"
+      ]
+    },
+    {
+      "id": "st-fili",
+      "kind": "station",
+      "name": "Фили",
+      "name_in": "у метро Фили",
+      "name_gen": "метро Фили",
+      "stations": [
+        "st:4:fili",
+        "st:d1:fili"
+      ]
+    },
+    {
+      "id": "st-fonvizinskaya",
+      "kind": "station",
+      "name": "Фонвизинская",
+      "name_in": "у метро Фонвизинская",
+      "name_gen": "метро Фонвизинская",
+      "stations": [
+        "st:10:fonvizinskaya"
+      ]
+    },
+    {
+      "id": "st-frunzenskaya",
+      "kind": "station",
+      "name": "Фрунзенская",
+      "name_in": "у метро Фрунзенская",
+      "name_gen": "метро Фрунзенская",
+      "stations": [
+        "st:1:frunzenskaya"
+      ]
+    },
+    {
+      "id": "st-khovrino",
+      "kind": "station",
+      "name": "Ховрино",
+      "name_in": "у метро Ховрино",
+      "name_gen": "метро Ховрино",
+      "stations": [
+        "st:2:khovrino",
+        "st:d3:khovrino"
+      ]
+    },
+    {
+      "id": "st-khoroshevo",
+      "kind": "station",
+      "name": "Хорошево",
+      "name_in": "у метро Хорошево",
+      "name_gen": "метро Хорошево",
+      "stations": [
+        "st:mck:khoroshevo"
+      ]
+    },
+    {
+      "id": "st-khoroshevskaya",
+      "kind": "station",
+      "name": "Хорошевская",
+      "name_in": "у метро Хорошевская",
+      "name_gen": "метро Хорошевская",
+      "stations": [
+        "st:11:khoroshevskaya"
+      ]
+    },
+    {
+      "id": "st-tsska",
+      "kind": "station",
+      "name": "ЦСКА",
+      "name_in": "у метро ЦСКА",
+      "name_gen": "метро ЦСКА",
+      "stations": [
+        "st:11:tsska"
+      ]
+    },
+    {
+      "id": "st-tsaritsyno",
+      "kind": "station",
+      "name": "Царицыно",
+      "name_in": "у метро Царицыно",
+      "name_gen": "метро Царицыно",
+      "stations": [
+        "st:2:tsaritsyno",
+        "st:d2:tsaritsyno"
+      ]
+    },
+    {
+      "id": "st-tsvetnoi-bulvar",
+      "kind": "station",
+      "name": "Цветной бульвар",
+      "name_in": "у метро Цветной бульвар",
+      "name_gen": "метро Цветной бульвар",
+      "stations": [
+        "st:9:tsvetnoi-bulvar"
+      ]
+    },
+    {
+      "id": "st-cherkizovskaya",
+      "kind": "station",
+      "name": "Черкизовская",
+      "name_in": "у метро Черкизовская",
+      "name_gen": "метро Черкизовская",
+      "stations": [
+        "st:1:cherkizovskaya"
+      ]
+    },
+    {
+      "id": "st-chertanovskaya",
+      "kind": "station",
+      "name": "Чертановская",
+      "name_in": "у метро Чертановская",
+      "name_gen": "метро Чертановская",
+      "stations": [
+        "st:9:chertanovskaya"
+      ]
+    },
+    {
+      "id": "st-chekhovskaya",
+      "kind": "station",
+      "name": "Чеховская",
+      "name_in": "у метро Чеховская",
+      "name_gen": "метро Чеховская",
+      "stations": [
+        "st:9:chekhovskaya"
+      ]
+    },
+    {
+      "id": "st-chistye-prudy",
+      "kind": "station",
+      "name": "Чистые пруды",
+      "name_in": "у метро Чистые пруды",
+      "name_gen": "метро Чистые пруды",
+      "stations": [
+        "st:1:chistye-prudy"
+      ]
+    },
+    {
+      "id": "st-chkalovskaya",
+      "kind": "station",
+      "name": "Чкаловская",
+      "name_in": "у метро Чкаловская",
+      "name_gen": "метро Чкаловская",
+      "stations": [
+        "st:10:chkalovskaya"
+      ]
+    },
+    {
+      "id": "st-shabolovskaya",
+      "kind": "station",
+      "name": "Шаболовская",
+      "name_in": "у метро Шаболовская",
+      "name_gen": "метро Шаболовская",
+      "stations": [
+        "st:6:shabolovskaya"
+      ]
+    },
+    {
+      "id": "st-shelepikha",
+      "kind": "station",
+      "name": "Шелепиха",
+      "name_in": "у метро Шелепиха",
+      "name_gen": "метро Шелепиха",
+      "stations": [
+        "st:11:shelepikha",
+        "st:mck:shelepikha"
+      ]
+    },
+    {
+      "id": "st-shipilovskaya",
+      "kind": "station",
+      "name": "Шипиловская",
+      "name_in": "у метро Шипиловская",
+      "name_gen": "метро Шипиловская",
+      "stations": [
+        "st:10:shipilovskaya"
+      ]
+    },
+    {
+      "id": "st-shosse-entuziastov",
+      "kind": "station",
+      "name": "Шоссе Энтузиастов",
+      "name_in": "у метро Шоссе Энтузиастов",
+      "name_gen": "метро Шоссе Энтузиастов",
+      "stations": [
+        "st:8:shosse-entuziastov",
+        "st:mck:shosse-entuziastov"
+      ]
+    },
+    {
+      "id": "st-shchelkovskaya",
+      "kind": "station",
+      "name": "Щелковская",
+      "name_in": "у метро Щелковская",
+      "name_gen": "метро Щелковская",
+      "stations": [
+        "st:3:shchelkovskaya"
+      ]
+    },
+    {
+      "id": "st-shcherbinka",
+      "kind": "station",
+      "name": "Щербинка",
+      "name_in": "у метро Щербинка",
+      "name_gen": "метро Щербинка",
+      "stations": [
+        "st:d2:shcherbinka"
+      ]
+    },
+    {
+      "id": "st-shchukinskaya",
+      "kind": "station",
+      "name": "Щукинская",
+      "name_in": "у метро Щукинская",
+      "name_gen": "метро Щукинская",
+      "stations": [
+        "st:7:shchukinskaya"
+      ]
+    },
+    {
+      "id": "st-elektrozavodskaya",
+      "kind": "station",
+      "name": "Электрозаводская",
+      "name_in": "у метро Электрозаводская",
+      "name_gen": "метро Электрозаводская",
+      "stations": [
+        "st:11:elektrozavodskaya",
+        "st:3:elektrozavodskaya",
+        "st:d3:elektrozavodskaya"
+      ]
+    },
+    {
+      "id": "st-yugo-vostochnaya",
+      "kind": "station",
+      "name": "Юго-Восточная",
+      "name_in": "у метро Юго-Восточная",
+      "name_gen": "метро Юго-Восточная",
+      "stations": [
+        "st:15:yugo-vostochnaya"
+      ]
+    },
+    {
+      "id": "st-yugo-zapadnaya",
+      "kind": "station",
+      "name": "Юго-Западная",
+      "name_in": "у метро Юго-Западная",
+      "name_gen": "метро Юго-Западная",
+      "stations": [
+        "st:1:yugo-zapadnaya"
+      ]
+    },
+    {
+      "id": "st-yuzhnaya",
+      "kind": "station",
+      "name": "Южная",
+      "name_in": "у метро Южная",
+      "name_gen": "метро Южная",
+      "stations": [
+        "st:9:yuzhnaya"
+      ]
+    },
+    {
+      "id": "st-yasenevo",
+      "kind": "station",
+      "name": "Ясенево",
+      "name_in": "у метро Ясенево",
+      "name_gen": "метро Ясенево",
+      "stations": [
+        "st:6:yasenevo"
+      ]
+    },
+    {
+      "id": "st-yakhromskaya",
+      "kind": "station",
+      "name": "Яхромская",
+      "name_in": "у метро Яхромская",
+      "name_gen": "метро Яхромская",
+      "stations": [
+        "st:10:yakhromskaya"
+      ]
+    }
   ]
 }

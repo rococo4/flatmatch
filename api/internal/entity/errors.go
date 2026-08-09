@@ -5,10 +5,11 @@ import (
 	"fmt"
 )
 
-// ErrNotFound is what a repository answers when the row is not there. Declared
-// here so a service can recognise it without importing the package that talks
-// to Postgres.
 var ErrNotFound = errors.New("not found")
+
+var ErrSearchLimit = errors.New("active search limit reached")
+
+var ErrSearchClosed = errors.New("search is closed")
 
 // FieldsError carries the names InvalidFields and MissingFields return, so a
 // caller can say which fields to fix without deriving the list a second time.

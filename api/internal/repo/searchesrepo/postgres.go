@@ -1,0 +1,206 @@
+package searchesrepo
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/AlekSi/pointer"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/postgres"
+)
+
+func (r *Repo) Create(ctx context.Context, userID uuid.UUID, p entity.SearchParams) (entity.Search, error) {
+	var out entity.Search
+	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		if err := lockAndCheckSlots(ctx, tx, userID); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			INSERT INTO searches (user_id, zone_id, price_min, price_max,
+				rooms_min, rooms_max, move_in, term, has_stuff)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING `+searchColumns,
+			userID, p.ZoneID, p.PriceMin, p.PriceMax, p.RoomsMin, p.RoomsMax,
+			p.MoveIn, termArg(p.Term), stuffArg(p.HasStuff))
+		if err != nil {
+			return err
+		}
+		out, err = collectSearch(rows)
+		return err
+	})
+	if err != nil {
+		return entity.Search{}, fmt.Errorf("create search for user %s: %w", userID, err)
+	}
+	return out, nil
+}
+
+func (r *Repo) ByID(ctx context.Context, userID, id uuid.UUID) (entity.Search, error) {
+	search, err := r.one(ctx, `SELECT `+searchColumns+` FROM searches WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return entity.Search{}, fmt.Errorf("get search %s: %w", id, err)
+	}
+	return search, nil
+}
+
+func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+searchColumns+` FROM searches
+		WHERE user_id = $1
+		ORDER BY (status = 'active') DESC, created_at DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list searches of user %s: %w", userID, err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[searchRow])
+	if err != nil {
+		return nil, fmt.Errorf("list searches of user %s: %w", userID, err)
+	}
+	out := make([]entity.Search, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
+}
+
+func (r *Repo) UpdateParams(ctx context.Context, userID, id uuid.UUID, p entity.SearchParams) (entity.Search, error) {
+	search, err := r.oneEditable(ctx, userID, id, `
+		UPDATE searches SET zone_id = $3, price_min = $4, price_max = $5,
+			rooms_min = $6, rooms_max = $7, move_in = $8, term = $9,
+			has_stuff = $10, updated_at = now()
+		WHERE id = $1 AND user_id = $2 AND status <> 'closed'
+		RETURNING `+searchColumns,
+		id, userID, p.ZoneID, p.PriceMin, p.PriceMax, p.RoomsMin, p.RoomsMax,
+		p.MoveIn, termArg(p.Term), stuffArg(p.HasStuff))
+	if err != nil {
+		return entity.Search{}, fmt.Errorf("update params of search %s: %w", id, err)
+	}
+	return search, nil
+}
+
+func (r *Repo) Close(ctx context.Context, userID, id uuid.UUID, reason entity.CloseReason) (entity.Search, error) {
+	search, err := r.oneEditable(ctx, userID, id, `
+		UPDATE searches SET status = 'closed', close_reason = $3, updated_at = now()
+		WHERE id = $1 AND user_id = $2 AND status <> 'closed'
+		RETURNING `+searchColumns, id, userID, string(reason))
+	if err != nil {
+		return entity.Search{}, fmt.Errorf("close search %s: %w", id, err)
+	}
+	return search, nil
+}
+
+func (r *Repo) Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Search, error) {
+	var out entity.Search
+	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		if err := lockAndCheckSlots(ctx, tx, userID); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			UPDATE searches SET status = 'active', close_reason = NULL,
+				pool_seen_at = now(), updated_at = now()
+			WHERE id = $1 AND user_id = $2 AND status <> 'active'
+			RETURNING `+searchColumns, id, userID)
+		if err != nil {
+			return err
+		}
+		out, err = collectSearch(rows)
+		return err
+	})
+	if err != nil {
+		return entity.Search{}, fmt.Errorf("reactivate search %s: %w", id, err)
+	}
+	return out, nil
+}
+
+func (r *Repo) MarkPoolSeen(ctx context.Context, userID uuid.UUID, zoneID string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE searches SET pool_seen_at = now()
+		WHERE user_id = $1 AND zone_id = $2 AND status = 'active'`, userID, zoneID)
+	if err != nil {
+		return fmt.Errorf("mark pool seen for user %s zone %s: %w", userID, zoneID, err)
+	}
+	return nil
+}
+
+func (r *Repo) one(ctx context.Context, query string, args ...any) (entity.Search, error) {
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return entity.Search{}, err
+	}
+	return collectSearch(rows)
+}
+
+func (r *Repo) oneEditable(ctx context.Context, userID, id uuid.UUID, query string, args ...any) (entity.Search, error) {
+	search, err := r.one(ctx, query, args...)
+	if !errors.Is(err, entity.ErrNotFound) {
+		return search, err
+	}
+
+	var status string
+	err = r.pool.QueryRow(ctx,
+		`SELECT status FROM searches WHERE id = $1 AND user_id = $2`, id, userID).Scan(&status)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return entity.Search{}, entity.ErrNotFound
+	case err != nil:
+		return entity.Search{}, err
+	case status == string(entity.SearchClosed):
+		return entity.Search{}, entity.ErrSearchClosed
+	default:
+		// Someone edited the row between the two statements; nothing to report
+		// beyond «the update you asked for did not happen».
+		return entity.Search{}, entity.ErrNotFound
+	}
+}
+
+func lockAndCheckSlots(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
+	// FOR NO KEY UPDATE, not FOR UPDATE: it excludes other slot checks but
+	// still lets unrelated rows reference this user by foreign key meanwhile.
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE`, userID).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.ErrNotFound
+		}
+		return err
+	}
+
+	var active int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*) FROM searches
+		WHERE user_id = $1 AND status = 'active'`, userID).Scan(&active); err != nil {
+		return err
+	}
+	if active >= entity.MaxActiveSearches {
+		return entity.ErrSearchLimit
+	}
+	return nil
+}
+
+func collectSearch(rows pgx.Rows) (entity.Search, error) {
+	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[searchRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Search{}, entity.ErrNotFound
+		}
+		return entity.Search{}, err
+	}
+	return row.toEntity(), nil
+}
+
+func termArg(t *entity.Term) *string {
+	if t == nil {
+		return nil
+	}
+	return pointer.To(string(*t))
+}
+
+func stuffArg(chips []entity.StuffChip) []string {
+	out := make([]string, 0, len(chips))
+	for _, c := range chips {
+		out = append(out, string(c))
+	}
+	return out
+}

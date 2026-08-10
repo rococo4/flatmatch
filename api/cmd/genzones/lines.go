@@ -62,11 +62,23 @@ var stationOverrides = map[stationKey]stationFix{
 	// other); the value below is the railway=halt node and it sits between its
 	// two МЦД-2 neighbours by latitude, as it must.
 	{"МЦД-2", "Покровское"}: {55.602761, 37.631924, "hh duplicates the Покровское-Стрешнево coordinates"},
+	// hh puts МЦД-4 «Курская» 1.8 km south of Курский вокзал, where the D4 has
+	// no stop at all (nothing between Курская and Серп и Молот). The platform
+	// is the same station complex as its D2 twin, whose hh value agrees with
+	// the OSM metro nodes (1123660474, 5202107570) to within ~100 m.
+	{"МЦД-4", "Курская"}: {55.757622, 37.660767, "hh points 1.8 km south of the vokzal"},
 }
 
 // stationSkips drop a platform from ONE line without touching the others.
 // Unlike skippedLines this is not about a line disappearing — the station is
 // alive, it just stopped belonging here, and the source feed still says it does.
+// stationAliases folds hh's alternate names of one physical place into the
+// canonical one — «Новомосковская (Коммунарка)» is the same interchange as
+// «Новомосковская», 78 m apart, and must not become a second zone.
+var stationAliases = map[string]string{
+	"Новомосковская (Коммунарка)": "Новомосковская",
+}
+
 var stationSkips = map[stationKey]string{
 	// Handed over to the Большая кольцевая линия in 2023, when the БКЛ closed
 	// its ring; hh still lists them on both. All three are already in line-11,

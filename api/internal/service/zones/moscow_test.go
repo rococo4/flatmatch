@@ -155,7 +155,10 @@ func TestMoscowSpotChecks(t *testing.T) {
 	for _, z := range d.All() {
 		switch z.Kind {
 		case KindStation:
-			if !strings.HasPrefix(z.NameIn, "у метро ") {
+			// Split-off МЦД platforms are «у станции … (МЦД)»; -mcd and the
+			// wording imply each other.
+			if strings.HasSuffix(z.ID, "-mcd") != strings.HasPrefix(z.NameIn, "у станции ") ||
+				(!strings.HasPrefix(z.NameIn, "у метро ") && !strings.HasPrefix(z.NameIn, "у станции ")) {
 				t.Errorf("station zone %s: name_in %q", z.ID, z.NameIn)
 			}
 		case KindDistrict:

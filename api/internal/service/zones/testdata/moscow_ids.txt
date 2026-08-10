@@ -256,6 +256,7 @@ st-leninskii-prospekt
 st-lermontovskii-prospekt
 st-lesoparkovaya
 st-lianozovo
+st-lianozovo-mcd
 st-likhobory
 st-lokomotiv
 st-lomonosovskii-prospekt
@@ -263,6 +264,7 @@ st-lubyanka
 st-lukhmanovskaya
 st-luzhniki
 st-lyublino
+st-lyublino-mcd
 st-marina-roshcha
 st-marino
 st-mark
@@ -275,6 +277,7 @@ st-meshcherskaya
 st-michurinets
 st-michurinskii-prospekt
 st-minskaya
+st-minskaya-mcd
 st-mitino
 st-mitkovo
 st-mnevniki
@@ -298,8 +301,8 @@ st-novokhokhlovskaya
 st-novokosino
 st-novokuznetskaya
 st-novomoskovskaya
-st-novomoskovskaya-kommunarka
 st-novoperedelkino
+st-novoperedelkino-mcd
 st-novopodrezkovo
 st-novoslobodskaya
 st-novoyasenevskaya
@@ -326,6 +329,7 @@ st-penyagino
 st-peredelkino
 st-pererva
 st-perovo
+st-perovo-mcd
 st-pervomaiskaya
 st-petrovskii-park
 st-petrovsko-razumovskaya

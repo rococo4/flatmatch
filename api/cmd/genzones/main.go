@@ -57,6 +57,14 @@ const (
 	metersPerDegreeLat = 110540.0
 	metersPerDegreeLng = 111320.0
 
+	// stationSplitM breaks up a same-named group whose platforms are not one
+	// place: «у метро Лианозово» must not span a 40-minute walk between the
+	// metro and the МЦД platform.
+	stationSplitM = 1500.0
+
+	// dirVersion: 2 — МЦД split-offs, Новомосковская merge, район Аэропорт.
+	dirVersion = 2
+
 	fetchTimeout = 60 * time.Second
 )
 
@@ -175,7 +183,9 @@ func run(metroSrc, districtsSrc, declSrc, out string) error {
 		return err
 	}
 
-	f := outFile{Version: 1, Stations: stations}
+	// Bump on every meaningful data change: the version is the /zones ETag, and
+	// a stale one would 304 old data into caches for a day.
+	f := outFile{Version: dirVersion, Stations: stations}
 	f.Zones = append(f.Zones, lineZones...)
 	f.Zones = append(f.Zones, districtZones...)
 	f.Zones = append(f.Zones, stationZones...)
@@ -236,6 +246,9 @@ func buildLines(metro *hhMetro, moscow []district) ([]zones.Zone, []zones.Statio
 			// The feed has shipped «Бутырская » with a trailing space; that
 			// would reach the user as «у метро Бутырская ».
 			s.Name = strings.TrimSpace(s.Name)
+			if canonical, ok := stationAliases[s.Name]; ok {
+				s.Name = canonical
+			}
 			key := stationKey{Line: l.Name, Station: s.Name}
 
 			if why, skip := stationSkips[key]; skip {
@@ -398,6 +411,7 @@ func buildStationZones(stations []zones.Station) ([]zones.Zone, error) {
 		out   []zones.Zone
 		slugs = map[string]string{}
 	)
+	var split []string
 	for _, key := range order {
 		g := groups[key]
 		id := "st-" + translit(key)
@@ -405,18 +419,66 @@ func buildStationZones(stations []zones.Station) ([]zones.Zone, error) {
 			return nil, fmt.Errorf("station slug collision %q: %q and %q", id, prev, key)
 		}
 		slugs[id] = key
-		name := displayName(g)
-		ids := make([]string, 0, len(g))
-		for _, s := range g {
-			ids = append(ids, s.ID)
+
+		if maxSpreadM(g) > stationSplitM {
+			base, rail := splitByRail(g)
+			if len(base) == 0 || len(rail) == 0 ||
+				maxSpreadM(base) > stationSplitM || maxSpreadM(rail) > stationSplitM {
+				return nil, fmt.Errorf("station group %q spreads %.0f m and МЦД does not explain it — decide by hand",
+					key, maxSpreadM(g))
+			}
+			out = append(out, stationZone(id, displayName(base), "у метро ", "метро ", base))
+			mcdName := displayName(rail) + " (МЦД)"
+			out = append(out, stationZone(id+"-mcd", mcdName, "у станции ", "станции ", rail))
+			split = append(split, fmt.Sprintf("%s (%.0f m apart)", key, maxSpreadM(g)))
+			continue
 		}
-		out = append(out, zones.Zone{
-			ID: id, Kind: zones.KindStation, Name: name,
-			NameIn: "у метро " + name, NameGen: "метро " + name, Stations: ids,
-		})
+
+		out = append(out, stationZone(id, displayName(g), "у метро ", "метро ", g))
 	}
 	fmt.Printf("stations: %d station zones from %d platforms\n", len(out), len(stations))
+	if len(split) > 0 {
+		fmt.Printf("stations: split off МЦД zones: %s\n", strings.Join(split, "; "))
+	}
 	return out, nil
+}
+
+func stationZone(id, name, in, gen string, g []zones.Station) zones.Zone {
+	ids := make([]string, 0, len(g))
+	for _, s := range g {
+		ids = append(ids, s.ID)
+	}
+	return zones.Zone{
+		ID: id, Kind: zones.KindStation, Name: name,
+		NameIn: in + name, NameGen: gen + name, Stations: ids,
+	}
+}
+
+func maxSpreadM(g []zones.Station) float64 {
+	spread := 0.0
+	for i := range g {
+		for j := i + 1; j < len(g); j++ {
+			d := metersBetween(point{g[i].Lng, g[i].Lat}, point{g[j].Lng, g[j].Lat})
+			if d > spread {
+				spread = d
+			}
+		}
+	}
+	return spread
+}
+
+// splitByRail parts a group into metro platforms and МЦД ones — the only kind
+// of same-name pair that sits kilometres apart in practice.
+func splitByRail(g []zones.Station) (base, rail []zones.Station) {
+	for _, s := range g {
+		parts := strings.SplitN(s.ID, ":", 3)
+		if len(parts) == 3 && strings.HasPrefix(parts[1], "d") {
+			rail = append(rail, s)
+		} else {
+			base = append(base, s)
+		}
+	}
+	return base, rail
 }
 
 // finalize makes the file byte-stable across runs and removes the one thing the

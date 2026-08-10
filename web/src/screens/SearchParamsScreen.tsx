@@ -46,6 +46,13 @@ export const EMPTY_DRAFT: SearchDraft = {
   term: null,
 };
 
+// МЦД-платформы отделены от одноимённого метро («Лианозово (МЦД)») — подпись
+// «метро» рядом с ними противоречила бы имени.
+function zoneKindLabel(z: Zone): string {
+  if (z.kind === 'station' && z.name.endsWith('(МЦД)')) return 'станция';
+  return ZONE_KIND_LABEL[z.kind];
+}
+
 const ZONE_KIND_LABEL: Record<ZoneKind, string> = {
   district: 'район',
   station: 'метро',
@@ -350,7 +357,7 @@ export function SearchParamsScreen({
               <span style={{ minWidth: 0 }}>
                 <span style={{ fontSize: 16, fontWeight: 590 }}>{zone.name}</span>
                 <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
-                  {` · ${ZONE_KIND_LABEL[zone.kind]}`}
+                  {` · ${zoneKindLabel(zone)}`}
                 </span>
               </span>
             ) : value.zoneId && zoneNameFallback ? (
@@ -607,7 +614,7 @@ function PickerGroup({
         <div key={z.id} style={F.pickerRow} onClick={() => onPick(z.id)}>
           <span style={{ fontSize: 15, fontWeight: 510, minWidth: 0 }}>{z.name}</span>
           <span style={{ flex: '0 0 auto', fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
-            {ZONE_KIND_LABEL[z.kind]}
+            {zoneKindLabel(z)}
           </span>
         </div>
       ))}

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "stations": [
     {
       "id": "st:10:borisovo",
@@ -566,8 +566,8 @@
       "lng": 37.625336
     },
     {
-      "id": "st:1:novomoskovskaya-kommunarka",
-      "name": "Новомосковская (Коммунарка)",
+      "id": "st:1:novomoskovskaya",
+      "name": "Новомосковская",
       "lat": 55.559765,
       "lng": 37.468716
     },
@@ -2068,8 +2068,8 @@
     {
       "id": "st:d4:kurskaya",
       "name": "Курская",
-      "lat": 55.740833,
-      "lng": 37.660556
+      "lat": 55.757622,
+      "lng": 37.660767
     },
     {
       "id": "st:d4:kuskovo",
@@ -2457,7 +2457,7 @@
       "kind": "district",
       "name": "Аэропорт",
       "name_in": "на Аэропорте",
-      "name_gen": "Аэропорта",
+      "name_gen": "района Аэропорт",
       "stations": [
         "st:11:petrovskii-park",
         "st:2:aeroport",
@@ -2500,7 +2500,8 @@
         "st:7:kitai-gorod",
         "st:7:kuznetskii-most",
         "st:d2:kurskaya",
-        "st:d3:elektrozavodskaya"
+        "st:d3:elektrozavodskaya",
+        "st:d4:kurskaya"
       ]
     },
     {
@@ -4690,7 +4691,7 @@
         "st:1:krasnye-vorota",
         "st:1:kropotkinskaya",
         "st:1:lubyanka",
-        "st:1:novomoskovskaya-kommunarka",
+        "st:1:novomoskovskaya",
         "st:1:okhotnyi-ryad",
         "st:1:olkhovaya",
         "st:1:park-kultury",
@@ -6113,7 +6114,16 @@
       "name_in": "у метро Лианозово",
       "name_gen": "метро Лианозово",
       "stations": [
-        "st:10:lianozovo",
+        "st:10:lianozovo"
+      ]
+    },
+    {
+      "id": "st-lianozovo-mcd",
+      "kind": "station",
+      "name": "Лианозово (МЦД)",
+      "name_in": "у станции Лианозово (МЦД)",
+      "name_gen": "станции Лианозово (МЦД)",
+      "stations": [
         "st:d1:lianozovo"
       ]
     },
@@ -6185,7 +6195,16 @@
       "name_in": "у метро Люблино",
       "name_gen": "метро Люблино",
       "stations": [
-        "st:10:lyublino",
+        "st:10:lyublino"
+      ]
+    },
+    {
+      "id": "st-lyublino-mcd",
+      "kind": "station",
+      "name": "Люблино (МЦД)",
+      "name_in": "у станции Люблино (МЦД)",
+      "name_gen": "станции Люблино (МЦД)",
+      "stations": [
         "st:d2:lyublino"
       ]
     },
@@ -6289,7 +6308,16 @@
       "name_in": "у метро Минская",
       "name_gen": "метро Минская",
       "stations": [
-        "st:8a:minskaya",
+        "st:8a:minskaya"
+      ]
+    },
+    {
+      "id": "st-minskaya-mcd",
+      "kind": "station",
+      "name": "Минская (МЦД)",
+      "name_in": "у станции Минская (МЦД)",
+      "name_gen": "станции Минская (МЦД)",
+      "stations": [
         "st:d4:minskaya"
       ]
     },
@@ -6536,17 +6564,8 @@
       "name_in": "у метро Новомосковская",
       "name_gen": "метро Новомосковская",
       "stations": [
-        "st:16:novomoskovskaya"
-      ]
-    },
-    {
-      "id": "st-novomoskovskaya-kommunarka",
-      "kind": "station",
-      "name": "Новомосковская (Коммунарка)",
-      "name_in": "у метро Новомосковская (Коммунарка)",
-      "name_gen": "метро Новомосковская (Коммунарка)",
-      "stations": [
-        "st:1:novomoskovskaya-kommunarka"
+        "st:16:novomoskovskaya",
+        "st:1:novomoskovskaya"
       ]
     },
     {
@@ -6556,7 +6575,16 @@
       "name_in": "у метро Новопеределкино",
       "name_gen": "метро Новопеределкино",
       "stations": [
-        "st:8a:novoperedelkino",
+        "st:8a:novoperedelkino"
+      ]
+    },
+    {
+      "id": "st-novoperedelkino-mcd",
+      "kind": "station",
+      "name": "Новопеределкино (МЦД)",
+      "name_in": "у станции Новопеределкино (МЦД)",
+      "name_gen": "станции Новопеределкино (МЦД)",
+      "stations": [
         "st:d4:novoperedelkino"
       ]
     },
@@ -6834,7 +6862,16 @@
       "name_in": "у метро Перово",
       "name_gen": "метро Перово",
       "stations": [
-        "st:8:perovo",
+        "st:8:perovo"
+      ]
+    },
+    {
+      "id": "st-perovo-mcd",
+      "kind": "station",
+      "name": "Перово (МЦД)",
+      "name_in": "у станции Перово (МЦД)",
+      "name_gen": "станции Перово (МЦД)",
+      "stations": [
         "st:d3:perovo"
       ]
     },

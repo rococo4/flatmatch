@@ -117,13 +117,15 @@ func rankedSections(dir *zones.Directory, photos PhotoURLs, viewer entity.User, 
 		sc := best.byUser[userID]
 		for i := range sections {
 			if sections[i].ID == sc.section {
-				sections[i].People = append(sections[i].People, newPerson(dir, photos, viewer, sc))
+				p := newPerson(dir, photos, viewer, sc)
+				p.ZoneMatch = zoneMatch(dir, mine.ZoneID, sc.cand.Search.ZoneID)
+				sections[i].People = append(sections[i].People, p)
 			}
 		}
 	}
 
 	for i := range sections {
-		slices.SortStableFunc(sections[i].People, freshestFirst)
+		slices.SortStableFunc(sections[i].People, zoneMatchFirst)
 		if sections[i].ID == SectionNone && len(sections[i].People) > noneSectionCap {
 			sections[i].People = sections[i].People[:noneSectionCap]
 		}
@@ -195,6 +197,44 @@ func paramsFilled(p entity.SearchParams) int {
 		}
 	}
 	return n
+}
+
+// zoneMatchFirst: сначала совпавшие по зоне, внутри групп — свежесть.
+func zoneMatchFirst(a, b Person) int {
+	if a.ZoneMatch != b.ZoneMatch {
+		if a.ZoneMatch {
+			return -1
+		}
+		return 1
+	}
+	return freshestFirst(a, b)
+}
+
+// zoneMatch: equal zones, or every station of one inside the other — anywhere
+// they want to live suits me too (or the reverse).
+func zoneMatch(dir *zones.Directory, mineID, theirsID string) bool {
+	if mineID == theirsID {
+		return true
+	}
+	mine, ok1 := dir.Get(mineID)
+	theirs, ok2 := dir.Get(theirsID)
+	if !ok1 || !ok2 {
+		return false
+	}
+	return subset(mine.Stations, theirs.Stations) || subset(theirs.Stations, mine.Stations)
+}
+
+func subset(inner, outer []string) bool {
+	set := make(map[string]bool, len(outer))
+	for _, s := range outer {
+		set[s] = true
+	}
+	for _, s := range inner {
+		if !set[s] {
+			return false
+		}
+	}
+	return true
 }
 
 func freshestFirst(a, b Person) int {

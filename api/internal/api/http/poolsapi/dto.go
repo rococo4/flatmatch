@@ -75,6 +75,8 @@ type personDTO struct {
 	Params        paramsDTO `json:"params"`
 	// Zone of the person's search: «ищет на красной ветке» in the card.
 	Zone zoneDTO `json:"zone"`
+	// ZoneMatch: полная территориальная совместимость с поиском смотрящего.
+	ZoneMatch bool `json:"zone_match"`
 }
 
 type sectionDTO struct {
@@ -145,6 +147,7 @@ func toPerson(p pools.Person) personDTO {
 		SharedAnswers: p.SharedAnswers,
 		Params:        toParamsDTO(p.Params),
 		Zone:          toZoneDTO(p.Zone),
+		ZoneMatch:     p.ZoneMatch,
 	}
 	for _, c := range p.Chips {
 		out.Chips = append(out.Chips, chipDTO{Param: string(c.Param), Verdict: string(c.Verdict)})

@@ -70,3 +70,40 @@ func TestRankedSectionsSortFreshestFirst(t *testing.T) {
 		}
 	}
 }
+
+// Совпавшие по зоне — выше в секции; вложение множеств станций тоже совпадение.
+func TestRankedSectionsBoostZoneMatch(t *testing.T) {
+	mine := entity.SearchParams{ZoneID: "pz-district", PriceMin: pointer.To(35000), PriceMax: 45000}
+	theirs := entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000}
+	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+
+	// Пересекает район (north), но тянется наружу (west) — не совпадение.
+	crossZone := candidate(base.Add(3*time.Hour), withZone(theirs, "pz-line-cross"))
+	// Вложена в район целиком — совпадение, как и сам район.
+	subsetZone := candidate(base.Add(time.Hour), withZone(theirs, "pz-line-west"))
+	sameZone := candidate(base, withZone(theirs, "pz-district"))
+
+	sections := rankedSections(testDir(t), staticPhotos{}, entity.User{}, mine,
+		[]entity.PoolCandidate{crossZone, subsetZone, sameZone})
+
+	top := sections[0].People
+	if len(top) != 3 {
+		t.Fatalf("got %d cards, want 3", len(top))
+	}
+	// Совпавшие по зоне впереди (меж собой — по свежести), сквозная — последней.
+	wantOrder := []struct {
+		id    uuid.UUID
+		match bool
+	}{{subsetZone.User.ID, true}, {sameZone.User.ID, true}, {crossZone.User.ID, false}}
+	for i, w := range wantOrder {
+		if top[i].User.ID != w.id || top[i].ZoneMatch != w.match {
+			t.Errorf("card %d = %s match=%v, want %s match=%v",
+				i, top[i].User.ID, top[i].ZoneMatch, w.id, w.match)
+		}
+	}
+}
+
+func withZone(p entity.SearchParams, zone string) entity.SearchParams {
+	p.ZoneID = zone
+	return p
+}

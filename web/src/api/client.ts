@@ -209,6 +209,8 @@ export interface PoolPersonDTO {
   params: SearchParamsNoZone;
   /** Зона его поиска — «где именно он ищет». */
   zone: ZoneRef;
+  /** Полная территориальная совместимость с поиском смотрящего. */
+  zone_match: boolean;
 }
 
 export interface PoolSectionDTO {

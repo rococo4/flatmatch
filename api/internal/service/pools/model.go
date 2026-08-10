@@ -32,6 +32,7 @@ type Person struct {
 	Chips         []Chip
 	Params        entity.SearchParams
 	Zone          zones.Zone
+	ZoneMatch     bool
 	SearchCreated time.Time
 }
 

@@ -248,6 +248,7 @@ export function SearchParamsScreen({
   mode,
   zones,
   zoneNameFallback,
+  updatesSearch,
   value,
   onChange,
   onSubmit,
@@ -267,6 +268,8 @@ export function SearchParamsScreen({
    * живёт только в справочнике.
    */
   zoneNameFallback?: string;
+  /** На зону формы есть активный поиск: «Показать» обновит и его (§6). */
+  updatesSearch?: boolean;
   value: SearchDraft;
   onChange: (next: SearchDraft) => void;
   onSubmit: () => void;
@@ -475,7 +478,11 @@ export function SearchParamsScreen({
           </button>
           {/* Только в 'look': в 'edit' это как раз подписка. */}
           {mode === 'look' && (
-            <span style={S.caption}>Это ещё не подписка — просто посмотрим, что есть</span>
+            <span style={S.caption}>
+              {updatesSearch
+                ? 'Обновит твой сохранённый поиск в этой зоне'
+                : 'Это ещё не подписка — просто посмотрим, что есть'}
+            </span>
           )}
           {error && <span style={F.error}>{error}</span>}
         </div>

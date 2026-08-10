@@ -1,18 +1,85 @@
 {
   "version": 1,
   "stations": [
-    {"id": "st:pz:north", "name": "Северная", "lat": 55.9000, "lng": 37.5000},
-    {"id": "st:pz:south", "name": "Южная", "lat": 55.6000, "lng": 37.5000},
-    {"id": "st:pz:east", "name": "Восточная", "lat": 55.7500, "lng": 37.8000}
+    {
+      "id": "st:pz:north",
+      "name": "Северная",
+      "lat": 55.9,
+      "lng": 37.5
+    },
+    {
+      "id": "st:pz:south",
+      "name": "Южная",
+      "lat": 55.6,
+      "lng": 37.5
+    },
+    {
+      "id": "st:pz:east",
+      "name": "Восточная",
+      "lat": 55.75,
+      "lng": 37.8
+    },
+    {
+      "id": "st:pz:west",
+      "name": "Западная",
+      "lat": 55.75,
+      "lng": 37.2
+    }
   ],
   "zones": [
-    {"id": "pz-line-west", "kind": "line", "name": "западная ветка", "name_in": "на западной ветке",
-     "name_gen": "западной ветки", "stations": ["st:pz:north", "st:pz:south"]},
-    {"id": "pz-line-east", "kind": "line", "name": "восточная ветка", "name_in": "на восточной ветке",
-     "name_gen": "восточной ветки", "stations": ["st:pz:east"]},
-    {"id": "pz-district", "kind": "district", "name": "Тестовый район", "name_in": "в Тестовом районе",
-     "name_gen": "Тестового района", "stations": ["st:pz:north", "st:pz:south", "st:pz:east"]},
-    {"id": "pz-station-east", "kind": "station", "name": "Восточная", "name_in": "у метро Восточная",
-     "name_gen": "метро Восточная", "stations": ["st:pz:east"]}
+    {
+      "id": "pz-line-west",
+      "kind": "line",
+      "name": "западная ветка",
+      "name_in": "на западной ветке",
+      "name_gen": "западной ветки",
+      "stations": [
+        "st:pz:north",
+        "st:pz:south"
+      ]
+    },
+    {
+      "id": "pz-line-east",
+      "kind": "line",
+      "name": "восточная ветка",
+      "name_in": "на восточной ветке",
+      "name_gen": "восточной ветки",
+      "stations": [
+        "st:pz:east"
+      ]
+    },
+    {
+      "id": "pz-line-cross",
+      "kind": "line",
+      "name": "сквозная ветка",
+      "name_in": "на сквозной ветке",
+      "name_gen": "сквозной ветки",
+      "stations": [
+        "st:pz:north",
+        "st:pz:west"
+      ]
+    },
+    {
+      "id": "pz-district",
+      "kind": "district",
+      "name": "Тестовый район",
+      "name_in": "в Тестовом районе",
+      "name_gen": "Тестового района",
+      "stations": [
+        "st:pz:north",
+        "st:pz:south",
+        "st:pz:east"
+      ]
+    },
+    {
+      "id": "pz-station-east",
+      "kind": "station",
+      "name": "Восточная",
+      "name_in": "у метро Восточная",
+      "name_gen": "метро Восточная",
+      "stations": [
+        "st:pz:east"
+      ]
+    }
   ]
 }

@@ -313,7 +313,16 @@ export function App() {
   const showFeed = async (draft: SearchDraft) => {
     setFeed((f) => ({ ...f, busy: true, error: null, invalidFields: [] }));
     try {
-      const data = await fetchFeed(draftToParams(draft));
+      const params = draftToParams(draft);
+      // На зону с активным поиском форма — редактор подписки, не просмотр:
+      // иначе счётчик считался бы по форме, пул — по подписке, и они врали
+      // бы друг другу (§6, решение 2026-08-11).
+      const owned = (searches ?? []).find((s) => s.status === 'active' && s.zone.id === params.zone_id);
+      if (owned) {
+        await updateSearch(owned.id, params);
+        void reloadSearches().catch(() => undefined);
+      }
+      const data = await fetchFeed(params);
       setFeed((f) => ({
         ...f,
         mode: 'results',
@@ -576,6 +585,9 @@ export function App() {
           <SearchParamsScreen
             mode="look"
             zones={zones}
+            updatesSearch={(searches ?? []).some(
+              (s) => s.status === 'active' && s.zone.id === feed.draft.zoneId,
+            )}
             value={feed.draft}
             onChange={(draft) => setFeed((f) => ({ ...f, draft }))}
             onSubmit={() => {

@@ -15,6 +15,8 @@ export type PoolPerson = {
   matches: number; // «N совпадений анкеты»
   /** «ищет на красной ветке» — точный сосед и веточник это разные намерения. */
   searchZone?: string;
+  /** Зоны совпали (равны или вложены) — строка подсвечивается зелёным. */
+  searchZoneMatched?: boolean;
   verdicts: { verdict: Verdict; label: string }[];
   /** Пусто = фото не одобрено: вместо него инициалы, как требует §5. */
   photoUrl?: string;
@@ -98,7 +100,16 @@ function PersonMiniCard({ p, onOpen }: { p: PoolPerson; onOpen?: (id: string) =>
         </div>
         <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{p.habits}</span>
         {p.searchZone && (
-          <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{p.searchZone}</span>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: p.searchZoneMatched ? 510 : 400,
+              color: p.searchZoneMatched ? 'var(--type-home-fg)' : 'var(--tg-theme-hint-color)',
+            }}
+          >
+            {p.searchZone}
+            {p.searchZoneMatched && ' · твоя зона'}
+          </span>
         )}
         <span style={{ fontSize: 13, fontWeight: 510 }}>
           {p.matches} {plural(p.matches, 'совпадение', 'совпадения', 'совпадений')} анкеты

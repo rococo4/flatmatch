@@ -87,14 +87,24 @@ type poolResponse struct {
 	// MySearchID is the subscription to this very zone, what the «Ты в пуле
 	// {зоны} · поиск сохранён» banner needs. Ranking is happy with a search of
 	// an intersecting zone, so ranked may be true while this is absent.
-	MySearchID *uuid.UUID   `json:"my_search_id,omitempty"`
-	Ranked     bool         `json:"ranked"`
-	Sections   []sectionDTO `json:"sections,omitempty"` // ranked
-	People     []personDTO  `json:"people,omitempty"`   // unranked
+	MySearchID *uuid.UUID `json:"my_search_id,omitempty"`
+	Ranked     bool       `json:"ranked"`
+	// Both lists are always present and always arrays; `ranked` says which one
+	// carries the pool — sections when true, people when false, the other one
+	// empty. No omitempty: it drops an empty slice as readily as a nil one, so
+	// an empty pool would arrive without the key the front-end iterates, and
+	// «пул пуст» would have to be told apart from «поле забыли».
+	Sections []sectionDTO `json:"sections"` // ranked
+	People   []personDTO  `json:"people"`   // unranked
 }
 
 func toPoolResponse(p pools.Pool) poolResponse {
-	out := poolResponse{Zone: toZoneDTO(p.Zone), Ranked: p.Ranked}
+	out := poolResponse{
+		Zone:     toZoneDTO(p.Zone),
+		Ranked:   p.Ranked,
+		Sections: make([]sectionDTO, 0, len(p.Sections)),
+		People:   toPeople(p.People),
+	}
 	if p.MySearch != nil {
 		out.MySearchID = &p.MySearch.ID
 	}
@@ -103,9 +113,6 @@ func toPoolResponse(p pools.Pool) poolResponse {
 			ID:     string(s.ID),
 			People: toPeople(s.People),
 		})
-	}
-	if len(p.People) > 0 {
-		out.People = toPeople(p.People)
 	}
 	return out
 }

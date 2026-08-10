@@ -177,20 +177,31 @@ func TestMoscowInvariants(t *testing.T) {
 	}
 
 	seenID := map[string]bool{}
-	seenName := map[Kind]map[string]bool{}
+	// All three names are checked, not just Name: the picker reads Name, but
+	// every pool headline and «пул {зоны}» is built from the declensions, so
+	// two zones sharing NameIn are indistinguishable exactly where it matters.
+	// line-8 and line-8a were that case — both «на жёлтой ветке».
+	seen := map[string]map[Kind]map[string]bool{
+		"name": {}, "name_in": {}, "name_gen": {},
+	}
 	for _, z := range d.All() {
 		if seenID[z.ID] {
 			t.Fatalf("duplicate zone id %q", z.ID)
 		}
 		seenID[z.ID] = true
 
-		if seenName[z.Kind] == nil {
-			seenName[z.Kind] = map[string]bool{}
+		for field, value := range map[string]string{
+			"name": z.Name, "name_in": z.NameIn, "name_gen": z.NameGen,
+		} {
+			if seen[field][z.Kind] == nil {
+				seen[field][z.Kind] = map[string]bool{}
+			}
+			if seen[field][z.Kind][value] {
+				t.Errorf("two %s zones with %s %q — nothing in the UI could tell them apart",
+					z.Kind, field, value)
+			}
+			seen[field][z.Kind][value] = true
 		}
-		if seenName[z.Kind][z.Name] {
-			t.Errorf("two %s zones named %q — the picker could not tell them apart", z.Kind, z.Name)
-		}
-		seenName[z.Kind][z.Name] = true
 
 		if len(z.Stations) == 0 {
 			t.Errorf("zone %s: no stations", z.ID)

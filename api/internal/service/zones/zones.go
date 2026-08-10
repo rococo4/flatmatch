@@ -111,13 +111,20 @@ func New(raw []byte) (*Directory, error) {
 	return d, nil
 }
 
+// Get returns the zone by id. The Zone is a copy, but its Stations slice is
+// NOT: it aliases the directory's own array, which is shared by every caller
+// and never rebuilt after startup. Read it, never write to it — appending to
+// or sorting it corrupts the directory for the whole process.
 func (d *Directory) Get(id string) (Zone, bool) {
 	z, ok := d.zones[id]
 	return z, ok
 }
 
 // Intersecting answers the pool boundary (§2.1): every zone sharing at least
-// one station with the given one, itself included.
+// one station with the given one, itself included. The returned slice is the
+// directory's own, precomputed at startup and shared by every caller: it is
+// read-only for the same reason Get's Stations are. Callers that need to
+// modify it must copy first (slices.Clone).
 func (d *Directory) Intersecting(id string) []string {
 	return d.intersecting[id]
 }

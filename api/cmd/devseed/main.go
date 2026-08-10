@@ -4,8 +4,10 @@
 //
 // The crowd is deterministic: fixed Telegram ids from seedTGBase up, upserted
 // by tg_id, searches wiped and re-inserted. Reruns converge to the same state
-// instead of piling up copies, and one predicate removes everything:
+// instead of piling up copies, and the same tg_id range removes everything —
+// searches first, because searches.user_id references users:
 //
+//	DELETE FROM searches WHERE user_id IN (SELECT id FROM users WHERE tg_id >= 900000001);
 //	DELETE FROM users WHERE tg_id >= 900000001;
 //
 // Usage:

@@ -177,6 +177,21 @@ func (r *Repo) oneEditable(ctx context.Context, userID, id uuid.UUID, query stri
 	}
 }
 
+// lockAndCheckSlots serialises slot accounting: concurrent creations queue on
+// the user row, so two of them cannot both see the same free slot and take it.
+// The lock has to sit on users rather than on the user's searches — locking
+// the searches would lock nothing at all for a user who has none yet, which is
+// exactly the case where a fourth search slips through.
+//
+// It also rests on READ COMMITTED, the default level these transactions run at,
+// and on the count being a SEPARATE statement from the lock. Under READ
+// COMMITTED every statement takes its own snapshot, so the count issued AFTER
+// the lock wait ends sees the rows the transaction that held the lock has just
+// committed. Merge the two into one statement, or raise the level to
+// REPEATABLE READ, and the count would read the snapshot taken before the wait
+// — the concurrent search would be invisible, both transactions would see the
+// same free slot, and the ≤3 limit (§2.1) would break silently, without an
+// error anywhere.
 func lockAndCheckSlots(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
 	// FOR NO KEY UPDATE, not FOR UPDATE: it excludes other slot checks but
 	// still lets unrelated rows reference this user by foreign key meanwhile.

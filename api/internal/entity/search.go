@@ -11,6 +11,12 @@ const MaxActiveSearches = 3
 
 const PriceMaxCap = 1_000_000
 
+// RoomsCap is the same kind of bound for комнатность. It exists to keep an
+// absurd number out of the database rather than to judge the flat: without it
+// a request for three billion rooms passes validation and dies deeper down, in
+// the int4 encoder, as a 500 instead of a 400.
+const RoomsCap = 20
+
 type Term string
 
 const (
@@ -102,8 +108,9 @@ func (p SearchParams) InvalidFields() []string {
 		{"price_max", p.PriceMax <= 0 || p.PriceMax > PriceMaxCap},
 		{"price_min", p.PriceMin != nil && (*p.PriceMin < 0 || *p.PriceMin > p.PriceMax)},
 		{"rooms_min", p.RoomsMin != nil &&
-			(*p.RoomsMin < 1 || (p.RoomsMax != nil && *p.RoomsMin > *p.RoomsMax))},
-		{"rooms_max", p.RoomsMax != nil && *p.RoomsMax < 1},
+			(*p.RoomsMin < 1 || *p.RoomsMin > RoomsCap ||
+				(p.RoomsMax != nil && *p.RoomsMin > *p.RoomsMax))},
+		{"rooms_max", p.RoomsMax != nil && (*p.RoomsMax < 1 || *p.RoomsMax > RoomsCap)},
 		{"term", p.Term != nil && *p.Term == TermUnknown},
 		{"has_stuff", slices.ContainsFunc(p.HasStuff, func(c StuffChip) bool {
 			return c == "" || c == StuffChipUnknown || ParseStuffChip(string(c)) != c

@@ -107,7 +107,12 @@ func (b paramsRequest) toParams() (entity.SearchParams, error) {
 		HasStuff: make([]entity.StuffChip, 0, len(b.HasStuff)),
 	}
 
-	if b.MoveIn != nil {
+	// An empty string means «неважно», the same as an absent field: the promo
+	// block posts the feed's filters back verbatim, and there `move_in=` is
+	// exactly how «месяц не выбран» travels. Rejecting it here would turn the
+	// one button that saves a search into a 400. A string that is present and
+	// malformed («2026-13», «sept») is still an error.
+	if b.MoveIn != nil && *b.MoveIn != "" {
 		month, err := time.Parse(moveInMonth, *b.MoveIn)
 		if err != nil {
 			return entity.SearchParams{},
@@ -115,7 +120,11 @@ func (b paramsRequest) toParams() (entity.SearchParams, error) {
 		}
 		p.MoveIn = &month
 	}
-	if b.Term != nil {
+	// Same rule for the term, and here it is not only about symmetry: an empty
+	// string parses to an empty Term, which InvalidFields does not call unknown
+	// and the CHECK on searches.term then rejects — a 500 for a filter the user
+	// simply did not fill in.
+	if b.Term != nil && *b.Term != "" {
 		p.Term = pointer.To(entity.ParseTerm(*b.Term))
 	}
 	for _, raw := range b.HasStuff {

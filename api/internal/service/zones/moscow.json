@@ -4599,8 +4599,8 @@
       "id": "line-8a",
       "kind": "line",
       "name": "жёлтая ветка (Солнцевская)",
-      "name_in": "на жёлтой ветке",
-      "name_gen": "жёлтой ветки",
+      "name_in": "на жёлтой ветке (Солнцевской)",
+      "name_gen": "жёлтой ветки (Солнцевской)",
       "stations": [
         "st:8a:aeroport-vnukovo",
         "st:8a:borovskoe-shosse",

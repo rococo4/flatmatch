@@ -13,5 +13,5 @@
 // validation — must go through, so the mutual gender_pref rule and blocks can
 // never be forgotten in one query. Counters are therefore personal.
 //
-// Empty on purpose — built in §12 step 3.
+// Built in §12 step 3.
 package pools

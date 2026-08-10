@@ -104,3 +104,25 @@ func (p Profile) MissingFields() []string {
 	}
 	return missing
 }
+
+func (p Profile) SharedAnswers(o Profile) int {
+	pairs := [][2]string{
+		{string(p.Schedule), string(o.Schedule)},
+		{string(p.Smoking), string(o.Smoking)},
+		{string(p.PetsOwn), string(o.PetsOwn)},
+		{string(p.PetsOK), string(o.PetsOK)},
+		{string(p.Noise), string(o.Noise)},
+		{string(p.Guests), string(o.Guests)},
+		{string(p.Cleaning), string(o.Cleaning)},
+		{string(p.Alcohol), string(o.Alcohol)},
+		{string(p.Expenses), string(o.Expenses)},
+	}
+
+	n := 0
+	for _, pair := range pairs {
+		if pair[0] != "" && pair[0] == pair[1] {
+			n++
+		}
+	}
+	return n
+}

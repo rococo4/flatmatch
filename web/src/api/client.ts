@@ -207,6 +207,8 @@ export interface PoolPersonDTO {
   /** Нет вовсе в unranked-пуле: сравнивать не с чем. */
   chips?: PoolChip[];
   params: SearchParamsNoZone;
+  /** Зона его поиска — «где именно он ищет». */
+  zone: ZoneRef;
 }
 
 export interface PoolSectionDTO {

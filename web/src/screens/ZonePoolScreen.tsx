@@ -13,6 +13,8 @@ export type PoolPerson = {
   verifiedBadge?: string;
   habits: string; // «сова · не курю · без животных»
   matches: number; // «N совпадений анкеты»
+  /** «ищет на красной ветке» — точный сосед и веточник это разные намерения. */
+  searchZone?: string;
   verdicts: { verdict: Verdict; label: string }[];
   /** Пусто = фото не одобрено: вместо него инициалы, как требует §5. */
   photoUrl?: string;
@@ -95,6 +97,9 @@ function PersonMiniCard({ p, onOpen }: { p: PoolPerson; onOpen?: (id: string) =>
           {p.verifiedBadge && <Badge tone="accent">{p.verifiedBadge}</Badge>}
         </div>
         <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{p.habits}</span>
+        {p.searchZone && (
+          <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{p.searchZone}</span>
+        )}
         <span style={{ fontSize: 13, fontWeight: 510 }}>
           {p.matches} {plural(p.matches, 'совпадение', 'совпадения', 'совпадений')} анкеты
         </span>

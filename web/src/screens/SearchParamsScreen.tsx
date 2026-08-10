@@ -331,11 +331,14 @@ export function SearchParamsScreen({
       </div>
 
       <div style={F.card}>
-        {/* Зона — единственная жёсткая граница пула (§2.1), поэтому первой. */}
+        {/* Зона — единственная жёсткая граница пула (§2.1), поэтому первой.
+            В режиме редактирования она заперта: зона — идентичность поиска
+            (§3), смена зоны = новый поиск. */}
         <div
-          onClick={() => setPickerOpen(true)}
+          onClick={mode === 'edit' ? undefined : () => setPickerOpen(true)}
           style={{
             ...F.zoneRow,
+            cursor: mode === 'edit' ? 'default' : 'pointer',
             borderColor: bad('zone_id') ? 'var(--tg-theme-destructive-text-color)' : 'transparent',
           }}
         >
@@ -359,8 +362,15 @@ export function SearchParamsScreen({
               </span>
             )}
           </span>
-          <span style={{ flex: '0 0 auto', fontSize: 20, color: 'var(--tg-theme-hint-color)' }}>›</span>
+          {mode !== 'edit' && (
+            <span style={{ flex: '0 0 auto', fontSize: 20, color: 'var(--tg-theme-hint-color)' }}>›</span>
+          )}
         </div>
+        {mode === 'edit' && (
+          <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)', padding: '0 2px' }}>
+            Зона не меняется — другой район или ветка это новый поиск
+          </span>
+        )}
 
         {/* Бюджет — «с человека»: цена доли, не аренда целиком. */}
         <div style={F.field}>

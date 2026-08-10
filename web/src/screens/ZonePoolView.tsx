@@ -167,6 +167,7 @@ function toPerson(p: PoolPersonDTO): PoolPerson {
     name: p.name,
     age: p.age,
     habits: habitsLine(p),
+    searchZone: `ищет ${p.zone.name_in}`,
     matches: p.shared_answers,
     photoUrl: p.photo_url || undefined,
     verdicts: (p.chips ?? []).map((c) => ({

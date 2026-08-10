@@ -72,6 +72,11 @@ type Search struct {
 	UpdatedAt   time.Time
 }
 
+type PoolCandidate struct {
+	User   User
+	Search Search
+}
+
 func ParseTerm(raw string) Term {
 	return parseEnum(raw, TermHalfYear, TermYear, TermOpen)
 }

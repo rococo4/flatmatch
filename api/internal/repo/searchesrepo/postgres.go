@@ -65,6 +65,28 @@ func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Searc
 	return out, nil
 }
 
+func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]entity.PoolCandidate, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+candidateColumns+`
+		FROM searches s
+		JOIN visible_people($1) vp ON vp = s.user_id
+		JOIN users u ON u.id = s.user_id
+		WHERE s.status = 'active'
+		  AND s.zone_id = ANY($2)
+		ORDER BY s.created_at DESC`, viewerID, zoneIDs)
+	if err != nil {
+		return nil, fmt.Errorf("pool candidates for viewer %s: %w", viewerID, err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[candidateRow])
+	if err != nil {
+		return nil, fmt.Errorf("pool candidates for viewer %s: %w", viewerID, err)
+	}
+	out := make([]entity.PoolCandidate, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
+}
 func (r *Repo) UpdateParams(ctx context.Context, userID, id uuid.UUID, p entity.SearchParams) (entity.Search, error) {
 	search, err := r.oneEditable(ctx, userID, id, `
 		UPDATE searches SET zone_id = $3, price_min = $4, price_max = $5,

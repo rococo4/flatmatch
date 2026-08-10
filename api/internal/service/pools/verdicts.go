@@ -24,8 +24,6 @@ const (
 	ParamTerm   Param = "term"
 )
 
-// SectionID values match the vested frontend (ZonePoolScreen): «Совпали по
-// всем параметрам» / «Пересекаются частично» / «Не совпали».
 type SectionID string
 
 const (

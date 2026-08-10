@@ -8,10 +8,10 @@
 // частично» / «Не совпали». A match is an INTERSECTION of ranges, not equality,
 // and a NULL parameter means «неважно» and intersects everything.
 //
-// This package also owns visible_people(viewer_id, ...) from §4: the single
-// function every consumer — zone pools, flat pools, counters, pushes, like
-// validation — must go through, so the mutual gender_pref rule and blocks can
-// never be forgotten in one query. Counters are therefore personal.
-//
-// Built in §12 step 3.
+// Every candidate arrives through visible_people(viewer) from §4 — the single
+// visibility function each consumer must go through, so the mutual gender_pref
+// rule and blocks can never be forgotten in one query. Counters are therefore
+// personal, and Counts here answers them from the very same candidates and the
+// very same Compare as the sections: the promo block of the feed and «Мои
+// поиски» cannot drift away from what the pool shows.
 package pools

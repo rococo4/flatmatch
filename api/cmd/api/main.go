@@ -15,13 +15,20 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"flatmatch/api/internal/api/http/authmw"
+	"flatmatch/api/internal/api/http/poolsapi"
+	"flatmatch/api/internal/api/http/searchesapi"
 	"flatmatch/api/internal/api/http/usersapi"
+	"flatmatch/api/internal/api/http/zonesapi"
 	"flatmatch/api/internal/config"
 	"flatmatch/api/internal/httpx"
 	"flatmatch/api/internal/photostore"
 	"flatmatch/api/internal/postgres"
+	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
+	"flatmatch/api/internal/service/pools"
+	"flatmatch/api/internal/service/searches"
 	"flatmatch/api/internal/service/users"
+	"flatmatch/api/internal/service/zones"
 	"flatmatch/api/internal/tgbot"
 	"flatmatch/api/internal/tma"
 	"flatmatch/api/migrations"
@@ -71,12 +78,22 @@ func run() error {
 		return err
 	}
 
+	// A broken directory has to kill the process here, not a request at noon.
+	dir, err := zones.Load()
+	if err != nil {
+		return err
+	}
+
+	searchesRepo := searchesrepo.New(pool)
 	userService := users.New(usersrepo.New(pool), photos)
+	searchService := searches.New(searchesRepo, dir)
+	poolService := pools.New(searchesRepo, dir, photos)
 	validator := tma.NewValidator(cfg.BotToken, cfg.InitDataTTL)
 
 	server := &http.Server{
-		Addr:              cfg.APIAddr,
-		Handler:           router(log, pool, validator, userService, photos.Root()),
+		Addr: cfg.APIAddr,
+		Handler: router(log, pool, validator,
+			userService, searchService, poolService, dir, photos.Root()),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -131,9 +148,12 @@ func run() error {
 
 func router(
 	log *slog.Logger,
-	pool httpx.Pinger,
+	pinger httpx.Pinger,
 	validator authmw.Validator,
 	accounts *users.Service,
+	searchService *searches.Service,
+	poolService *pools.Service,
+	dir *zones.Directory,
 	mediaRoot string,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -143,7 +163,7 @@ func router(
 	r.Use(httpx.RequestLogger(log))
 	r.Use(middleware.Recoverer)
 
-	r.Get("/healthz", httpx.Health(pool))
+	r.Get("/healthz", httpx.Health(pinger))
 
 	// Photos are served without authentication, the same way an object storage
 	// bucket will serve them later: the key is a random uuid, so the address is
@@ -154,6 +174,14 @@ func router(
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authmw.New(validator, accounts))
 		r.Mount("/", usersapi.New(accounts).Routes())
+		r.Method(http.MethodGet, "/zones", zonesapi.New(dir))
+		r.Mount("/searches", searchesapi.New(searchService, poolService, dir).Routes())
+
+		// chi allows only one Mount per pattern, so the two pool routes are
+		// registered directly instead of via a second Mount("/", …).
+		poolsHandler := poolsapi.New(poolService, searchService, dir)
+		r.Get("/feed", poolsHandler.Feed)
+		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
 	})
 
 	return r

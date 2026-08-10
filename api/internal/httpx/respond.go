@@ -20,6 +20,9 @@ const (
 	CodeProfileIncomplete Code = "profile_incomplete"
 	CodeTooLarge          Code = "too_large"
 	CodeUnsupportedMedia  Code = "unsupported_media"
+
+	CodeSearchLimit  Code = "search_limit"
+	CodeSearchClosed Code = "search_closed"
 )
 
 type ErrorBody struct {

@@ -16,5 +16,5 @@
 // rooms, move-in month, term. Gender is a server-side visibility rule, not a
 // filter. Habits are sorting signals and verdict chips, never cut-offs.
 //
-// Empty on purpose — built in §12 step 3.
+// Built in §12 step 3.
 package searches

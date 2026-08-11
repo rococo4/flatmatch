@@ -1,14 +1,17 @@
 /* Оболочка приложения: тема, табы §6 и переходы между экранами.
 
    Живыми данными питаются анкета (§12 шаг 2), зоны, поиски, лента и зонный
-   пул (§12 шаг 3). Точки, лайки и мэтчи ждут своих шагов и пока отрисованы на
-   DEMO_*-данных из макета: вёрстка и переходы настоящие, содержимое подставное.
+   пул (§12 шаг 3), профиль человека, лайки и мэтчи (§12 шаг 4). Точки ждут
+   своего шага и пока отрисованы на DEMO_*-данных из макета: вёрстка и
+   переходы настоящие, содержимое подставное.
 
    Здесь же живёт состояние ленты — намеренно выше экранов: переключение табов
    не должно ронять выдачу и перезапрашивать её. И здесь единственный владелец
    списка поисков: после любой мутации он перечитывается с сервера целиком,
    локальных «оптимистичных» правок нет — счётчики и номера слотов считает
-   только сервер. */
+   только сервер. Входящие лайки и мэтчи — по тому же правилу: бейдж на табе
+   считается по одному списку, который перечитывается после каждого лайка,
+   откуда бы его ни поставили. */
 import { useCallback, useEffect, useState } from 'react';
 import { isMiniAppDark, useSignal } from '@telegram-apps/sdk-react';
 
@@ -17,19 +20,32 @@ import {
   closeSearch,
   createSearch,
   fetchFeed,
+  fetchIncoming,
+  fetchMatches,
   fetchMe,
   fetchSearches,
   fetchZones,
+  postLike,
   reactivateSearch,
   updateSearch,
   type CloseReason,
   type FeedPromo,
   type FeedResponse,
+  type IncomingLikeDTO,
+  type MatchDTO,
   type Profile,
   type SearchResponse,
   type Zone,
 } from './api/client';
-import { closeReasonLabel, dayMonth, occupationLabel, paramChips, plural } from './api/format';
+import {
+  closeReasonLabel,
+  dayMonth,
+  habitsLine,
+  occupationLabel,
+  paramChips,
+  plural,
+  relativeDay,
+} from './api/format';
 import { TabBar, type Tab } from './ui/TabBar';
 import type { PromoState } from './ui/PoolPromoBlock';
 import { OnboardingFlow } from './screens/OnboardingFlow';
@@ -45,15 +61,9 @@ import {
 } from './screens/SearchParamsScreen';
 import { ZonePoolView } from './screens/ZonePoolView';
 import { PersonProfileView } from './screens/PersonProfileView';
-import {
-  DEMO_MATCH_PARAMS,
-  DEMO_MATCH_PROFILE,
-  DEMO_MATCH_WHERE,
-  DEMO_NEXT_STEPS,
-  MatchScreen,
-} from './screens/MatchScreen';
+import { MatchView } from './screens/MatchView';
 import { DEMO_FLAT_POOL, FlatPoolScreen } from './screens/FlatPoolScreen';
-import { DEMO_INCOMING, IncomingLikesScreen } from './screens/IncomingLikesScreen';
+import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
 import {
   DEMO_MARKET_FLATS,
   DEMO_MY_HOMES,
@@ -61,7 +71,7 @@ import {
   type ArchivedSearch,
   type SavedSearch,
 } from './screens/MySearchesScreen';
-import { DEMO_MY_MATCHES, MyProfileScreen } from './screens/MyProfileScreen';
+import { MyProfileScreen, type MyMatch } from './screens/MyProfileScreen';
 import { FlatLinkFormScreen, HomePointFormScreen } from './screens/PointFormScreens';
 import { PointCreatedScreen } from './screens/PointCreatedScreen';
 import { CloseSearchSheet, LeavePoolSheet, StillLiveSheet } from './screens/EdgeStates';
@@ -170,9 +180,17 @@ export function App() {
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [poolZone, setPoolZone] = useState<string | null>(null);
   const [person, setPerson] = useState<PersonTarget | null>(null);
-  // Мэтч состоялся — id уже здесь; саммари по нему грузит §12 шаг 4 (экран
-  // пока на DEMO-данных макета).
+  /** Открытый мэтч: саммари по нему грузит MatchView. */
   const [matchId, setMatchId] = useState<string | null>(null);
+  /**
+   * Входящие лайки и мэтчи — здесь, а не в экранах: по длине входящих считается
+   * бейдж таба «Профиль», и он обязан быть тем же числом, что в разделе.
+   */
+  const [incoming, setIncoming] = useState<IncomingLikeDTO[]>([]);
+  const [matches, setMatches] = useState<MatchDTO[]>([]);
+  /** Кому сейчас отвечаем: второй тап не должен уйти вторым запросом. */
+  const [replying, setReplying] = useState<string | null>(null);
+  const [incomingError, setIncomingError] = useState<string | null>(null);
   /**
    * Профиль, который ждёт сохранённого поиска.
    *
@@ -189,6 +207,22 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
   }, [isDark]);
+
+  /**
+   * Перечитывает входящие лайки и мэтчи.
+   *
+   * Оба списка меняет один и тот же жест: ответ на входящий убирает его из
+   * «Тебя лайкнули» и добавляет мэтч. Отказ переживаем молча — на экране
+   * останутся прежние цифры, а не пустота вместо них.
+   */
+  const reloadLikes = useCallback(() => {
+    void fetchIncoming()
+      .then(setIncoming)
+      .catch(() => undefined);
+    void fetchMatches()
+      .then(setMatches)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +267,10 @@ export function App() {
           .catch(() => {
             // Лента остаётся на экране входа — оттуда всё доступно.
           });
+
+        // Бейдж входящих на табе «Профиль» нужен с первого экрана — иначе о
+        // лайке узнают только те, кто сам зашёл в раздел.
+        reloadLikes();
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -244,7 +282,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadLikes]);
 
   const setProfile = useCallback((profile: Profile) => setState({ kind: 'ready', profile }), []);
 
@@ -296,7 +334,7 @@ export function App() {
     );
   }
 
-  const unreadLikes = DEMO_INCOMING.length;
+  const unreadLikes = incoming.length;
   const back = () => setView('tab');
 
   const active = (searches ?? []).filter((s) => s.status === 'active');
@@ -424,6 +462,41 @@ export function App() {
   const openZonePool = (zoneId: string) => {
     setPoolZone(zoneId);
     setView('zonePool');
+  };
+
+  const openMatch = (id: string) => {
+    setMatchId(id);
+    setView('match');
+  };
+
+  const openIncoming = () => {
+    // Отказ прошлого ответа не должен встречать на входе: он уже рассказан.
+    setIncomingError(null);
+    setView('incoming');
+  };
+
+  /**
+   * «Ответить» из «Тебя лайкнули»: тот же дорогой лайк, но бесплатный (§2.3).
+   *
+   * Контекст берётся из самого входящего — пул, в котором пересеклись, а не
+   * тот, где мы сейчас стоим. Взаимность гарантирована (в списке ровно те, кто
+   * лайкнул), но ветвимся всё равно по ответу сервера: мэтч рождается там.
+   */
+  const replyLike = async (userId: string) => {
+    if (replying) return;
+    setReplying(userId);
+    setIncomingError(null);
+    try {
+      const res = await postLike(userId, incoming.find((l) => l.user_id === userId)?.zone?.id);
+      reloadLikes();
+      if (res.matched && res.match_id) openMatch(res.match_id);
+    } catch (e: unknown) {
+      // 403 «анкета на проверке» — единственный ожидаемый отказ ответа:
+      // лимита он не тратит и поиска не требует. Показываем слова сервера.
+      setIncomingError(asApiError(e).message);
+    } finally {
+      setReplying(null);
+    }
   };
 
   const openPerson = (target: PersonTarget) => {
@@ -581,7 +654,7 @@ export function App() {
             onAddSearch={() => openLookForm(EMPTY_DRAFT)}
             onReactivate={(id) => void reactivate(id)}
             onOpenFlatPool={() => setView('flatPool')}
-            onOpenIncomingLikes={() => setView('incoming')}
+            onOpenIncomingLikes={openIncoming}
             onCreateFlatPoint={() => setView('flatForm')}
             onCreateHomePoint={() => setView('homeForm')}
           />
@@ -595,9 +668,10 @@ export function App() {
             status={profile.status === 'active' ? 'active' : 'pending'}
             emailKind={profile.occupation === 'study' ? 'edu' : 'work'}
             incomingLikes={unreadLikes}
-            matches={DEMO_MY_MATCHES}
+            matches={matches.map(toMyMatch)}
             onEdit={() => setView('editProfile')}
-            onOpenIncomingLikes={() => setView('incoming')}
+            onOpenIncomingLikes={openIncoming}
+            onOpenMatch={openMatch}
           />
         );
     }
@@ -669,29 +743,18 @@ export function App() {
             userId={target.userId}
             zoneId={target.zoneId}
             onBack={() => setView(target.back)}
-            onMatched={(id) => {
-              setMatchId(id);
-              setView('match');
-            }}
+            onLiked={reloadLikes}
+            onMatched={openMatch}
             onNeedSearch={(serverMessage) => askSearchForLike(target, serverMessage)}
           />
         );
       }
       case 'match':
+        if (!matchId) return tabScreen();
         return (
-          // Ключ — id состоявшегося мэтча: следующий мэтч должен собрать экран
-          // заново, а не донести на нём саммари предыдущего (§12 шаг 4 повесит
-          // на этот id загрузку саммари вместо DEMO-данных).
-          <MatchScreen
-            key={matchId ?? 'demo'}
-            name="Аня"
-            username="anya"
-            where={DEMO_MATCH_WHERE}
-            params={DEMO_MATCH_PARAMS}
-            profileMatches={DEMO_MATCH_PROFILE}
-            nextSteps={DEMO_NEXT_STEPS}
-            onToFeed={() => toTab('feed')}
-          />
+          // Ключ — id мэтча: следующий должен собрать экран заново, а не
+          // донести на нём саммари предыдущего.
+          <MatchView key={matchId} matchId={matchId} onToFeed={() => toTab('feed')} />
         );
       case 'flatPool':
         return (
@@ -717,13 +780,24 @@ export function App() {
       case 'incoming':
         return (
           <IncomingLikesScreen
-            likes={DEMO_INCOMING}
+            likes={incoming.map(toIncomingRow)}
             unreadLikes={unreadLikes}
+            replyingId={replying}
+            error={incomingError}
             onBack={back}
-            onOpenContext={() => toTab('searches')}
-            // Входящие всё ещё из макета (§12 шаг 4, вторая половина): по
-            // подставным id ни профиль, ни ответный лайк не работают.
-            onReply={() => setView('match')}
+            // Контекст лайка тапабелен — он ведёт в тот самый пул (§6).
+            onOpenContext={(id) => {
+              const zone = incoming.find((l) => l.user_id === id)?.zone;
+              if (zone) openZonePool(zone.id);
+            }}
+            onOpenProfile={(id) =>
+              openPerson({
+                userId: id,
+                zoneId: incoming.find((l) => l.user_id === id)?.zone?.id,
+                back: 'incoming',
+              })
+            }
+            onReply={(id) => void replyLike(id)}
             onToFeed={() => toTab('feed')}
           />
         );
@@ -828,6 +902,38 @@ function buildPromo(p: FeedPromo, active: SearchResponse[], slotsFull: boolean):
     avatars: p.avatars,
     slot: p.slots_used + 1,
     slotsTotal: p.slots_total,
+  };
+}
+
+/**
+ * Карточка входящего лайка (§6).
+ *
+ * Контекста может не быть: зона выпала из справочника или лайк пришёл ответом,
+ * у которого пула нет. Тогда мини-карточки просто нет — выдумывать ей место
+ * пересечения нельзя.
+ */
+function toIncomingRow(l: IncomingLikeDTO): IncomingLike {
+  return {
+    id: l.user_id,
+    name: l.name,
+    age: l.age,
+    photoUrl: l.photo_url || undefined,
+    habits: habitsLine(l),
+    when: relativeDay(l.at),
+    notSearching: l.not_searching,
+    contextZone: l.zone ? `из пула ${l.zone.name_gen}` : undefined,
+  };
+}
+
+/** Строка «Моих мэтчей»: контакты остаются на экране самого мэтча (§3). */
+function toMyMatch(m: MatchDTO): MyMatch {
+  return {
+    id: m.match_id,
+    name: m.peer.name,
+    age: m.peer.age,
+    photoUrl: m.peer.photo_url || undefined,
+    context: m.zone?.name,
+    when: `мэтч ${relativeDay(m.at)}`,
   };
 }
 

@@ -8,6 +8,7 @@
    Чистые функции, React здесь не живёт. */
 import type {
   CloseReason,
+  ParamOverlap,
   PoolChip,
   PoolPersonDTO,
   PoolSectionDTO,
@@ -135,6 +136,14 @@ const CLOSE_REASON_LABEL: Record<CloseReason, string> = {
   changed_mind: 'передумал',
 };
 
+/** Подписи строк блока «ПО ПАРАМЕТРАМ» на экране мэтча (§6). */
+const OVERLAP_LABEL: Record<ParamOverlap['param'], string> = {
+  price: 'Бюджет',
+  rooms: 'Комнаты',
+  move_in: 'Заезд',
+  term: 'Срок',
+};
+
 const SECTION_LABEL: Record<PoolSectionDTO['id'], string> = {
   all: 'СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ',
   partial: 'ПЕРЕСЕКАЮТСЯ ЧАСТИЧНО',
@@ -159,6 +168,8 @@ const MONTHS_IN = [
 
 const MONTH_FMT = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
 const DAY_MONTH_FMT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+
+const DAY_MS = 86_400_000;
 
 /**
  * Часы возврата лимита лайков — всегда московские, а не телефонные.
@@ -186,7 +197,7 @@ export function chipLabel(chip: PoolChip, params: SearchParamsNoZone): string {
     case 'price':
       return priceShort(params);
     case 'rooms':
-      return roomsShort(params) ?? NOT_SET.rooms;
+      return roomsShort(params.rooms_min, params.rooms_max) ?? NOT_SET.rooms;
     case 'move_in':
       return params.move_in ? monthName(params.move_in) : NOT_SET.move_in;
     case 'term':
@@ -213,8 +224,40 @@ export function paramChips(p: SearchParamsNoZone, opts?: { zoneName?: string }):
   return out;
 }
 
-/** Строка привычек мини-карточки: «сова · не курю · без животных». */
-export function habitsLine(p: PoolPersonDTO): string {
+/**
+ * Строка блока «ПО ПАРАМЕТРАМ» мэтч-экрана: «Бюджет — у обоих 40–45к» (§6).
+ *
+ * Сервер шлёт только пересечение и только по тому, что назвали ОБА, поэтому
+ * ветки «не указано» здесь нет: нечего сказать — строки не будет вовсе (null).
+ * Вырожденная вилка печатается одним числом («у обоих 45к»), комнаты без
+ * верхней границы — «от 2 комн.»: её не назвал никто из двоих.
+ */
+export function overlapRow(o: ParamOverlap): { label: string; value: string } | null {
+  switch (o.param) {
+    case 'price':
+      return o.max != null
+        ? { label: OVERLAP_LABEL.price, value: `у обоих ${priceRange(o.min ?? 0, o.max)}` }
+        : null;
+    case 'rooms': {
+      const rooms = roomsShort(o.min, o.max);
+      return rooms ? { label: OVERLAP_LABEL.rooms, value: `у обоих ${rooms}` } : null;
+    }
+    case 'move_in':
+      return o.month
+        ? { label: OVERLAP_LABEL.move_in, value: `${monthName(o.month)} у обоих` }
+        : null;
+    case 'term':
+      return o.term ? { label: OVERLAP_LABEL.term, value: `${TERM_LABEL[o.term]} у обоих` } : null;
+  }
+}
+
+/**
+ * Строка привычек мини-карточки: «сова · не курю · без животных».
+ *
+ * Берёт три поля, а не человека пула целиком: ровно их же шлёт карточка
+ * входящего лайка, и одна метка должна обслуживать оба экрана.
+ */
+export function habitsLine(p: Pick<PoolPersonDTO, 'schedule' | 'smoking' | 'pets_own'>): string {
   return [SCHEDULE_LABEL[p.schedule], SMOKING_LABEL[p.smoking], PETS_OWN_LABEL[p.pets_own]]
     .filter(Boolean)
     .join(' · ');
@@ -275,6 +318,21 @@ export function dayMonth(iso: string): string {
 }
 
 /**
+ * Когда это было: «сегодня» / «вчера» / «26 июля».
+ *
+ * Считается от полуночи, а не «за последние 24 часа»: вчерашний вечер — это
+ * вчера, даже если прошло меньше суток.
+ */
+export function relativeDay(iso: string): string {
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const ago = midnight.getTime() - new Date(iso).getTime();
+  if (ago <= 0) return 'сегодня';
+  if (ago <= DAY_MS) return 'вчера';
+  return dayMonth(iso);
+}
+
+/**
  * Ближайшие месяцы для чипов заезда, начиная с текущего.
  *
  * Готовый список, а не `<input type="month">`: нативный пикер месяца в
@@ -293,14 +351,27 @@ export function monthOptions(count = 6): { value: string; label: string }[] {
 
 /** «35–45к» или «до 45к»: снизу вилка открыта чаще, чем сверху. */
 function priceShort(p: SearchParamsNoZone): string {
-  const max = `${Math.round(p.price_max / 1000)}к`;
-  return p.price_min != null ? `${Math.round(p.price_min / 1000)}–${max}` : `до ${max}`;
+  return p.price_min != null ? `${thousands(p.price_min)}–${k(p.price_max)}` : `до ${k(p.price_max)}`;
+}
+
+/** Вилка пересечения: «40–45к», «45к» у вырожденной, «до 45к» без нижней границы. */
+function priceRange(min: number, max: number): string {
+  if (min >= max) return k(max);
+  if (min <= 0) return `до ${k(max)}`;
+  return `${thousands(min)}–${k(max)}`;
+}
+
+/** Деньги коротко: 45000 → «45к». Буква одна на вилку, отсюда и thousands(). */
+function k(n: number): string {
+  return `${thousands(n)}к`;
+}
+
+function thousands(n: number): number {
+  return Math.round(n / 1000);
 }
 
 /** Короткая комнатность для вердикт-чипа: «2 комн.» / «2–3 комн.» / «от 3 комн.». */
-function roomsShort(p: SearchParamsNoZone): string | null {
-  const min = p.rooms_min ?? null;
-  const max = p.rooms_max ?? null;
+function roomsShort(min?: number | null, max?: number | null): string | null {
   if (min != null && max != null) return min === max ? `${min} комн.` : `${min}–${max} комн.`;
   if (min != null) return `от ${min} комн.`;
   if (max != null) return `до ${max} комн.`;

@@ -2,12 +2,22 @@
 import type { CSSProperties } from 'react';
 import { Avatar, S } from '../ui/primitives';
 
+/**
+ * Строка «Моих мэтчей».
+ *
+ * Контакта здесь нет намеренно: @username живёт только на экране самого
+ * мэтча (§3), сюда он и не приезжает — строка ведёт туда тапом.
+ */
 export type MyMatch = {
+  /** id мэтча: по нему открывается саммари с контактом. */
   id: string;
   name: string;
-  context: string; // «Хамовники»
+  age: number;
+  /** Пусто = фото не одобрено: у аватара заглушка с инициалами (§5). */
+  photoUrl?: string;
+  /** Зона контекста: «Хамовники». Пусто — контекста не осталось. */
+  context?: string;
   when: string; // «мэтч сегодня»
-  username: string; // без @
 };
 
 export type ProfileStatus = 'pending' | 'active' | 'no_photo';
@@ -138,6 +148,7 @@ export function MyProfileScreen({
   matches,
   onEdit,
   onOpenIncomingLikes,
+  onOpenMatch,
   onVerifyEmail,
 }: {
   name: string;
@@ -150,6 +161,7 @@ export function MyProfileScreen({
   matches: MyMatch[];
   onEdit?: () => void;
   onOpenIncomingLikes?: () => void;
+  onOpenMatch?: (id: string) => void;
   onVerifyEmail?: () => void;
 }) {
   const st = STATUS_TEXT[status];
@@ -219,32 +231,45 @@ export function MyProfileScreen({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <span style={S.sectionTitle}>МОИ МЭТЧИ · {matches.length}</span>
-          {matches.map((m) => (
-            <div
-              key={m.id}
-              style={{ ...L.block, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-            >
-              <Avatar name={m.name} size={44} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 15, fontWeight: 590 }}>
-                  {m.name} · {m.context}
+        {/* Пустая секция не рисуется: «МОИ МЭТЧИ · 0» — шум, а не информация. */}
+        {matches.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span style={S.sectionTitle}>МОИ МЭТЧИ · {matches.length}</span>
+            {matches.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  ...L.block,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  cursor: 'pointer',
+                }}
+                onClick={() => onOpenMatch?.(m.id)}
+              >
+                <Avatar name={m.name} size={44} src={m.photoUrl} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 15, fontWeight: 590 }}>
+                    {m.name}, {m.age}
+                    {m.context ? ` · ${m.context}` : ''}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{m.when}</span>
+                </div>
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontSize: 17,
+                    color: 'var(--tg-theme-hint-color)',
+                    lineHeight: 1,
+                  }}
+                >
+                  ›
                 </span>
-                <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{m.when}</span>
               </div>
-              <button type="button" style={L.smallButton}>
-                @{m.username}
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export const DEMO_MY_MATCHES: MyMatch[] = [
-  { id: 'm1', name: 'Максим', context: 'Хамовники', when: 'мэтч сегодня', username: 'maxim_k' },
-  { id: 'm2', name: 'Аня', context: 'Сокол', when: 'мэтч 26 июля', username: 'anyakoval' },
-];

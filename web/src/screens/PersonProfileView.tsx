@@ -67,6 +67,7 @@ export function PersonProfileView({
   userId,
   zoneId,
   onBack,
+  onLiked,
   onMatched,
   onNeedSearch,
 }: {
@@ -74,6 +75,11 @@ export function PersonProfileView({
   /** Пул, из которого открыт профиль: и строка «пересеклись», и контекст лайка. */
   zoneId?: string;
   onBack?: () => void;
+  /**
+   * Лайк ушёл. Списки входящих и мэтчей держит оболочка: ответ на входящий
+   * убирает его из «Тебя лайкнули», а взаимный — добавляет мэтч.
+   */
+  onLiked?: () => void;
   /** Взаимный лайк: экран мэтча забирает пара, лайк уже необратим (§2.3). */
   onMatched?: (matchId: string) => void;
   /** Лайк без активного поиска: продукт просит мини-форму поиска, не отказ. */
@@ -111,6 +117,7 @@ export function PersonProfileView({
     setRefusal(null);
     try {
       const res = await postLike(person.user_id, zoneId);
+      onLiked?.();
       // matched приходит и на повторный тап по уже сматченному человеку —
       // ветвимся по нему, а не по already.
       if (res.matched && res.match_id) {

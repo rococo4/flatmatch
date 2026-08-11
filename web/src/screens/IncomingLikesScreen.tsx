@@ -1,22 +1,28 @@
 /* «Тебя лайкнули» — §2.3 / §6.
-   Два вида контекста: зонный пул и отклик на мою точку «к себе».
+   Имя сразу, тапабельная мини-карточка контекста, «Ответить» → мэтч.
    Ответный лайк не тратит лимит — строка сверху, не на карточке.
-   Отдельного авторского экрана откликов нет by design. */
+   Отдельного авторского экрана откликов нет by design.
+
+   Контекст пока только зонный: отклики на точку «к себе» придут вместе с
+   точками (§12 шаг 5), до тех пор рисовать их нечем. */
 import type { CSSProperties } from 'react';
 import { Avatar, Badge, S } from '../ui/primitives';
 import { TabBar } from '../ui/TabBar';
 
 export type IncomingLike = {
+  /** id лайкнувшего: он же адресат ответа и вход в его профиль. */
   id: string;
   name: string;
   age: number;
-  /** «лайкнул тебя» / «хочет заехать» */
-  action: string;
-  when: string; // «вчера», «сегодня»
-  verifiedBadge?: string;
-  context:
-    | { kind: 'zone'; title: string; hint: string } // «из пула Хамовников» + «твой поиск 35–45к»
-    | { kind: 'room'; title: string; hint: string }; // «на твою комнату:» + описание комнаты
+  /** Пусто = фото не одобрено: у аватара заглушка с инициалами (§5). */
+  photoUrl?: string;
+  /** «сова · не курю · без животных» */
+  habits: string;
+  when: string; // «вчера», «сегодня», «26 июля»
+  /** §2.3: лайк жив, а человек сейчас не ищет — пометка, а не причина прятать. */
+  notSearching?: boolean;
+  /** «из пула Хамовников». Нет — зона не пережила лайк или его поставили в ответ. */
+  contextZone?: string;
 };
 
 const L = {
@@ -54,23 +60,23 @@ const L = {
     background: 'var(--card-bg)',
     border: '1px solid var(--sep)',
   } as CSSProperties,
-  contextRow: (room: boolean): CSSProperties => ({
+  contextRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 9,
     padding: '10px 11px',
     borderRadius: 11,
-    background: room ? 'var(--saved-card-bg)' : 'var(--search-card-bg)',
-    border: `1px solid ${room ? 'var(--saved-card-border)' : 'var(--search-card-border)'}`,
+    background: 'var(--search-card-bg)',
+    border: '1px solid var(--search-card-border)',
     cursor: 'pointer',
-  }),
-  dot: (room: boolean): CSSProperties => ({
+  } as CSSProperties,
+  dot: {
     flex: '0 0 auto',
     width: 7,
     height: 7,
     borderRadius: '50%',
-    background: room ? 'var(--type-home-fg)' : 'var(--type-search-fg)',
-  }),
+    background: 'var(--type-search-fg)',
+  } as CSSProperties,
   buttons: { display: 'flex', gap: 8 } as CSSProperties,
   secondary: {
     flex: '1 1 0',
@@ -112,6 +118,8 @@ const L = {
 export function IncomingLikesScreen({
   likes,
   unreadLikes,
+  replyingId,
+  error,
   onBack,
   onOpenContext,
   onOpenProfile,
@@ -120,12 +128,17 @@ export function IncomingLikesScreen({
 }: {
   likes: IncomingLike[];
   unreadLikes: number;
+  /** Чей ответ сейчас улетает: кнопки гаснут, второй тап не уходит вторым лайком. */
+  replyingId?: string | null;
+  error?: string | null;
   onBack?: () => void;
   onOpenContext?: (id: string) => void;
   onOpenProfile?: (id: string) => void;
   onReply?: (id: string) => void;
   onToFeed?: () => void;
 }) {
+  const busy = Boolean(replyingId);
+
   return (
     <div style={L.screen}>
       <div style={L.header}>
@@ -156,6 +169,12 @@ export function IncomingLikesScreen({
       <div style={L.body}>
         <span style={L.topLine}>Ответный лайк не тратит лимит</span>
 
+        {error && (
+          <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>
+            {error}
+          </span>
+        )}
+
         {likes.length === 0 ? (
           <div style={L.empty}>
             <span style={{ fontSize: 16, fontWeight: 590, textAlign: 'center', textWrap: 'pretty' }}>
@@ -170,49 +189,54 @@ export function IncomingLikesScreen({
             </button>
           </div>
         ) : (
-          likes.map((l) => {
-            const room = l.context.kind === 'room';
-            return (
-              <article key={l.id} style={L.card}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Avatar name={l.name} size={48} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: l.verifiedBadge ? 4 : 3, minWidth: 0 }}>
-                    <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>
-                      {l.name}, {l.age} {l.action}
+          likes.map((l) => (
+            <article key={l.id} style={L.card}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar name={l.name} size={48} src={l.photoUrl} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>
+                    {l.name}, {l.age}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>
+                      {l.when} · {l.habits}
                     </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{l.when}</span>
-                      {l.verifiedBadge && <Badge tone="accent">{l.verifiedBadge}</Badge>}
-                    </div>
+                    {l.notSearching && <Badge>сейчас не в поиске</Badge>}
                   </div>
                 </div>
+              </div>
 
-                <div style={L.contextRow(room)} onClick={() => onOpenContext?.(l.id)}>
-                  <span style={L.dot(room)} />
+              {l.contextZone && (
+                <div style={L.contextRow} onClick={() => onOpenContext?.(l.id)}>
+                  <span style={L.dot} />
                   <span style={{ flex: '1 1 auto', fontSize: 13, lineHeight: 1.35, minWidth: 0 }}>
-                    <b style={{ fontWeight: room ? 590 : 400, color: room ? 'var(--type-home-fg)' : 'inherit' }}>
-                      {l.context.title}
-                    </b>{' '}
-                    <span style={{ color: room ? 'inherit' : 'var(--tg-theme-subtitle-text-color)' }}>
-                      {l.context.hint}
-                    </span>
+                    {l.contextZone}
                   </span>
                   <span style={{ flex: '0 0 auto', fontSize: 17, color: 'var(--tg-theme-hint-color)', lineHeight: 1 }}>
                     ›
                   </span>
                 </div>
+              )}
 
-                <div style={L.buttons}>
-                  <button type="button" style={L.secondary} onClick={() => onOpenProfile?.(l.id)}>
-                    Профиль
-                  </button>
-                  <button type="button" style={L.reply} onClick={() => onReply?.(l.id)}>
-                    Хочу жить вместе
-                  </button>
-                </div>
-              </article>
-            );
-          })
+              <div style={L.buttons}>
+                <button type="button" style={L.secondary} onClick={() => onOpenProfile?.(l.id)}>
+                  Профиль
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...L.reply,
+                    opacity: replyingId === l.id ? 0.6 : 1,
+                    cursor: busy ? 'default' : 'pointer',
+                  }}
+                  disabled={busy}
+                  onClick={() => onReply?.(l.id)}
+                >
+                  Ответить
+                </button>
+              </div>
+            </article>
+          ))
         )}
       </div>
 
@@ -220,28 +244,3 @@ export function IncomingLikesScreen({
     </div>
   );
 }
-
-/* Демо-данные для вёрстки. */
-export const DEMO_INCOMING: IncomingLike[] = [
-  {
-    id: 'l1',
-    name: 'Игорь',
-    age: 24,
-    action: 'лайкнул тебя',
-    when: 'вчера',
-    context: { kind: 'zone', title: 'из пула Хамовников ·', hint: 'твой поиск 35–45к' },
-  },
-  {
-    id: 'l2',
-    name: 'Аня',
-    age: 21,
-    action: 'хочет заехать',
-    when: 'сегодня',
-    verifiedBadge: 'Студент ВШЭ',
-    context: {
-      kind: 'room',
-      title: 'на твою комнату:',
-      hint: 'комната в двушке · м. Аэропорт · 44к',
-    },
-  },
-];

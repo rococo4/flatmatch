@@ -56,7 +56,7 @@ func (m Match) Peer(me uuid.UUID) uuid.UUID
 
 type LikeBudget struct {
 	Remaining  int
-	NextFreeAt *time.Time // nil, пока есть свободные слоты
+	NextFreeAt *time.Time // nil только при полном остатке (см. Task 2 Budget)
 }
 
 // LikeResult is what one like attempt produced.

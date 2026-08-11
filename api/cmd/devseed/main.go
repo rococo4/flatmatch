@@ -5,8 +5,13 @@
 // The crowd is deterministic: fixed Telegram ids from seedTGBase up, upserted
 // by tg_id, searches wiped and re-inserted. Reruns converge to the same state
 // instead of piling up copies, and the same tg_id range removes everything —
-// searches first, because searches.user_id references users:
+// in reference order, and likes and matches name a seed person on either side
+// (the other one is usually the dev account of cmd/devinitdata):
 //
+//	DELETE FROM matches USING users u
+//	 WHERE u.tg_id >= 900000001 AND (a_id = u.id OR b_id = u.id);
+//	DELETE FROM likes_users USING users u
+//	 WHERE u.tg_id >= 900000001 AND (from_id = u.id OR to_id = u.id);
 //	DELETE FROM searches WHERE user_id IN (SELECT id FROM users WHERE tg_id >= 900000001);
 //	DELETE FROM users WHERE tg_id >= 900000001;
 //
@@ -21,6 +26,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -63,6 +69,17 @@ const (
 	// moveInLayout is how the table below spells a move-in month. Only the
 	// month is a product concept (§2.1), the day is always the first.
 	moveInLayout = "2006-01-02"
+
+	// devTGID is the mock account the browser flow logs in as (cmd/devinitdata,
+	// see the README). The seeder never creates it — it only hangs incoming
+	// likes on it when it is already there, so «Тебя лайкнули» has something to
+	// show without a second Telegram account on the other end.
+	devTGID int64 = 777000001
+
+	// devLikeZone is the context of those likes: the pool they were sent from.
+	// Хамовники for both, including Ира — her search is on line-1, and line-1
+	// reaches the Хамовники pool through its stations (§2.1).
+	devLikeZone = "d-khamovniki"
 )
 
 // seedPerson is one row of the table: the questionnaire a pool card renders,
@@ -196,6 +213,15 @@ var (
 	expenses  = []entity.Expenses{entity.ExpensesSplitEqually, entity.ExpensesTracked, entity.ExpensesAsWeGo}
 )
 
+// devLikers are the people who like the dev account, by offset in people:
+// Катя (n=1) and Ира (n=3). Two of them, so «Тебя лайкнули» is a list rather
+// than one card, and Ира comes from a line search — the mini-card of the
+// context then has to render a zone nobody's search names literally.
+//
+// The match itself is deliberately not seeded: answering one of these is the
+// manual half of the acceptance walkthrough.
+var devLikers = []int64{1, 3}
+
 // localHosts is the whole permission of this tool. It writes twenty active
 // people with approved photos; against a production database that is not a
 // mistake to notice the next day. A unix socket is not listed — any host that
@@ -231,7 +257,7 @@ func run() error {
 		return fmt.Errorf("upload the placeholder avatar: %w", err)
 	}
 
-	var users, searches int
+	var users, searches, likes int
 	err = postgres.InTx(ctx, pool, func(tx pgx.Tx) error {
 		ids, err := upsertPeople(ctx, tx)
 		if err != nil {
@@ -239,7 +265,11 @@ func run() error {
 		}
 		users = len(ids)
 
-		searches, err = replaceSearches(ctx, tx, ids)
+		if searches, err = replaceSearches(ctx, tx, ids); err != nil {
+			return err
+		}
+
+		likes, err = likeDevUser(ctx, tx)
 		return err
 	})
 	if err != nil {
@@ -248,6 +278,11 @@ func run() error {
 
 	fmt.Printf("seeded %d people and %d searches; tg_id %d…%d, photo %s\n",
 		users, searches, seedTGBase, seedTGBase+int64(len(people))-1, photos.URL(avatarKey))
+	if likes == 0 {
+		fmt.Printf("dev user %d is not in the database — incoming likes skipped\n", devTGID)
+	} else {
+		fmt.Printf("dev user %d has %d incoming likes from the crowd\n", devTGID, likes)
+	}
 	return nil
 }
 
@@ -325,6 +360,44 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 		}
 	}
 	return len(people), nil
+}
+
+// likeDevUser hangs the incoming likes of devLikers on the dev account and
+// returns how many it ends up with — not how many this run inserted, because a
+// rerun inserts nothing and has to report the same number. Zero means the
+// account is absent, which is the normal state of a fresh database: it appears
+// when the dev logs in, and the seeder has no business creating it.
+//
+// The likes are spent ones, as if sent from the pool: an unspent like is what
+// the reply is (§2.3), and the reply is the manual part of the walkthrough.
+func likeDevUser(ctx context.Context, tx pgx.Tx) (int, error) {
+	var devID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE tg_id = $1`, devTGID).Scan(&devID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("look up the dev user: %w", err)
+	}
+
+	tgIDs := make([]int64, len(devLikers))
+	for i, n := range devLikers {
+		tgIDs[i] = seedTGBase + n - 1
+	}
+
+	// The rows are minutes apart on purpose: «Тебя лайкнули» is ordered by
+	// created_at, and everything written in one transaction shares now(), so
+	// with a plain default the order of the two cards would flip between runs.
+	const query = `
+		INSERT INTO likes_users (from_id, to_id, zone_id, spent, created_at)
+		SELECT u.id, $1, $2, true, now() - make_interval(mins => liker.ord::int)
+		FROM unnest($3::bigint[]) WITH ORDINALITY AS liker(tg_id, ord)
+		JOIN users u ON u.tg_id = liker.tg_id
+		ON CONFLICT (from_id, to_id) DO NOTHING`
+	if _, err := tx.Exec(ctx, query, devID, devLikeZone, tgIDs); err != nil {
+		return 0, fmt.Errorf("like the dev user: %w", err)
+	}
+	return len(devLikers), nil
 }
 
 // profile completes the questionnaire. Every field is filled in: these people

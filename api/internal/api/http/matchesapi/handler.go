@@ -25,8 +25,10 @@ type Matches interface {
 	Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo.MatchWithPeer, matches.Summary, error)
 }
 
+// Photos is the §5 rule about an unapproved photo, and it lives in one place —
+// the users service — because every screen has to hide the same thing.
 type Photos interface {
-	URL(key string) string
+	PhotoURL(u entity.User) string
 }
 
 type ZoneDir interface {
@@ -67,7 +69,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]matchDTO, 0, len(all))
 	for _, m := range all {
-		out = append(out, toMatchDTO(m, h.photoURL(m.Peer), h.zone(m.Match.ContextZone)))
+		out = append(out, toMatchDTO(m, h.photos.PhotoURL(m.Peer), h.zone(m.Match.ContextZone)))
 	}
 	httpx.JSON(w, r, http.StatusOK, out)
 }
@@ -90,7 +92,7 @@ func (h *Handler) detail(w http.ResponseWriter, r *http.Request) {
 		handleError(w, r, err)
 		return
 	}
-	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photoURL(match.Peer)))
+	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photos.PhotoURL(match.Peer)))
 }
 
 // zone names the historical context of a match: an id the directory no longer
@@ -101,14 +103,6 @@ func (h *Handler) zone(id string) *zoneDTO {
 		return nil
 	}
 	return pointer.To(toZoneDTO(zone))
-}
-
-// photoURL hides a photo moderation has not approved (§5).
-func (h *Handler) photoURL(u entity.User) string {
-	if !u.PhotoApproved() {
-		return ""
-	}
-	return h.photos.URL(u.PhotoKey)
 }
 
 func handleError(w http.ResponseWriter, r *http.Request, err error) {

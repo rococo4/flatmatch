@@ -40,3 +40,22 @@ func TestProfileCarriesNoContacts(t *testing.T) {
 		}
 	}
 }
+
+// TestProfileLikeDirectionsAreNotSwapped: the two flags read the same pair from
+// opposite ends and mean opposite screens — «Ответить — мэтч сразу» against
+// «уже лайкнул». Asymmetric values are the only way to catch them crossed.
+func TestProfileLikeDirectionsAreNotSwapped(t *testing.T) {
+	const myLike, likedMe = true, false
+
+	raw, err := json.Marshal(toProfile(entity.User{}, entity.User{ID: uuid.New()},
+		"", nil, myLike, likedMe, entity.LikeBudget{Remaining: 4}))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	for _, want := range []string{`"my_like":true`, `"liked_me":false`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("profile JSON %s\ndoes not contain %s", raw, want)
+		}
+	}
+}

@@ -209,15 +209,15 @@ func router(
 		r.Mount("/", usersapi.New(d.accounts).Routes())
 		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
 		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.dir).Routes())
-		r.Mount("/likes", likesapi.New(d.likes, d.photos, d.dir).Routes())
-		r.Mount("/matches", matchesapi.New(d.matches, d.photos, d.dir).Routes())
+		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.dir).Routes())
+		r.Mount("/matches", matchesapi.New(d.matches, d.accounts, d.dir).Routes())
 
 		// chi allows only one Mount per pattern, so the routes that would need a
 		// second Mount("/", …) are registered directly.
 		poolsHandler := poolsapi.New(d.pools, d.searches, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
-		r.Get("/people/{id}", peopleapi.New(d.people, d.pairLikes, d.photos, d.dir).Profile)
+		r.Get("/people/{id}", peopleapi.New(d.people, d.pairLikes, d.accounts, d.dir).Profile)
 	})
 
 	return r

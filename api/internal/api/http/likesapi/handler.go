@@ -31,8 +31,10 @@ type Likes interface {
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
 
+// Photos is the §5 rule about an unapproved photo, and it lives in one place —
+// the users service — because every screen has to hide the same thing.
 type Photos interface {
-	URL(key string) string
+	PhotoURL(u entity.User) string
 }
 
 type ZoneDir interface {
@@ -77,8 +79,9 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "to_id is not a uuid", []string{"to_id"}, err)
 		return
 	}
-	// The table's CHECK (from_id <> to_id) would turn this into a 500; naming
-	// the field costs one comparison.
+	// Without this the answer would be 404: visible_people never returns the
+	// viewer himself. 400 invalid_field труднее спутать с «нет такого
+	// человека» — сам себе это ошибка запроса, а не отсутствие адресата.
 	if toID == user.ID {
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "cannot like yourself", []string{"to_id"}, errSelfLike)
 		return
@@ -107,7 +110,7 @@ func (h *Handler) incoming(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]incomingDTO, 0, len(likes))
 	for _, like := range likes {
-		out = append(out, toIncoming(like, h.photoURL(like.From), h.zone(like.ZoneID)))
+		out = append(out, toIncoming(like, h.photos.PhotoURL(like.From), h.zone(like.ZoneID)))
 	}
 	httpx.JSON(w, r, http.StatusOK, out)
 }
@@ -121,14 +124,6 @@ func (h *Handler) zone(id string) *zoneDTO {
 		return nil
 	}
 	return pointer.To(toZoneDTO(zone))
-}
-
-// photoURL hides a photo moderation has not approved (§5).
-func (h *Handler) photoURL(u entity.User) string {
-	if !u.PhotoApproved() {
-		return ""
-	}
-	return h.photos.URL(u.PhotoKey)
 }
 
 func decode(w http.ResponseWriter, r *http.Request, dst any) bool {

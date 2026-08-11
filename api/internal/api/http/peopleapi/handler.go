@@ -31,8 +31,10 @@ type Likes interface {
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
 
+// Photos is the §5 rule about an unapproved photo, and it lives in one place —
+// the users service — because every screen has to hide the same thing.
 type Photos interface {
-	URL(key string) string
+	PhotoURL(u entity.User) string
 }
 
 type ZoneDir interface {
@@ -87,7 +89,7 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, r, http.StatusOK, toProfile(viewer, target,
-		h.photoURL(target), h.contextZone(r.URL.Query().Get("zone")),
+		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")),
 		myLike, likedMe, budget))
 }
 
@@ -101,15 +103,6 @@ func (h *Handler) contextZone(id string) *zoneDTO {
 		return nil
 	}
 	return pointer.To(toZoneDTO(zone))
-}
-
-// photoURL hides a photo moderation has not approved (§5) — the screen shows
-// its placeholder instead.
-func (h *Handler) photoURL(u entity.User) string {
-	if !u.PhotoApproved() {
-		return ""
-	}
-	return h.photos.URL(u.PhotoKey)
 }
 
 func handleError(w http.ResponseWriter, r *http.Request, err error) {

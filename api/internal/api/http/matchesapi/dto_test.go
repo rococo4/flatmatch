@@ -4,9 +4,42 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
+
+	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/repo/matchesrepo"
 	"flatmatch/api/internal/service/matches"
 )
+
+// TestMatchListCarriesNoContacts pins where contacts stop (§3): the list is a
+// list, the detail is the handover. The repository reads no contact columns for
+// the list at all, so a leak here could only come from this DTO — which is
+// exactly what the pin watches, since the peer arrives as a whole entity.User.
+func TestMatchListCarriesNoContacts(t *testing.T) {
+	m := matchesrepo.MatchWithPeer{
+		Match: entity.Match{ID: uuid.New(), CreatedAt: time.Now()},
+		Peer: entity.User{
+			ID:         uuid.New(),
+			TelegramID: 777000123,
+			Name:       "Катя",
+			Username:   "katya",
+			Profile:    entity.Profile{Age: 27},
+		},
+	}
+
+	raw, err := json.Marshal(toMatchDTO(m, "/media/photos/a1b2.jpg", nil))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	for _, forbidden := range []string{"username", "tg_id", "katya", "777000123"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Errorf("match list JSON leaks %q:\n%s", forbidden, raw)
+		}
+	}
+}
 
 // TestParamOverlapBounds pins how a range reaches the screen: an unbounded top
 // («от двух комнат и сколько угодно») has no max at all, so the front-end has

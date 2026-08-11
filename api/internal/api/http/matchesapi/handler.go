@@ -1,0 +1,122 @@
+// Package matchesapi serves «Мои мэтчи» and the match screen (§6) — the one
+// place in the product where contacts are handed over, together with the
+// «почему совпали» summary that gives the first message its topics.
+package matchesapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+
+	"github.com/AlekSi/pointer"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
+	"flatmatch/api/internal/api/http/authmw"
+	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/httpx"
+	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/service/matches"
+	"flatmatch/api/internal/service/zones"
+)
+
+type Matches interface {
+	List(ctx context.Context, userID uuid.UUID) ([]matchesrepo.MatchWithPeer, error)
+	Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo.MatchWithPeer, matches.Summary, error)
+}
+
+type Photos interface {
+	URL(key string) string
+}
+
+type ZoneDir interface {
+	Get(id string) (zones.Zone, bool)
+}
+
+type Handler struct {
+	matches Matches
+	photos  Photos
+	dir     ZoneDir
+}
+
+var errNoUserInContext = errors.New("no authenticated user in request context")
+
+func New(matches Matches, photos Photos, dir ZoneDir) *Handler {
+	return &Handler{matches: matches, photos: photos, dir: dir}
+}
+
+func (h *Handler) Routes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", h.list)
+	r.Get("/{id}", h.detail)
+	return r
+}
+
+func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	all, err := h.matches.List(r.Context(), user.ID)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	out := make([]matchDTO, 0, len(all))
+	for _, m := range all {
+		out = append(out, toMatchDTO(m, h.photoURL(m.Peer), h.zone(m.Match.ContextZone)))
+	}
+	httpx.JSON(w, r, http.StatusOK, out)
+}
+
+func (h *Handler) detail(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "match id is not a uuid", []string{"id"}, err)
+		return
+	}
+
+	match, summary, err := h.matches.Detail(r.Context(), user.ID, id)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photoURL(match.Peer)))
+}
+
+// zone names the historical context of a match: an id the directory no longer
+// knows is dropped, the match itself is nobody's to revoke (§2.3).
+func (h *Handler) zone(id string) *zoneDTO {
+	zone, ok := h.dir.Get(id)
+	if !ok {
+		return nil
+	}
+	return pointer.To(toZoneDTO(zone))
+}
+
+// photoURL hides a photo moderation has not approved (§5).
+func (h *Handler) photoURL(u entity.User) string {
+	if !u.PhotoApproved() {
+		return ""
+	}
+	return h.photos.URL(u.PhotoKey)
+}
+
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	// Somebody else's match and a non-existent one are the same answer: a match
+	// is private to its pair (§2.3).
+	if errors.Is(err, entity.ErrNotFound) {
+		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such match", err)
+		return
+	}
+	httpx.Internal(w, r, err)
+}

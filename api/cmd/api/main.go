@@ -15,6 +15,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"flatmatch/api/internal/api/http/authmw"
+	"flatmatch/api/internal/api/http/likesapi"
+	"flatmatch/api/internal/api/http/matchesapi"
+	"flatmatch/api/internal/api/http/peopleapi"
 	"flatmatch/api/internal/api/http/poolsapi"
 	"flatmatch/api/internal/api/http/searchesapi"
 	"flatmatch/api/internal/api/http/usersapi"
@@ -23,8 +26,12 @@ import (
 	"flatmatch/api/internal/httpx"
 	"flatmatch/api/internal/photostore"
 	"flatmatch/api/internal/postgres"
+	"flatmatch/api/internal/repo/likesrepo"
+	"flatmatch/api/internal/repo/matchesrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
+	"flatmatch/api/internal/service/likes"
+	"flatmatch/api/internal/service/matches"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/searches"
 	"flatmatch/api/internal/service/users"
@@ -40,6 +47,26 @@ const shutdownGrace = 15 * time.Second
 // mediaPrefix is where uploaded photos are addressed, both in the URL the API
 // hands out and in the route that serves them.
 const mediaPrefix = "/media"
+
+// deps are the wired components the routes are built from — a struct rather
+// than a dozen positional parameters.
+type deps struct {
+	accounts *users.Service
+	searches *searches.Service
+	pools    *pools.Service
+	likes    *likes.Service
+	matches  *matches.Service
+
+	// people and pairLikes are storage read directly: the profile screen only
+	// asks for facts — is this person visible to the viewer, what have the two
+	// already done to each other, how many slots are left — and there is no
+	// policy in between for a service to hold.
+	people    *usersrepo.Repo
+	pairLikes *likesrepo.Repo
+
+	photos *photostore.Dir
+	dir    *zones.Directory
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -84,16 +111,26 @@ func run() error {
 		return err
 	}
 
+	usersRepo := usersrepo.New(pool)
 	searchesRepo := searchesrepo.New(pool)
-	userService := users.New(usersrepo.New(pool), photos)
-	searchService := searches.New(searchesRepo, dir)
-	poolService := pools.New(searchesRepo, dir, photos)
+	likesRepo := likesrepo.New(pool)
+
+	wired := deps{
+		accounts:  users.New(usersRepo, photos),
+		searches:  searches.New(searchesRepo, dir),
+		pools:     pools.New(searchesRepo, dir, photos),
+		likes:     likes.New(likesRepo, dir),
+		matches:   matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, dir),
+		people:    usersRepo,
+		pairLikes: likesRepo,
+		photos:    photos,
+		dir:       dir,
+	}
 	validator := tma.NewValidator(cfg.BotToken, cfg.InitDataTTL)
 
 	server := &http.Server{
-		Addr: cfg.APIAddr,
-		Handler: router(log, pool, validator,
-			userService, searchService, poolService, dir, photos.Root()),
+		Addr:              cfg.APIAddr,
+		Handler:           router(log, pool, validator, wired),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -150,11 +187,7 @@ func router(
 	log *slog.Logger,
 	pinger httpx.Pinger,
 	validator authmw.Validator,
-	accounts *users.Service,
-	searchService *searches.Service,
-	poolService *pools.Service,
-	dir *zones.Directory,
-	mediaRoot string,
+	d deps,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -169,19 +202,22 @@ func router(
 	// bucket will serve them later: the key is a random uuid, so the address is
 	// unguessable, and a face in a profile is meant to be seen.
 	r.Handle(mediaPrefix+"/*", http.StripPrefix(mediaPrefix+"/",
-		http.FileServer(http.Dir(mediaRoot))))
+		http.FileServer(http.Dir(d.photos.Root()))))
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(authmw.New(validator, accounts))
-		r.Mount("/", usersapi.New(accounts).Routes())
-		r.Method(http.MethodGet, "/zones", zonesapi.New(dir))
-		r.Mount("/searches", searchesapi.New(searchService, poolService, dir).Routes())
+		r.Use(authmw.New(validator, d.accounts))
+		r.Mount("/", usersapi.New(d.accounts).Routes())
+		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
+		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.dir).Routes())
+		r.Mount("/likes", likesapi.New(d.likes, d.photos, d.dir).Routes())
+		r.Mount("/matches", matchesapi.New(d.matches, d.photos, d.dir).Routes())
 
-		// chi allows only one Mount per pattern, so the two pool routes are
-		// registered directly instead of via a second Mount("/", …).
-		poolsHandler := poolsapi.New(poolService, searchService, dir)
+		// chi allows only one Mount per pattern, so the routes that would need a
+		// second Mount("/", …) are registered directly.
+		poolsHandler := poolsapi.New(d.pools, d.searches, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
+		r.Get("/people/{id}", peopleapi.New(d.people, d.pairLikes, d.photos, d.dir).Profile)
 	})
 
 	return r

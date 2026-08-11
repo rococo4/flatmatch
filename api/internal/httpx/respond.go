@@ -23,6 +23,10 @@ const (
 
 	CodeSearchLimit  Code = "search_limit"
 	CodeSearchClosed Code = "search_closed"
+
+	CodeLikeLimit   Code = "like_limit"
+	CodeNeedSearch  Code = "need_search"
+	CodeNotApproved Code = "not_approved"
 )
 
 type ErrorBody struct {

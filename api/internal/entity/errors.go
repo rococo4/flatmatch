@@ -15,6 +15,8 @@ var ErrLikeLimit = errors.New("daily like limit reached")
 
 var ErrNeedSearch = errors.New("an active search is required to like")
 
+var ErrNotApproved = errors.New("profile is not approved yet")
+
 // FieldsError carries the names InvalidFields and MissingFields return, so a
 // caller can say which fields to fix without deriving the list a second time.
 type FieldsError struct {

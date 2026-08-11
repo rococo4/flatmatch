@@ -18,8 +18,16 @@ import (
 func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string) (entity.LikeResult, error) {
 	var out entity.LikeResult
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
-		if err := lockPair(ctx, tx, fromID, toID); err != nil {
+		status, err := lockPair(ctx, tx, fromID, toID)
+		if err != nil {
 			return err
+		}
+		// Draft and pending may browse and save searches, but not spend a dear
+		// like (§5). The gate stands before everything else, including the reply
+		// path: nobody can have liked a draft first — visible_people hides them
+		// — so an unapproved reply is not a case, it is a bug elsewhere.
+		if status != entity.StatusActive {
+			return entity.ErrNotApproved
 		}
 
 		visible, err := exists(ctx, tx,
@@ -36,8 +44,18 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string
 		if err != nil {
 			return err
 		}
+		// An existing like of ours makes this tap a repeat, and a repeat changes
+		// nothing — so the gates below, which guard the SPENDING of a slot, must
+		// not run. Otherwise a second tap on the fifth person liked today would
+		// answer «limit reached» instead of «already liked», and so would a tap
+		// made after the search that paid for the like was closed.
+		already, err := exists(ctx, tx,
+			`SELECT 1 FROM likes_users WHERE from_id = $1 AND to_id = $2`, fromID, toID)
+		if err != nil {
+			return err
+		}
 
-		if !reply {
+		if !reply && !already {
 			hasSearch, err := exists(ctx, tx,
 				`SELECT 1 FROM searches WHERE user_id = $1 AND status = 'active'`, fromID)
 			if err != nil {
@@ -121,7 +139,7 @@ func (r *Repo) Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget,
 func (r *Repo) settledMatch(ctx context.Context, fromID, toID uuid.UUID) (*entity.Match, error) {
 	var out *entity.Match
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
-		if err := lockPair(ctx, tx, fromID, toID); err != nil {
+		if _, err := lockPair(ctx, tx, fromID, toID); err != nil {
 			return err
 		}
 		var err error
@@ -131,11 +149,23 @@ func (r *Repo) settledMatch(ctx context.Context, fromID, toID uuid.UUID) (*entit
 	return out, err
 }
 
-func lockPair(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) error {
-	_, err := tx.Exec(ctx, `
-		SELECT id FROM users WHERE id IN ($1::uuid, $2::uuid)
+func lockPair(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) (entity.Status, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id, status FROM users WHERE id IN ($1::uuid, $2::uuid)
 		ORDER BY id FOR NO KEY UPDATE`, fromID, toID)
-	return err
+	if err != nil {
+		return entity.StatusUnknown, err
+	}
+	locked, err := pgx.CollectRows(rows, pgx.RowToStructByPos[lockedUser])
+	if err != nil {
+		return entity.StatusUnknown, err
+	}
+	for _, user := range locked {
+		if user.ID == fromID {
+			return entity.ParseStatus(user.Status), nil
+		}
+	}
+	return entity.StatusUnknown, entity.ErrNotFound
 }
 
 func ensureMatch(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) error {

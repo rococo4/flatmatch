@@ -283,6 +283,96 @@ func TestRepeatedLikeIsIdempotent(t *testing.T) {
 	}
 }
 
+// Повтор — не трата, поэтому гейты траты его не касаются: иначе двойной тап по
+// пятому за сутки отвечал бы «лимит», хотя лайк давно стоит.
+func TestRepeatIdempotentDespiteExhaustedBudget(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	liker := seedUser(t, pool, 1, "active", "male", "any")
+	seedSearch(t, pool, liker, "active")
+
+	targets := make([]uuid.UUID, entity.MaxDailyLikes)
+	for i := range targets {
+		targets[i] = seedUser(t, pool, int64(10+i), "active", "male", "any")
+		if _, err := repo.Create(t.Context(), liker, targets[i], testZone); err != nil {
+			t.Fatalf("Create() #%d failed: %v", i+1, err)
+		}
+	}
+
+	res, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes-1], testZone)
+	if err != nil {
+		t.Fatalf("repeated Create() with an exhausted budget failed: %v", err)
+	}
+	if !res.Already || res.Budget.Remaining != 0 {
+		t.Errorf("result = %+v, want Already with an empty budget", res)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM likes_users WHERE from_id = $1`, liker); n != entity.MaxDailyLikes {
+		t.Errorf("database holds %d likes, want %d", n, entity.MaxDailyLikes)
+	}
+}
+
+// Та же идемпотентность с другой стороны: поиск, который оплатил лайк, закрыт —
+// повтор всё равно ничего не меняет и не требует нового поиска.
+func TestRepeatIdempotentDespiteClosedSearch(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	liker := seedUser(t, pool, 1, "active", "male", "any")
+	target := seedUser(t, pool, 2, "active", "male", "any")
+	seedSearch(t, pool, liker, "active")
+
+	if _, err := repo.Create(t.Context(), liker, target, testZone); err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `
+		UPDATE searches SET status = 'closed', close_reason = 'found_here'
+		WHERE user_id = $1`, liker); err != nil {
+		t.Fatalf("close the search: %v", err)
+	}
+
+	res, err := repo.Create(t.Context(), liker, target, testZone)
+	if err != nil {
+		t.Fatalf("repeated Create() without an active search failed: %v", err)
+	}
+	if !res.Already {
+		t.Errorf("result = %+v, want Already", res)
+	}
+	if res.Budget.Remaining != entity.MaxDailyLikes-1 {
+		t.Errorf("remaining = %d, want %d — the repeat must be free",
+			res.Budget.Remaining, entity.MaxDailyLikes-1)
+	}
+}
+
+// В draft и pending можно листать и сохранять поиски, но не ставить дорогие
+// лайки (§5): человек ещё не прошёл проверку.
+func TestLikeNeedsApprovedProfile(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	target := seedUser(t, pool, 1, "active", "male", "any")
+
+	tests := []struct {
+		name   string
+		status string
+	}{
+		{"draft", "draft"},
+		{"pending", "pending"},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			liker := seedUser(t, pool, int64(10+i), tt.status, "male", "any")
+			seedSearch(t, pool, liker, "active")
+			if _, err := repo.Create(t.Context(), liker, target, testZone); !errors.Is(err, entity.ErrNotApproved) {
+				t.Errorf("Create() = %v, want ErrNotApproved", err)
+			}
+			if n := countRows(t, pool, `SELECT count(*) FROM likes_users WHERE from_id = $1`, liker); n != 0 {
+				t.Errorf("database holds %d likes, want 0", n)
+			}
+		})
+	}
+}
+
 func TestLikeInvisiblePersonIs404(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

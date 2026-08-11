@@ -17,6 +17,13 @@ const spentInWindowFilter = `from_id = $1 AND spent AND created_at > now() - mak
 
 var windowSeconds = entity.LikeWindow.Seconds()
 
+// lockedUser is what the pair lock brings back: the id to tell the two rows
+// apart and the status the §5 gate reads without a second statement.
+type lockedUser struct {
+	ID     uuid.UUID
+	Status string
+}
+
 type likeRow struct {
 	FromID    uuid.UUID  `db:"from_id"`
 	ToID      uuid.UUID  `db:"to_id"`

@@ -11,5 +11,5 @@
 // A match is also where the product's success metric starts — the survey 5–7
 // days later, and the search closed with «нашёл здесь» (§1, §7).
 //
-// Empty on purpose — built in §12 step 4.
+// Built in §12 step 4.
 package matches

@@ -43,6 +43,10 @@ type ProfilePatch struct {
 	OnboardingStep *int
 }
 
+type SharedAnswer struct {
+	Field, Value string
+}
+
 func (p ProfilePatch) InvalidFields() []string {
 	checks := []struct {
 		field string
@@ -105,24 +109,31 @@ func (p Profile) MissingFields() []string {
 	return missing
 }
 
-func (p Profile) SharedAnswers(o Profile) int {
-	pairs := [][2]string{
-		{string(p.Schedule), string(o.Schedule)},
-		{string(p.Smoking), string(o.Smoking)},
-		{string(p.PetsOwn), string(o.PetsOwn)},
-		{string(p.PetsOK), string(o.PetsOK)},
-		{string(p.Noise), string(o.Noise)},
-		{string(p.Guests), string(o.Guests)},
-		{string(p.Cleaning), string(o.Cleaning)},
-		{string(p.Alcohol), string(o.Alcohol)},
-		{string(p.Expenses), string(o.Expenses)},
+func (p Profile) Shared(o Profile) []SharedAnswer {
+	answers := []struct {
+		field        string
+		mine, theirs string
+	}{
+		{"schedule", string(p.Schedule), string(o.Schedule)},
+		{"smoking", string(p.Smoking), string(o.Smoking)},
+		{"pets_own", string(p.PetsOwn), string(o.PetsOwn)},
+		{"pets_ok", string(p.PetsOK), string(o.PetsOK)},
+		{"noise", string(p.Noise), string(o.Noise)},
+		{"guests", string(p.Guests), string(o.Guests)},
+		{"cleaning", string(p.Cleaning), string(o.Cleaning)},
+		{"alcohol", string(p.Alcohol), string(o.Alcohol)},
+		{"expenses", string(p.Expenses), string(o.Expenses)},
 	}
 
-	n := 0
-	for _, pair := range pairs {
-		if pair[0] != "" && pair[0] == pair[1] {
-			n++
+	var shared []SharedAnswer
+	for _, a := range answers {
+		if a.mine != "" && a.mine == a.theirs {
+			shared = append(shared, SharedAnswer{Field: a.field, Value: a.mine})
 		}
 	}
-	return n
+	return shared
+}
+
+func (p Profile) SharedAnswers(o Profile) int {
+	return len(p.Shared(o))
 }

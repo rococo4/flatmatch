@@ -15,5 +15,5 @@
 // waiting forever. Instead of expiry there is transparency: a liker with no
 // active searches is shown with a grey «сейчас не в поиске» note.
 //
-// Empty on purpose — built in §12 step 4.
+// Built in §12 step 4.
 package likes

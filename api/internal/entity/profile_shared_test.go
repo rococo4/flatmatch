@@ -1,6 +1,9 @@
 package entity
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func filledProfile() Profile {
 	return Profile{
@@ -50,6 +53,37 @@ func TestSharedAnswersEmptyOnOneSideNeverCounts(t *testing.T) {
 	}
 	if got := (Profile{}).SharedAnswers(full); got != 0 {
 		t.Errorf("empty vs full SharedAnswers() = %d, want 0", got)
+	}
+}
+
+// Саммари мэтча называет совпавшие ответы («вы оба совы»), поэтому Shared
+// отдаёт именно их — поле и значение, в порядке анкеты.
+func TestSharedNamesTheMatchedFields(t *testing.T) {
+	a := Profile{Schedule: ScheduleOwl, Smoking: SmokingNo, Noise: NoiseSilence}
+	b := Profile{Schedule: ScheduleOwl, Smoking: SmokingNo, Noise: NoiseLoud}
+
+	want := []SharedAnswer{
+		{Field: "schedule", Value: string(ScheduleOwl)},
+		{Field: "smoking", Value: string(SmokingNo)},
+	}
+	if got := a.Shared(b); !slices.Equal(got, want) {
+		t.Errorf("Shared() = %v, want %v", got, want)
+	}
+}
+
+func TestSharedAnswersCountsShared(t *testing.T) {
+	a, b := filledProfile(), filledProfile()
+	b.Noise = NoiseLoud
+	b.Alcohol = ""
+
+	if got, want := a.SharedAnswers(b), len(a.Shared(b)); got != want {
+		t.Errorf("SharedAnswers() = %d, want len(Shared()) = %d", got, want)
+	}
+}
+
+func TestSharedIsEmptyWithoutMatches(t *testing.T) {
+	if got := filledProfile().Shared(Profile{}); len(got) != 0 {
+		t.Errorf("Shared() = %v, want empty", got)
 	}
 }
 

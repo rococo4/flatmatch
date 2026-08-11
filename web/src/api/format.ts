@@ -11,6 +11,7 @@ import type {
   PoolChip,
   PoolPersonDTO,
   PoolSectionDTO,
+  Questionnaire,
   SearchParamsNoZone,
   Term,
 } from './client';
@@ -63,6 +64,70 @@ const PETS_OWN_LABEL: Record<PoolPersonDTO['pets_own'], string> = {
   other: 'есть питомец',
 };
 
+const PETS_OK_LABEL: Record<NonNullable<Questionnaire['pets_ok']>, string> = {
+  ok: 'к чужим ок',
+  allergy: 'аллергия',
+  against: 'против чужих животных',
+};
+
+const NOISE_LABEL: Record<NonNullable<Questionnaire['noise']>, string> = {
+  silence: 'нужна тишина',
+  normal: 'шум нормально',
+  loud: 'сам шумный',
+};
+
+const GUESTS_LABEL: Record<NonNullable<Questionnaire['guests']>, string> = {
+  rare: 'гости редко',
+  sometimes: 'гости иногда',
+  often: 'гости часто',
+  partner: 'партнёр регулярно ночует',
+};
+
+const CLEANING_LABEL: Record<NonNullable<Questionnaire['cleaning']>, string> = {
+  schedule: 'убираю по расписанию',
+  when_dirty: 'убираю, когда грязно',
+  creative_mess: 'творческий беспорядок',
+};
+
+const ALCOHOL_LABEL: Record<NonNullable<Questionnaire['alcohol']>, string> = {
+  none: 'не пью',
+  with_neighbor: 'с соседом за сериалом',
+  parties: 'тусовки — норм',
+};
+
+const EXPENSES_LABEL: Record<NonNullable<Questionnaire['expenses']>, string> = {
+  split_equally: 'поровну и сразу',
+  tracked: 'веду учёт трат',
+  as_we_go: 'разберёмся по ходу',
+};
+
+/**
+ * Девять привычек анкеты (§4) по ключам полей, как их шлёт сервер в `shared`.
+ *
+ * Первые три карты — те же, что рисуют строку привычек в пуле: одна метка на
+ * все экраны, иначе один и тот же человек в пуле «сова», а в профиле «ночной».
+ */
+const FIELD_LABEL: Record<string, Record<string, string>> = {
+  schedule: SCHEDULE_LABEL,
+  smoking: SMOKING_LABEL,
+  pets_own: PETS_OWN_LABEL,
+  pets_ok: PETS_OK_LABEL,
+  noise: NOISE_LABEL,
+  guests: GUESTS_LABEL,
+  cleaning: CLEANING_LABEL,
+  alcohol: ALCOHOL_LABEL,
+  expenses: EXPENSES_LABEL,
+};
+
+/** Занятость — подпись под именем. Формулировки §4, дословно. */
+const OCCUPATION_LABEL: Record<string, string> = {
+  study: 'Учусь',
+  office: 'Офис',
+  hybrid: 'Гибрид',
+  remote: 'Удалёнка',
+  shift: 'Сменный график',
+};
+
 /** Метка причины у карточки в архиве. Строчные — это подпись, а не кнопка. */
 const CLOSE_REASON_LABEL: Record<CloseReason, string> = {
   found_here: 'нашёл здесь',
@@ -94,6 +159,19 @@ const MONTHS_IN = [
 
 const MONTH_FMT = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
 const DAY_MONTH_FMT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+
+/**
+ * Часы возврата лимита лайков — всегда московские, а не телефонные.
+ *
+ * Сутки лимита сервер считает по Москве (продукт московский, §1), и «следующий
+ * в 00:00» на телефоне с другой зоной назвал бы час, которого никто не ждёт.
+ */
+const MSK_TIME_FMT = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Europe/Moscow',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
 
 /**
  * Метка чипа параметра у человека в пуле.
@@ -140,6 +218,26 @@ export function habitsLine(p: PoolPersonDTO): string {
   return [SCHEDULE_LABEL[p.schedule], SMOKING_LABEL[p.smoking], PETS_OWN_LABEL[p.pets_own]]
     .filter(Boolean)
     .join(' · ');
+}
+
+/**
+ * Метка ответа анкеты: «сова», «не курю», «убираю по расписанию».
+ *
+ * Незнакомая пара поле-значение (схема ушла вперёд бинаря) отдаётся как есть:
+ * сырое значение честнее пустой строки.
+ */
+export function fieldLabel(field: string, value: string): string {
+  return FIELD_LABEL[field]?.[value] ?? value;
+}
+
+/** Занятость человека: «Учусь», «Офис». Незаполненная — пустая строка. */
+export function occupationLabel(value?: string): string {
+  return value ? (OCCUPATION_LABEL[value] ?? '') : '';
+}
+
+/** Час по Москве, «14:30»: когда вернётся истраченный лайк (§2.3). */
+export function moscowTime(iso: string): string {
+  return MSK_TIME_FMT.format(new Date(iso));
 }
 
 /** Заголовок секции пула: «СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ · 3». */

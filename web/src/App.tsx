@@ -29,7 +29,7 @@ import {
   type SearchResponse,
   type Zone,
 } from './api/client';
-import { closeReasonLabel, dayMonth, paramChips, plural } from './api/format';
+import { closeReasonLabel, dayMonth, occupationLabel, paramChips, plural } from './api/format';
 import { TabBar, type Tab } from './ui/TabBar';
 import type { PromoState } from './ui/PoolPromoBlock';
 import { OnboardingFlow } from './screens/OnboardingFlow';
@@ -44,7 +44,7 @@ import {
   type SearchDraft,
 } from './screens/SearchParamsScreen';
 import { ZonePoolView } from './screens/ZonePoolView';
-import { DEMO_ABOUT, DEMO_MATCHES, PersonProfileScreen } from './screens/PersonProfileScreen';
+import { PersonProfileView } from './screens/PersonProfileView';
 import {
   DEMO_MATCH_PARAMS,
   DEMO_MATCH_PROFILE,
@@ -83,6 +83,15 @@ type Loading =
   | { kind: 'loading' }
   | { kind: 'ready'; profile: Profile }
   | { kind: 'failed'; error: ApiError };
+
+/**
+ * Открытый профиль человека.
+ *
+ * `zoneId` — пул, из которого пришли: он и строка «пересеклись», и контекст
+ * лайка. `back` — куда возвращает стрелка: из пула уходят обратно в пул, а не
+ * «в никуда».
+ */
+type PersonTarget = { userId: string; zoneId?: string; back: View };
 
 /**
  * Состояние ленты.
@@ -160,6 +169,18 @@ export function App() {
   const [feed, setFeed] = useState<FeedState>(EMPTY_FEED);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [poolZone, setPoolZone] = useState<string | null>(null);
+  const [person, setPerson] = useState<PersonTarget | null>(null);
+  // Мэтч состоялся — id уже здесь; саммари по нему грузит §12 шаг 4 (экран
+  // пока на DEMO-данных макета).
+  const [matchId, setMatchId] = useState<string | null>(null);
+  /**
+   * Профиль, который ждёт сохранённого поиска.
+   *
+   * Лайк без активного поиска сервер отклоняет (§2.3), и продукт вместо отказа
+   * показывает форму поиска. Сохранился поиск — возвращаем человека туда,
+   * откуда он ушёл: искать тот же профиль заново он не должен.
+   */
+  const [likeReturn, setLikeReturn] = useState<PersonTarget | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
   const [searchesError, setSearchesError] = useState<string | null>(null);
 
@@ -236,6 +257,9 @@ export function App() {
   const closeForm = useCallback(() => {
     setFormMode(null);
     setView('tab');
+    // Форму бросили — ждать возврата к профилю больше нечему: иначе поиск,
+    // сохранённый через неделю совсем по другому поводу, унёс бы туда.
+    setLikeReturn(null);
     setFeed((f) => ({
       ...f,
       // Форму бросили — возвращаем черновик показанной выдачи. Иначе чипы
@@ -363,6 +387,13 @@ export function App() {
       await reloadSearches();
       const data = await fetchFeed(params);
       setFeed((f) => ({ ...f, data, busy: false, error: null, slotsFull: false }));
+      // Поиск сохранён — лайк, ради которого форму открыли, теперь разрешён:
+      // возвращаем человека к профилю, а не оставляем в ленте.
+      if (likeReturn) {
+        setPerson(likeReturn);
+        setLikeReturn(null);
+        setView('person');
+      }
     } catch (e: unknown) {
       const err = asApiError(e);
       if (err.code === 'search_limit') {
@@ -393,6 +424,20 @@ export function App() {
   const openZonePool = (zoneId: string) => {
     setPoolZone(zoneId);
     setView('zonePool');
+  };
+
+  const openPerson = (target: PersonTarget) => {
+    setPerson(target);
+    setView('person');
+  };
+
+  /** Лайк без поиска: §2.3 просит мини-форму «укажи, где ищешь», а не отказ. */
+  const askSearchForLike = (target: PersonTarget, serverMessage: string) => {
+    setLikeReturn(target);
+    // Зона пула предзаполнена: там они и пересеклись, и поиск скорее всего
+    // нужен именно на неё.
+    openLookForm(target.zoneId ? { ...EMPTY_DRAFT, zoneId: target.zoneId } : EMPTY_DRAFT);
+    setFeed((f) => ({ ...f, error: serverMessage }));
   };
 
   const openEditForm = (id: string) => {
@@ -502,6 +547,8 @@ export function App() {
             zone={promo.zone.name}
             params={paramChips(draftToParams(feed.draft), { zoneName: promo.zone.name })}
             promo={buildPromo(promo, active, feed.slotsFull)}
+            // Точек ещё нет (§12 шаг 5), поэтому и переходов с их карточек в
+            // профиль нет: открывать живой профиль без id человека нечем.
             items={[]}
             error={feed.error}
             onEditParams={() => openLookForm(feed.draft)}
@@ -510,8 +557,6 @@ export function App() {
             onFreeSlot={() => toTab('searches')}
             onEnterFlatPool={() => setView('flatPool')}
             onOpenSource={() => setSheet('stillLive')}
-            onWantRoom={() => setView('person')}
-            onOpenProfile={() => setView('person')}
           />
         );
       }
@@ -546,7 +591,7 @@ export function App() {
           <MyProfileScreen
             name={profile.name}
             age={profile.age ?? 0}
-            occupation={occupationLabel(profile)}
+            occupation={occupationLabel(profile.occupation)}
             status={profile.status === 'active' ? 'active' : 'pending'}
             emailKind={profile.occupation === 'study' ? 'edu' : 'work'}
             incomingLikes={unreadLikes}
@@ -610,35 +655,35 @@ export function App() {
             // чтобы клиент не показывал сгоревшую цифру.
             onLoaded={() => void reloadSearches().catch(() => undefined)}
             onBack={back}
-            onOpenPerson={() => setView('person')}
+            onOpenPerson={(id) =>
+              openPerson({ userId: id, zoneId: poolZone ?? undefined, back: 'zonePool' })
+            }
             onOpenPoints={() => toTab('feed')}
           />
         );
-      case 'person':
+      case 'person': {
+        if (!person) return tabScreen();
+        const target = person;
         return (
-          <PersonProfileScreen
-            name="Аня"
-            age={22}
-            occupation="Студент"
-            verifiedBadge="ВШЭ"
-            lastSeen="была сегодня"
-            zone="пересеклись в пуле Хамовников"
-            matches={DEMO_MATCHES}
-            matchesTotal={6}
-            about={DEMO_ABOUT}
-            searchFacts={[
-              { label: 'Бюджет', value: '40–45к с человека' },
-              { label: 'Заезд', value: 'с 1 сентября' },
-            ]}
-            likesLeft={3}
-            likesTotal={5}
-            onBack={back}
-            onLike={() => setView('match')}
+          <PersonProfileView
+            userId={target.userId}
+            zoneId={target.zoneId}
+            onBack={() => setView(target.back)}
+            onMatched={(id) => {
+              setMatchId(id);
+              setView('match');
+            }}
+            onNeedSearch={(serverMessage) => askSearchForLike(target, serverMessage)}
           />
         );
+      }
       case 'match':
         return (
+          // Ключ — id состоявшегося мэтча: следующий мэтч должен собрать экран
+          // заново, а не донести на нём саммари предыдущего (§12 шаг 4 повесит
+          // на этот id загрузку саммари вместо DEMO-данных).
           <MatchScreen
+            key={matchId ?? 'demo'}
             name="Аня"
             username="anya"
             where={DEMO_MATCH_WHERE}
@@ -664,7 +709,8 @@ export function App() {
             shownCount={3}
             onBack={back}
             onOpenSource={() => setSheet('stillLive')}
-            onOpenPerson={() => setView('person')}
+            // Люди в этом пуле — из макета: их id ненастоящие, и живой профиль
+            // по ним не открыть. Переход появится вместе с точками (§12 шаг 5).
             onLeave={() => setSheet('leavePool')}
           />
         );
@@ -675,7 +721,8 @@ export function App() {
             unreadLikes={unreadLikes}
             onBack={back}
             onOpenContext={() => toTab('searches')}
-            onOpenProfile={() => setView('person')}
+            // Входящие всё ещё из макета (§12 шаг 4, вторая половина): по
+            // подставным id ни профиль, ни ответный лайк не работают.
             onReply={() => setView('match')}
             onToFeed={() => toTab('feed')}
           />
@@ -733,14 +780,6 @@ export function App() {
   );
 }
 
-const OCCUPATIONS: Record<string, string> = {
-  study: 'Учусь',
-  office: 'Офис',
-  hybrid: 'Гибрид',
-  remote: 'Удалёнка',
-  shift: 'Сменный график',
-};
-
 /**
  * Промо-блок из ответа ленты (§6, четыре состояния).
  *
@@ -795,10 +834,6 @@ function buildPromo(p: FeedPromo, active: SearchResponse[], slotsFull: boolean):
 /** Любая неудача вызова — в ApiError: экраны ветвятся по code, а не по тексту. */
 function asApiError(e: unknown): ApiError {
   return e instanceof ApiError ? e : new ApiError(0, 'network', String(e));
-}
-
-function occupationLabel(profile: Profile): string {
-  return profile.occupation ? (OCCUPATIONS[profile.occupation] ?? '') : '';
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

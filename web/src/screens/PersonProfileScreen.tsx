@@ -2,13 +2,29 @@
    Совпадения анкеты: зелёный фон «вы оба», нейтральный — различие с контекстом.
    Красного в сравнении людей не существует. */
 import type { CSSProperties, ReactNode } from 'react';
-import { Avatar, Badge, LimitChip, S, type Fact } from '../ui/primitives';
+import { Avatar, Badge, S } from '../ui/primitives';
 
 export type MatchRow = {
   /** both = «вы оба» (зелёный), diff = различие с контекстом (нейтральный) */
   tone: 'both' | 'diff';
   title: string;
-  context: string; // «вы оба поздно ложитесь», «у тебя кот — ей ок»
+  context: string; // «вы оба», «у тебя кот — ей ок»
+};
+
+/**
+ * Состояние дорогого лайка — одно на обе кнопки.
+ *
+ * В Telegram лайк ставится родной MainButton, в браузере — кнопкой вёрстки, но
+ * текст и запрет считает контейнер один раз: две ветки логики разошлись бы.
+ */
+export type LikeAction = {
+  /** «Хочу жить вместе · осталось 3 из 5», «Ответить — мэтч сразу». */
+  label: string;
+  /** Подпись под кнопкой: «Ответный лайк не тратит лимит» или отказ сервера. */
+  caption?: string;
+  disabled?: boolean;
+  /** Кнопку рисует Telegram — в вёрстке остаётся только подпись. */
+  native?: boolean;
 };
 
 const L = {
@@ -65,25 +81,25 @@ const L = {
     position: 'sticky',
     bottom: 0,
     display: 'flex',
-    alignItems: 'center',
-    gap: 10,
+    flexDirection: 'column',
+    gap: 8,
     padding: '10px 12px',
     paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
     background: 'var(--tg-theme-bg-color)',
     borderTop: '1px solid var(--sep)',
   } as CSSProperties,
-  mainButton: {
-    flex: '1 1 auto',
+  mainButton: (disabled: boolean): CSSProperties => ({
+    width: '100%',
     padding: 14,
     border: 'none',
     borderRadius: 11,
-    background: 'var(--tg-theme-button-color)',
+    background: disabled ? 'var(--chip-bg)' : 'var(--tg-theme-button-color)',
     font: 'inherit',
     fontSize: 16,
     fontWeight: 590,
-    color: 'var(--tg-theme-button-text-color)',
-    cursor: 'pointer',
-  } as CSSProperties,
+    color: disabled ? 'var(--tg-theme-hint-color)' : 'var(--tg-theme-button-text-color)',
+    cursor: disabled ? 'default' : 'pointer',
+  }),
 };
 
 function ZoneLine({ children }: { children: ReactNode }) {
@@ -107,30 +123,32 @@ export function PersonProfileScreen({
   name,
   age,
   occupation,
+  photoUrl,
   verifiedBadge,
   lastSeen,
   zone,
   matches,
   matchesTotal,
   about,
-  searchFacts,
-  likesLeft,
-  likesTotal,
+  like,
   onBack,
   onLike,
 }: {
   name: string;
   age: number;
   occupation: string;
+  /** Пусто = фото не одобрено: заглушка с инициалами, а не пустой круг (§5). */
+  photoUrl?: string;
+  /** Бейджи и «была сегодня» сервер пока не шлёт — строк тогда просто нет. */
   verifiedBadge?: string;
-  lastSeen: string; // «была сегодня»
-  zone: string; // «Хамовники»
+  lastSeen?: string;
+  /** Зона контекста, «Хамовники». Профиль открыт не из пула — строки нет. */
+  zone?: string;
   matches: MatchRow[];
   matchesTotal: number; // «6 ИЗ 9»
-  about: string;
-  searchFacts: Fact[];
-  likesLeft: number; // «3 из 5»
-  likesTotal: number;
+  /** Только одобренное «о себе»: до аппрува блока нет вовсе (§5). */
+  about?: string;
+  like: LikeAction;
   onBack?: () => void;
   onLike?: () => void;
 }) {
@@ -151,7 +169,7 @@ export function PersonProfileScreen({
       <div style={L.body}>
         <div style={{ ...L.block, gap: 12, padding: '14px 12px' }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <Avatar name={name} size={88} />
+            <Avatar name={name} size={88} src={photoUrl} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
               <span style={{ fontSize: 22, fontWeight: 640, letterSpacing: '-0.5px' }}>
                 {name}, {age}
@@ -162,12 +180,16 @@ export function PersonProfileScreen({
                 </span>
                 {verifiedBadge && <Badge tone="accent">{verifiedBadge}</Badge>}
               </div>
-              <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{lastSeen}</span>
+              {lastSeen && (
+                <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{lastSeen}</span>
+              )}
             </div>
           </div>
-          <ZoneLine>
-            пересеклись: <b style={{ fontWeight: 590 }}>{zone}</b>
-          </ZoneLine>
+          {zone && (
+            <ZoneLine>
+              пересеклись: <b style={{ fontWeight: 590 }}>{zone}</b>
+            </ZoneLine>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -216,46 +238,31 @@ export function PersonProfileScreen({
           </div>
         </div>
 
-        <div style={L.block}>
-          <span style={S.blockTitle}>О себе</span>
-          <span style={{ fontSize: 14, lineHeight: 1.45, textWrap: 'pretty' }}>{about}</span>
-        </div>
-
-        <div style={L.block}>
-          <span style={S.blockTitle}>Её поиск</span>
-          {searchFacts.map((f) => (
-            <div key={f.label} style={S.row}>
-              <span style={S.rowLabel}>{f.label}</span>
-              <span style={{ fontWeight: 510, textAlign: 'right' }}>{f.value}</span>
-            </div>
-          ))}
-        </div>
+        {about && (
+          <div style={L.block}>
+            <span style={S.blockTitle}>О себе</span>
+            <span style={{ fontSize: 14, lineHeight: 1.45, textWrap: 'pretty' }}>{about}</span>
+          </div>
+        )}
       </div>
 
-      {/* В реализации — нативная MainButton; здесь та же зона визуально. */}
-      <div style={L.fixed}>
-        <button type="button" style={L.mainButton} onClick={onLike}>
-          Хочу жить вместе
-        </button>
-        <LimitChip>
-          {likesLeft} из {likesTotal}
-        </LimitChip>
-      </div>
+      {/* В Telegram кнопку рисует MainButton, и здесь остаётся только подпись:
+          две одинаковые кнопки друг над другом — это два разных обещания. */}
+      {(!like.native || like.caption) && (
+        <div style={L.fixed}>
+          {!like.native && (
+            <button
+              type="button"
+              style={L.mainButton(Boolean(like.disabled))}
+              disabled={like.disabled}
+              onClick={onLike}
+            >
+              {like.label}
+            </button>
+          )}
+          {like.caption && <span style={S.caption}>{like.caption}</span>}
+        </div>
+      )}
     </div>
   );
 }
-
-/* Демо-данные для вёрстки. */
-export const DEMO_MATCHES: MatchRow[] = [
-  { tone: 'both', title: 'Сова', context: 'вы оба поздно ложитесь' },
-  { tone: 'both', title: 'Не курите', context: 'вы оба не курите' },
-  { tone: 'both', title: 'Гости редко', context: 'вы оба зовёте гостей пару раз в месяц' },
-  { tone: 'both', title: 'Тихо после 23', context: 'вы оба за тишину ночью' },
-  { tone: 'both', title: 'Готовите дома', context: 'вы оба готовите почти каждый день' },
-  { tone: 'both', title: 'Делите счета пополам', context: 'вы оба за равные платежи' },
-  { tone: 'diff', title: 'Животные', context: 'у тебя кот — ей ок' },
-  { tone: 'diff', title: 'Уборка', context: 'ты за график, она — по ситуации' },
-];
-
-export const DEMO_ABOUT =
-  'Второй год в Москве, учусь на матфаке и работаю part-time. Дома тихо: сериалы в наушниках, готовлю почти каждый день. Ищу человека, с которым можно делить квартиру и не делить круг общения.';

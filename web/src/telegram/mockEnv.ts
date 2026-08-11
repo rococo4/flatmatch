@@ -52,8 +52,13 @@ export function mockTelegramEnvIfNeeded(): void {
  *
  * A real client always hands the parameters over in the URL, so that is what
  * gets asked. Storage left over from an earlier load cannot fake it.
+ *
+ * Screens ask the same question about native controls: under the mock every
+ * `isAvailable()` says yes, the calls go into the intercepted postMessage, and
+ * a button that only Telegram can draw would simply be missing in a browser
+ * tab — leaving the screen without its only action.
  */
-function launchedByTelegram(): boolean {
+export function launchedByTelegram(): boolean {
   return /tgWebApp/.test(window.location.hash) || /tgWebApp/.test(window.location.search);
 }
 

@@ -234,6 +234,135 @@ export interface PoolResponse {
   people: PoolPersonDTO[];
 }
 
+/* ── Профиль, дорогой лайк, мэтчи (§2.3, §6) ────────────────────────────────
+   Те же правила, что и выше: snake_case как на проводе, русских строк нет. */
+
+/** Один ответ анкеты, который двое дали одинаково. `field` — ключ анкеты. */
+export interface SharedAnswer {
+  field: string;
+  value: string;
+}
+
+/**
+ * Остаток дорогих лайков на сегодня (§2.3).
+ *
+ * `next_free_at` нет, пока ничего не потрачено: возвращаться нечему. Время —
+ * ISO с зоной, показывать его надо по Москве (сервер считает сутки в ней).
+ */
+export interface LikeBudget {
+  remaining: number;
+  next_free_at?: string;
+}
+
+/**
+ * Экран профиля человека целиком.
+ *
+ * Контактов здесь нет и не будет: @username и tg_id живут только в мэтче (§3).
+ * `about` отсутствует, пока «о себе» не одобрено модератором (§5) — блок тогда
+ * не рисуется вовсе, а не пустым.
+ */
+export interface PersonProfileDTO {
+  user_id: string;
+  name: string;
+  age: number;
+  /** Пустая строка = фото не одобрено: вместо него заглушка с инициалами (§5). */
+  photo_url: string;
+
+  occupation: NonNullable<Questionnaire['occupation']>;
+  schedule: NonNullable<Questionnaire['schedule']>;
+  smoking: NonNullable<Questionnaire['smoking']>;
+  pets_own: NonNullable<Questionnaire['pets_own']>;
+  pets_ok: NonNullable<Questionnaire['pets_ok']>;
+  noise: NonNullable<Questionnaire['noise']>;
+  guests: NonNullable<Questionnaire['guests']>;
+  cleaning: NonNullable<Questionnaire['cleaning']>;
+  alcohol: NonNullable<Questionnaire['alcohol']>;
+  expenses: NonNullable<Questionnaire['expenses']>;
+  about?: string;
+
+  shared: SharedAnswer[];
+  /** Пул, из которого открыт профиль: «пересеклись: {зона}». Может не быть. */
+  context_zone?: ZoneRef;
+
+  liked_me: boolean;
+  my_like: boolean;
+  budget: LikeBudget;
+}
+
+/**
+ * Ответ на дорогой лайк.
+ *
+ * `already` — повторный тап: лимит не тронут, контекст остался от первого.
+ * Взаимный лайк отвечает `matched` вместе с `match_id`, и повторный тап по уже
+ * сматченному человеку отвечает так же — по нему и ветвиться.
+ */
+export interface LikeResponse {
+  matched: boolean;
+  match_id?: string;
+  already: boolean;
+  budget: LikeBudget;
+}
+
+/** Карточка входящего лайка (§6 «Тебя лайкнули»). Контактов тут тоже нет. */
+export interface IncomingLikeDTO {
+  user_id: string;
+  name: string;
+  age: number;
+  photo_url: string;
+  schedule: NonNullable<Questionnaire['schedule']>;
+  smoking: NonNullable<Questionnaire['smoking']>;
+  pets_own: NonNullable<Questionnaire['pets_own']>;
+
+  zone?: ZoneRef;
+  /** «сейчас не в поиске» — серая пометка, а не причина спрятать лайк (§2.3). */
+  not_searching: boolean;
+  at: string;
+}
+
+export interface MatchPeer {
+  user_id: string;
+  name: string;
+  age: number;
+  photo_url: string;
+}
+
+/**
+ * Единственное место продукта, где есть способ связаться (§3).
+ *
+ * У забаненного или заблокированного пира оба поля пустые — сервер их снимает,
+ * и звонить экрану некуда.
+ */
+export interface MatchPeerContact extends MatchPeer {
+  username?: string;
+  tg_id: number;
+}
+
+export interface MatchDTO {
+  match_id: string;
+  peer: MatchPeer;
+  zone?: ZoneRef;
+  at: string;
+}
+
+/** Пересечение одного параметра поисков: вилка, месяц или срок — что уж есть. */
+export interface ParamOverlap {
+  param: 'price' | 'rooms' | 'move_in' | 'term';
+  min?: number;
+  max?: number;
+  month?: string;
+  term?: Term;
+}
+
+/** «Это мэтч» тремя блоками (§6): где, по параметрам, по анкете. */
+export interface MatchDetail {
+  match_id: string;
+  peer: MatchPeerContact;
+  at: string;
+  where?: ZoneRef;
+  params: ParamOverlap[];
+  profile: SharedAnswer[];
+}
+
 /** Конверт, которым отвечает любая ошибка API. */
 export interface ApiErrorBody {
   error: { code: string; message: string; fields?: string[] };
@@ -452,6 +581,51 @@ export function reactivateSearch(id: string): Promise<SearchResponse> {
  */
 export function fetchZonePool(zoneId: string): Promise<PoolResponse> {
   return request<PoolResponse>(`/api/v1/pools/zone/${encodeURIComponent(zoneId)}`);
+}
+
+/**
+ * Профиль человека и состояние лайка между вами.
+ *
+ * `zone` — пул, из которого профиль открыт: он же станет контекстом лайка.
+ * В отличие от пула, этот GET ничего не мутирует — звать можно свободно.
+ * Невидимый по правилу пола или заблокировавший отвечает 404 `not_found`:
+ * невидимый и несуществующий — один ответ (§4).
+ */
+export function fetchPerson(id: string, zoneId?: string): Promise<PersonProfileDTO> {
+  const q = zoneId ? `?zone=${encodeURIComponent(zoneId)}` : '';
+  return request<PersonProfileDTO>(`/api/v1/people/${encodeURIComponent(id)}${q}`);
+}
+
+/**
+ * Дорогой лайк «Хочу жить вместе» (§2.3).
+ *
+ * Отказы приходят кодами: 400 `need_search` — нет активного поиска (мини-форма),
+ * 400 `like_limit` — израсходованы 5 в сутки (сообщение сервера уже называет
+ * час возврата), 403 `not_approved` — анкета не одобрена. Ровно два ключа в
+ * теле: декодер сервера с DisallowUnknownFields откажет на любом лишнем.
+ * Пустая зона легальна — у ответного лайка пула нет.
+ */
+export function postLike(toId: string, zoneId?: string): Promise<LikeResponse> {
+  return request<LikeResponse>('/api/v1/likes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to_id: toId, zone_id: zoneId ?? '' }),
+  });
+}
+
+/** «Тебя лайкнули»: входящие без ответа, новые первыми. */
+export function fetchIncoming(): Promise<IncomingLikeDTO[]> {
+  return request<IncomingLikeDTO[]>('/api/v1/likes/incoming');
+}
+
+/** Мои мэтчи списком. Контакты — только в карточке одного (§3). */
+export function fetchMatches(): Promise<MatchDTO[]> {
+  return request<MatchDTO[]>('/api/v1/matches');
+}
+
+/** Один мэтч с саммари «почему совпали» и контактом. */
+export function fetchMatch(id: string): Promise<MatchDetail> {
+  return request<MatchDetail>(`/api/v1/matches/${encodeURIComponent(id)}`);
 }
 
 /**

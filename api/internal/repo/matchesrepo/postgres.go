@@ -15,7 +15,7 @@ const peerJoin = `JOIN users u ON u.id = CASE WHEN m.a_id = $1::uuid THEN m.b_id
 
 func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]MatchWithPeer, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT `+matchColumns+`, `+peerColumns+`
+		SELECT `+matchColumns+`, `+blockedColumn+`, `+peerColumns+`
 		FROM matches m
 		`+peerJoin+`
 		WHERE $1::uuid IN (m.a_id, m.b_id)
@@ -36,7 +36,7 @@ func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]MatchWithPee
 
 func (r *Repo) ByID(ctx context.Context, userID, id uuid.UUID) (MatchWithPeer, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT `+matchColumns+`, `+peerColumns+`, `+contactColumns+`
+		SELECT `+matchColumns+`, `+blockedColumn+`, `+peerColumns+`, `+contactColumns+`
 		FROM matches m
 		`+peerJoin+`
 		WHERE m.id = $2 AND $1::uuid IN (m.a_id, m.b_id)`, userID, id)

@@ -28,6 +28,7 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM likes_users WHERE from_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM searches WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
+			`DELETE FROM blocks WHERE blocker_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM users WHERE tg_id <= $1 AND tg_id > $1-1000`,
 		} {
 			if _, err := pool.Exec(context.Background(), q, testTGBase); err != nil {
@@ -89,6 +90,63 @@ func matchPair(t *testing.T, likes *likesrepo.Repo, first, second uuid.UUID, zon
 		t.Fatal("the mutual like produced no match")
 	}
 	return res.Match.ID
+}
+
+// Мэтч необратим и переживает всё (§2.3): контакты у забаненного или
+// заблокированного пира отбирает сервис, но сам мэтч из списков не пропадает —
+// а статус и блок приезжают из базы живыми фактами, а не догадкой.
+func TestBannedAndBlockedPeerKeepsTheMatch(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	likes := likesrepo.New(pool)
+
+	me := seedUser(t, pool, 1, "me")
+	peer := seedUser(t, pool, 2, "peer")
+	seedSearch(t, pool, me)
+	matchID := matchPair(t, likes, me, peer, testZone)
+
+	both := func(stage string, wantStatus entity.Status, wantBlocked bool) {
+		t.Helper()
+		list := mustList(t, repo, me)
+		if len(list) != 1 || list[0].Match.ID != matchID {
+			t.Fatalf("ListByUser() at %s = %+v, want the match kept", stage, list)
+		}
+		detail, err := repo.ByID(t.Context(), me, matchID)
+		if err != nil {
+			t.Fatalf("ByID() at %s failed: %v", stage, err)
+		}
+		for _, got := range []MatchWithPeer{list[0], detail} {
+			if got.Peer.Status != wantStatus {
+				t.Errorf("peer status at %s = %q, want %q", stage, got.Peer.Status, wantStatus)
+			}
+			if got.Blocked != wantBlocked {
+				t.Errorf("Blocked at %s = %v, want %v", stage, got.Blocked, wantBlocked)
+			}
+		}
+	}
+
+	both("a fresh match", entity.StatusActive, false)
+
+	if _, err := pool.Exec(t.Context(),
+		`UPDATE users SET status = 'banned' WHERE id = $1`, peer); err != nil {
+		t.Fatalf("ban the peer: %v", err)
+	}
+	both("a banned peer", entity.StatusBanned, false)
+
+	// Блок — факт пары, а не одной стороны: обе записи читаются одинаково.
+	for _, pair := range [][2]uuid.UUID{{me, peer}, {peer, me}} {
+		if _, err := pool.Exec(t.Context(),
+			`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, pair[0], pair[1]); err != nil {
+			t.Fatalf("insert block %s -> %s: %v", pair[0], pair[1], err)
+		}
+		both("a block by "+pair[0].String(), entity.StatusBanned, true)
+		if _, err := pool.Exec(t.Context(),
+			`DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2`, pair[0], pair[1]); err != nil {
+			t.Fatalf("delete the block: %v", err)
+		}
+	}
+	both("the block lifted", entity.StatusBanned, false)
 }
 
 func TestListAndByID(t *testing.T) {

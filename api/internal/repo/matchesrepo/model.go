@@ -22,9 +22,16 @@ const peerColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
 
 const contactColumns = `u.tg_username AS u_tg_username, u.tg_id AS u_tg_id`
 
+const blockedColumn = `EXISTS (
+	SELECT 1 FROM blocks b
+	WHERE (b.blocker_id, b.blocked_id) IN ((m.a_id, m.b_id), (m.b_id, m.a_id))) AS blocked`
+
 type MatchWithPeer struct {
 	Match entity.Match
 	Peer  entity.User // Username and TelegramID are filled in by ByID only
+	// Blocked keeps the match in the lists but costs the peer his contacts in
+	// the detail: the pair is not to be reconnected, yet a match never dies.
+	Blocked bool
 }
 
 type matchRow struct {
@@ -38,6 +45,8 @@ type matchRow struct {
 
 type peerRow struct {
 	matchRow // m.* columns, unprefixed
+
+	Blocked bool `db:"blocked"`
 
 	UID          uuid.UUID `db:"u_id"`
 	UName        string    `db:"u_name"`
@@ -78,7 +87,8 @@ func (r matchRow) toEntity() entity.Match {
 
 func (r peerRow) toEntity() MatchWithPeer {
 	return MatchWithPeer{
-		Match: r.matchRow.toEntity(),
+		Match:   r.matchRow.toEntity(),
+		Blocked: r.Blocked,
 		Peer: entity.User{
 			ID:   r.UID,
 			Name: r.UName,

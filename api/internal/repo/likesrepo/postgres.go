@@ -136,6 +136,43 @@ func (r *Repo) Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget,
 	return budget, nil
 }
 
+func (r *Repo) Incoming(ctx context.Context, userID uuid.UUID) ([]IncomingLike, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+incomingColumns+`
+		FROM likes_users l
+		JOIN visible_people($1) vp ON vp = l.from_id
+		JOIN users u ON u.id = l.from_id
+		WHERE l.to_id = $1
+		  AND NOT EXISTS (
+		      SELECT 1 FROM matches m
+		      WHERE m.a_id = least(l.from_id, l.to_id)
+		        AND m.b_id = greatest(l.from_id, l.to_id))
+		ORDER BY l.created_at DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("incoming likes of %s: %w", userID, err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[incomingRow])
+	if err != nil {
+		return nil, fmt.Errorf("incoming likes of %s: %w", userID, err)
+	}
+	out := make([]IncomingLike, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
+}
+
+func (r *Repo) Between(ctx context.Context, a, b uuid.UUID) (aLikedB, bLikedA bool, err error) {
+	err = r.pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM likes_users WHERE from_id = $1 AND to_id = $2),
+		       EXISTS (SELECT 1 FROM likes_users WHERE from_id = $2 AND to_id = $1)`,
+		a, b).Scan(&aLikedB, &bLikedA)
+	if err != nil {
+		return false, false, fmt.Errorf("likes between %s and %s: %w", a, b, err)
+	}
+	return aLikedB, bLikedA, nil
+}
+
 func (r *Repo) settledMatch(ctx context.Context, fromID, toID uuid.UUID) (*entity.Match, error) {
 	var out *entity.Match
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {

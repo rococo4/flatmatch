@@ -39,6 +39,20 @@ func (r *Repo) ByID(ctx context.Context, id uuid.UUID) (entity.User, error) {
 	return user, nil
 }
 
+func (r *Repo) VisibleByID(ctx context.Context, viewerID, id uuid.UUID) (entity.User, error) {
+	const query = `
+		SELECT ` + columns + `
+		FROM users u
+		JOIN visible_people($1) vp ON vp = u.id
+		WHERE u.id = $2`
+
+	user, err := r.one(ctx, query, viewerID, id)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("get user %s visible to %s: %w", id, viewerID, err)
+	}
+	return user, nil
+}
+
 func (r *Repo) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error) {
 	const query = `
 		UPDATE users SET

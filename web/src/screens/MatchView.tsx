@@ -26,6 +26,22 @@ const V = {
     background: 'var(--app-bg)',
     color: 'var(--tg-theme-text-color)',
   } as CSSProperties,
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '0 14px',
+    height: 52,
+    flex: '0 0 52px',
+    background: 'var(--tg-theme-header-bg-color)',
+    borderBottom: '1px solid var(--sep)',
+  } as CSSProperties,
+  back: {
+    fontSize: 22,
+    lineHeight: 1,
+    color: 'var(--tg-theme-accent-text-color)',
+    cursor: 'pointer',
+  } as CSSProperties,
   centered: {
     flex: '1 1 auto',
     display: 'grid',
@@ -37,7 +53,22 @@ const V = {
   } as CSSProperties,
 };
 
-export function MatchView({ matchId, onToFeed }: { matchId: string; onToFeed?: () => void }) {
+export function MatchView({
+  matchId,
+  onBack,
+  onToFeed,
+}: {
+  matchId: string;
+  /**
+   * Выход, пока саммари не приехало.
+   *
+   * У готового экрана уход есть («К ленте»), а у загрузки и ошибки своего не
+   * было бы: таб-бар оболочка на этом экране не рисует, и сорвавшийся запрос
+   * запирал бы человека до перезапуска приложения.
+   */
+  onBack?: () => void;
+  onToFeed?: () => void;
+}) {
   const [match, setMatch] = useState<MatchDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +91,12 @@ export function MatchView({ matchId, onToFeed }: { matchId: string; onToFeed?: (
   if (error || !match) {
     return (
       <div style={V.screen}>
+        <div style={V.header}>
+          <span style={V.back} onClick={onBack}>
+            ‹
+          </span>
+          <span style={{ fontSize: 17, fontWeight: 590, letterSpacing: '-0.2px' }}>Мэтч</span>
+        </div>
         <div style={V.centered}>{error ?? 'Секунду…'}</div>
       </div>
     );

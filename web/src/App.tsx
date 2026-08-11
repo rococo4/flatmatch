@@ -754,7 +754,12 @@ export function App() {
         return (
           // Ключ — id мэтча: следующий должен собрать экран заново, а не
           // донести на нём саммари предыдущего.
-          <MatchView key={matchId} matchId={matchId} onToFeed={() => toTab('feed')} />
+          <MatchView
+            key={matchId}
+            matchId={matchId}
+            onBack={back}
+            onToFeed={() => toTab('feed')}
+          />
         );
       case 'flatPool':
         return (

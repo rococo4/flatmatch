@@ -219,7 +219,14 @@ export function IncomingLikesScreen({
               )}
 
               <div style={L.buttons}>
-                <button type="button" style={L.secondary} onClick={() => onOpenProfile?.(l.id)}>
+                {/* Пока ответ в полёте, уйти в профиль нельзя: экран сменился
+                    бы под ответом, и мэтч показать было бы уже некому. */}
+                <button
+                  type="button"
+                  style={{ ...L.secondary, cursor: busy ? 'default' : 'pointer' }}
+                  disabled={busy}
+                  onClick={() => onOpenProfile?.(l.id)}
+                >
                   Профиль
                 </button>
                 <button

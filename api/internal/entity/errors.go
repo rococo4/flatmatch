@@ -11,9 +11,13 @@ var ErrSearchLimit = errors.New("active search limit reached")
 
 var ErrSearchClosed = errors.New("search is closed")
 
+var ErrPointLimit = errors.New("point limit reached")
+
 var ErrLikeLimit = errors.New("daily like limit reached")
 
 var ErrNeedSearch = errors.New("an active search is required to like")
+
+var ErrNeedEnter = errors.New("the pool is visible to its members only")
 
 var ErrNotApproved = errors.New("profile is not approved yet")
 

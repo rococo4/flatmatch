@@ -31,8 +31,7 @@ type Config struct {
 	InitDataTTL time.Duration
 
 	BotPollingEnabled bool
-	// ModerationChatID is the founder's moderation chat (§5). Not used by the
-	// skeleton; carried here so step 5 of §12 has somewhere to read it from.
+
 	ModerationChatID int64
 }
 

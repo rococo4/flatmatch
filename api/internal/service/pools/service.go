@@ -2,7 +2,6 @@ package pools
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"slices"
 	"time"
@@ -43,17 +42,20 @@ func (s *Service) ZonePool(ctx context.Context, viewer entity.User, zoneID strin
 		}
 	}
 
+	// Правило «мы увиделись» (§2.3): пул виден только тому, кто в нём состоит —
+	// есть активный поиск, пересекающий зону. Анонимного просмотра нет; тизер
+	// зоны — промо-блок (Counts), он не гейтится.
+	if mySearch == nil {
+		return Pool{}, entity.ErrNeedSearch
+	}
+
 	cands, err := s.repo.PoolCandidates(ctx, viewer.ID, intersecting)
 	if err != nil {
 		return Pool{}, err
 	}
 
-	pool := Pool{Zone: zone, MySearch: exactOnly(mySearch, zoneID), Ranked: mySearch != nil}
-	if mySearch == nil {
-		pool.People = unrankedPeople(s.dir, s.photos, viewer, cands)
-	} else {
-		pool.Sections = rankedSections(s.dir, s.photos, viewer, mySearch.SearchParams, cands)
-	}
+	pool := Pool{Zone: zone, MySearch: exactOnly(mySearch, zoneID), Ranked: true}
+	pool.Sections = rankedSections(s.dir, s.photos, viewer, mySearch.SearchParams, cands)
 
 	if err := s.repo.MarkPoolSeen(ctx, viewer.ID, zoneID); err != nil {
 		return Pool{}, err
@@ -133,26 +135,6 @@ func rankedSections(dir *zones.Directory, photos PhotoURLs, viewer entity.User, 
 	return sections
 }
 
-func unrankedPeople(dir *zones.Directory, photos PhotoURLs, viewer entity.User, cands []entity.PoolCandidate) []Person {
-	seen := make(map[uuid.UUID]bool, len(cands))
-	var people []Person
-	for _, cand := range cands {
-		if seen[cand.User.ID] {
-			continue // candidates arrive freshest first, so the first one wins
-		}
-		seen[cand.User.ID] = true
-		people = append(people, newPerson(dir, photos, viewer, scored{cand: cand}))
-	}
-
-	slices.SortStableFunc(people, func(a, b Person) int {
-		if c := cmp.Compare(paramsFilled(b.Params), paramsFilled(a.Params)); c != 0 {
-			return c
-		}
-		return freshestFirst(a, b)
-	})
-	return people
-}
-
 func newPerson(dir *zones.Directory, photos PhotoURLs, viewer entity.User, sc scored) Person {
 	zone, _ := dir.Get(sc.cand.Search.ZoneID)
 	return Person{
@@ -178,25 +160,6 @@ func photoURL(photos PhotoURLs, u entity.User) string {
 		return ""
 	}
 	return photos.URL(u.PhotoKey)
-}
-
-func paramsFilled(p entity.SearchParams) int {
-	stated := []bool{
-		p.PriceMin != nil,
-		p.RoomsMin != nil,
-		p.RoomsMax != nil,
-		p.MoveIn != nil,
-		p.Term != nil,
-		len(p.HasStuff) > 0,
-	}
-
-	n := 0
-	for _, ok := range stated {
-		if ok {
-			n++
-		}
-	}
-	return n
 }
 
 // zoneMatchFirst: сначала совпавшие по зоне, внутри групп — свежесть.

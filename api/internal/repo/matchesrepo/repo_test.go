@@ -79,10 +79,10 @@ func mustList(t *testing.T, repo *Repo, userID uuid.UUID) []MatchWithPeer {
 // so only the one who calls first needs one.
 func matchPair(t *testing.T, likes *likesrepo.Repo, first, second uuid.UUID, zone string) uuid.UUID {
 	t.Helper()
-	if _, err := likes.Create(t.Context(), first, second, zone); err != nil {
+	if _, err := likes.Create(t.Context(), first, second, zone, []string{zone, testZone}); err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
-	res, err := likes.Create(t.Context(), second, first, "")
+	res, err := likes.Create(t.Context(), second, first, "", nil)
 	if err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
 	}

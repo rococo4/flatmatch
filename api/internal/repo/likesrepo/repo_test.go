@@ -102,7 +102,7 @@ func TestLikeSpendsBudget(t *testing.T) {
 	target := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, liker, "active")
 
-	res, err := repo.Create(t.Context(), liker, target, testZone)
+	res, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone})
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -150,12 +150,12 @@ func TestLikeRequiresActiveSearch(t *testing.T) {
 	liker := seedUser(t, pool, 1, "active", "male", "any")
 	target := seedUser(t, pool, 2, "active", "male", "any")
 
-	if _, err := repo.Create(t.Context(), liker, target, testZone); !errors.Is(err, entity.ErrNeedSearch) {
+	if _, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone}); !errors.Is(err, entity.ErrNeedSearch) {
 		t.Errorf("Create() without a search = %v, want ErrNeedSearch", err)
 	}
 	// Закрытый поиск — не skin in the game: он не открывает лайк.
 	seedSearch(t, pool, liker, "closed")
-	if _, err := repo.Create(t.Context(), liker, target, testZone); !errors.Is(err, entity.ErrNeedSearch) {
+	if _, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone}); !errors.Is(err, entity.ErrNeedSearch) {
 		t.Errorf("Create() with a closed search = %v, want ErrNeedSearch", err)
 	}
 	if n := countRows(t, pool, `SELECT count(*) FROM likes_users WHERE from_id = $1`, liker); n != 0 {
@@ -163,7 +163,7 @@ func TestLikeRequiresActiveSearch(t *testing.T) {
 	}
 
 	seedSearch(t, pool, liker, "active")
-	if _, err := repo.Create(t.Context(), liker, target, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone}); err != nil {
 		t.Fatalf("Create() with an active search failed: %v", err)
 	}
 }
@@ -177,11 +177,11 @@ func TestReplyIsFreeAndUnconditional(t *testing.T) {
 	second := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, first, "active")
 
-	if _, err := repo.Create(t.Context(), first, second, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), first, second, testZone, []string{testZone}); err != nil {
 		t.Fatalf("first Create() failed: %v", err)
 	}
 	// Отвечают из «Тебя лайкнули», где зоны под рукой нет — контекст пустой.
-	res, err := repo.Create(t.Context(), second, first, "")
+	res, err := repo.Create(t.Context(), second, first, "", nil)
 	if err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
 	}
@@ -225,10 +225,10 @@ func TestMatchContextIsFirstLike(t *testing.T) {
 	seedSearch(t, pool, first, "active")
 	seedSearch(t, pool, second, "active")
 
-	if _, err := repo.Create(t.Context(), first, second, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), first, second, testZone, []string{testZone}); err != nil {
 		t.Fatalf("first Create() failed: %v", err)
 	}
-	res, err := repo.Create(t.Context(), second, first, "line-1")
+	res, err := repo.Create(t.Context(), second, first, "line-1", []string{"line-1"})
 	if err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
 	}
@@ -253,12 +253,12 @@ func TestRepeatedLikeIsIdempotent(t *testing.T) {
 	target := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, liker, "active")
 
-	first, err := repo.Create(t.Context(), liker, target, testZone)
+	first, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone})
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
 	// Второй тап приходит с другой зоной: перезапись контекста была бы видна здесь.
-	again, err := repo.Create(t.Context(), liker, target, "line-1")
+	again, err := repo.Create(t.Context(), liker, target, "line-1", []string{"line-1"})
 	if err != nil {
 		t.Fatalf("repeated Create() failed: %v", err)
 	}
@@ -295,12 +295,12 @@ func TestRepeatIdempotentDespiteExhaustedBudget(t *testing.T) {
 	targets := make([]uuid.UUID, entity.MaxDailyLikes)
 	for i := range targets {
 		targets[i] = seedUser(t, pool, int64(10+i), "active", "male", "any")
-		if _, err := repo.Create(t.Context(), liker, targets[i], testZone); err != nil {
+		if _, err := repo.Create(t.Context(), liker, targets[i], testZone, []string{testZone}); err != nil {
 			t.Fatalf("Create() #%d failed: %v", i+1, err)
 		}
 	}
 
-	res, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes-1], testZone)
+	res, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes-1], testZone, []string{testZone})
 	if err != nil {
 		t.Fatalf("repeated Create() with an exhausted budget failed: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestRepeatIdempotentDespiteClosedSearch(t *testing.T) {
 	target := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, liker, "active")
 
-	if _, err := repo.Create(t.Context(), liker, target, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone}); err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
 	if _, err := pool.Exec(t.Context(), `
@@ -331,7 +331,7 @@ func TestRepeatIdempotentDespiteClosedSearch(t *testing.T) {
 		t.Fatalf("close the search: %v", err)
 	}
 
-	res, err := repo.Create(t.Context(), liker, target, testZone)
+	res, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone})
 	if err != nil {
 		t.Fatalf("repeated Create() without an active search failed: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestLikeNeedsApprovedProfile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			liker := seedUser(t, pool, int64(10+i), tt.status, "male", "any")
 			seedSearch(t, pool, liker, "active")
-			if _, err := repo.Create(t.Context(), liker, target, testZone); !errors.Is(err, entity.ErrNotApproved) {
+			if _, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone}); !errors.Is(err, entity.ErrNotApproved) {
 				t.Errorf("Create() = %v, want ErrNotApproved", err)
 			}
 			if n := countRows(t, pool, `SELECT count(*) FROM likes_users WHERE from_id = $1`, liker); n != 0 {
@@ -399,7 +399,7 @@ func TestLikeInvisiblePersonIs404(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := repo.Create(t.Context(), liker, tt.target, testZone); !errors.Is(err, entity.ErrNotFound) {
+			if _, err := repo.Create(t.Context(), liker, tt.target, testZone, []string{testZone}); !errors.Is(err, entity.ErrNotFound) {
 				t.Errorf("Create() = %v, want ErrNotFound", err)
 			}
 		})
@@ -431,7 +431,7 @@ func TestBudgetWindowSlides(t *testing.T) {
 		targets[i] = seedUser(t, pool, int64(10+i), "active", "male", "any")
 	}
 	for i, target := range targets[:entity.MaxDailyLikes] {
-		res, err := repo.Create(t.Context(), liker, target, testZone)
+		res, err := repo.Create(t.Context(), liker, target, testZone, []string{testZone})
 		if err != nil {
 			t.Fatalf("Create() #%d failed: %v", i+1, err)
 		}
@@ -439,7 +439,7 @@ func TestBudgetWindowSlides(t *testing.T) {
 			t.Errorf("remaining after like #%d = %d, want %d", i+1, res.Budget.Remaining, want)
 		}
 	}
-	if _, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes], testZone); !errors.Is(err, entity.ErrLikeLimit) {
+	if _, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes], testZone, []string{testZone}); !errors.Is(err, entity.ErrLikeLimit) {
 		t.Fatalf("Create() over the limit = %v, want ErrLikeLimit", err)
 	}
 
@@ -474,7 +474,7 @@ func TestBudgetWindowSlides(t *testing.T) {
 		t.Errorf("next_free_at = %v, want %v", budget.NextFreeAt, second.Add(entity.LikeWindow))
 	}
 
-	res, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes], testZone)
+	res, err := repo.Create(t.Context(), liker, targets[entity.MaxDailyLikes], testZone, []string{testZone})
 	if err != nil {
 		t.Fatalf("Create() into the freed slot failed: %v", err)
 	}
@@ -522,7 +522,7 @@ func TestLikeLimitUnderConcurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, errs[i] = repo.Create(t.Context(), liker, targets[i], testZone)
+			_, errs[i] = repo.Create(t.Context(), liker, targets[i], testZone, []string{testZone})
 		}()
 	}
 	close(start)
@@ -591,7 +591,7 @@ func TestMutualRaceMakesOneMatch(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i], errs[i] = repo.Create(t.Context(), pair[0], pair[1], testZone)
+			results[i], errs[i] = repo.Create(t.Context(), pair[0], pair[1], testZone, []string{testZone})
 		}()
 	}
 	waitBlockedBy(t, pool, gatePID, len(pairs))

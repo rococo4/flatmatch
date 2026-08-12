@@ -425,11 +425,23 @@ export function App() {
       await reloadSearches();
       const data = await fetchFeed(params);
       setFeed((f) => ({ ...f, data, busy: false, error: null, slotsFull: false }));
-      // Поиск сохранён — лайк, ради которого форму открыли, теперь разрешён:
-      // возвращаем человека к профилю, а не оставляем в ленте.
+      // Поиск сохранён — «и лайк улетит» из подписи формы обязано быть
+      // правдой: выстреливаем лайк сами и ведём человека к результату.
       if (likeReturn) {
-        setPerson(likeReturn);
+        const target = likeReturn;
         setLikeReturn(null);
+        try {
+          const res = await postLike(target.userId, target.zoneId);
+          reloadLikes();
+          if (res.matched && res.match_id) {
+            openMatch(res.match_id);
+            return;
+          }
+        } catch {
+          // Отказ (лимит, анкета на проверке) расскажет профиль состоянием
+          // кнопки — туда и ведём.
+        }
+        setPerson(target);
         setView('person');
       }
     } catch (e: unknown) {
@@ -788,10 +800,16 @@ export function App() {
             replyingId={replying}
             error={incomingError}
             onBack={back}
-            // Контекст лайка тапабелен — он ведёт в тот самый пул (§6).
+            // Контекст лайка тапабелен, но пул открывается только со своим
+            // поиском этой зоны — чужой пул сервер больше не отдаёт (§2.3
+            // «мы увиделись»). Иначе тап ведёт сразу в профиль лайкнувшего.
             onOpenContext={(id) => {
               const zone = incoming.find((l) => l.user_id === id)?.zone;
-              if (zone) openZonePool(zone.id);
+              if (zone && active.some((s) => s.zone.id === zone.id)) {
+                openZonePool(zone.id);
+              } else {
+                openPerson({ userId: id, zoneId: zone?.id, back: 'incoming' });
+              }
             }}
             onOpenProfile={(id) =>
               openPerson({

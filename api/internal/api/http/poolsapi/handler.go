@@ -176,11 +176,17 @@ func slots(mine []entity.Search, zoneID string) (used int, mySearchID *uuid.UUID
 }
 
 func handleError(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, entity.ErrNotFound) {
+	switch {
+	case errors.Is(err, entity.ErrNotFound):
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such zone", err)
-		return
+	case errors.Is(err, entity.ErrNeedSearch):
+		// Пул без пересекающего поиска не показываем (§2.3 «мы увиделись»);
+		// тизер зоны живёт в промо-блоке ленты, он не гейтится.
+		httpx.BadRequest(w, r, httpx.CodeNeedSearch,
+			"Сохрани поиск в этой зоне — пул откроется", nil, err)
+	default:
+		httpx.Internal(w, r, err)
 	}
-	httpx.Internal(w, r, err)
 }
 
 // optInt reads an optional integer parameter, naming one that is present but

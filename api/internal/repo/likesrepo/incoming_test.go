@@ -28,24 +28,24 @@ func TestIncomingHidesAnsweredAndInvisible(t *testing.T) {
 	for i := range waited {
 		waited[i] = seedUser(t, pool, int64(10+i), "active", "male", "any")
 		seedSearch(t, pool, waited[i], "active")
-		if _, err := repo.Create(t.Context(), waited[i], me, testZone); err != nil {
+		if _, err := repo.Create(t.Context(), waited[i], me, testZone, []string{testZone}); err != nil {
 			t.Fatalf("Create() of waiting like #%d failed: %v", i, err)
 		}
 	}
 
 	answered := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, answered, "active")
-	if _, err := repo.Create(t.Context(), answered, me, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), answered, me, testZone, []string{testZone}); err != nil {
 		t.Fatalf("Create() of the answered like failed: %v", err)
 	}
 	// Ответ закрыл мэтч — отвечать больше не на что, входящий уходит из списка.
-	if _, err := repo.Create(t.Context(), me, answered, ""); err != nil {
+	if _, err := repo.Create(t.Context(), me, answered, "", nil); err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
 	}
 
 	narrowed := seedUser(t, pool, 3, "active", "male", "any")
 	seedSearch(t, pool, narrowed, "active")
-	if _, err := repo.Create(t.Context(), narrowed, me, "line-1"); err != nil {
+	if _, err := repo.Create(t.Context(), narrowed, me, "line-1", []string{"line-1", testZone}); err != nil {
 		t.Fatalf("Create() of the narrowed liker failed: %v", err)
 	}
 	// Лайк уже стоял, когда его автор сузил круг до своего пола: с этого момента
@@ -96,7 +96,7 @@ func TestIncomingNotSearchingFlag(t *testing.T) {
 	me := seedUser(t, pool, 1, "active", "male", "any")
 	liker := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, liker, "active")
-	if _, err := repo.Create(t.Context(), liker, me, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), liker, me, testZone, []string{testZone}); err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
 
@@ -141,14 +141,14 @@ func TestBetweenReportsBothDirections(t *testing.T) {
 	}
 
 	assert("no likes", first, second, false, false)
-	if _, err := repo.Create(t.Context(), first, second, testZone); err != nil {
+	if _, err := repo.Create(t.Context(), first, second, testZone, []string{testZone}); err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
 	assert("one-sided", first, second, true, false)
 	// Порядок аргументов задаёт, что есть «мой лайк», а что — «меня лайкнули».
 	assert("one-sided, mirrored", second, first, false, true)
 
-	if _, err := repo.Create(t.Context(), second, first, ""); err != nil {
+	if _, err := repo.Create(t.Context(), second, first, "", nil); err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
 	}
 	assert("mutual", first, second, true, true)

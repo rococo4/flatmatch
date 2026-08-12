@@ -80,6 +80,16 @@
       "stations": [
         "st:pz:east"
       ]
+    },
+    {
+      "id": "pz-station-west",
+      "kind": "station",
+      "name": "Западная",
+      "name_in": "у метро Западная",
+      "name_gen": "метро Западная",
+      "stations": [
+        "st:pz:west"
+      ]
     }
   ]
 }

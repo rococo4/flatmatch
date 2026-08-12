@@ -37,21 +37,31 @@ type Photos interface {
 	PhotoURL(u entity.User) string
 }
 
+// Searches answers the pool half of «мы увиделись» (§2.3): whether the pair's
+// active searches intersect. The viewer side arrives as a zone list, the
+// target side is asked with it.
+type Searches interface {
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
+	HasActiveIn(ctx context.Context, userID uuid.UUID, zoneIDs []string) (bool, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
+	Intersecting(id string) []string
 }
 
 type Handler struct {
-	people People
-	likes  Likes
-	photos Photos
-	dir    ZoneDir
+	people   People
+	likes    Likes
+	photos   Photos
+	searches Searches
+	dir      ZoneDir
 }
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-func New(people People, likes Likes, photos Photos, dir ZoneDir) *Handler {
-	return &Handler{people: people, likes: likes, photos: photos, dir: dir}
+func New(people People, likes Likes, photos Photos, searches Searches, dir ZoneDir) *Handler {
+	return &Handler{people: people, likes: likes, photos: photos, searches: searches, dir: dir}
 }
 
 func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +92,22 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 		handleError(w, r, err)
 		return
 	}
+
+	// Отношение «мы увиделись» (§2.3): без пары лайков профиль открыт только
+	// со-пульнику — активные поиски двоих должны пересекаться. Чужой человек
+	// из другого конца города получает тот же 404, что и невидимый.
+	if !myLike && !likedMe {
+		met, err := h.metInPool(r.Context(), viewer.ID, target.ID)
+		if err != nil {
+			handleError(w, r, err)
+			return
+		}
+		if !met {
+			handleError(w, r, entity.ErrNotFound)
+			return
+		}
+	}
+
 	budget, err := h.likes.Budget(r.Context(), viewer.ID)
 	if err != nil {
 		handleError(w, r, err)
@@ -91,6 +117,34 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, toProfile(viewer, target,
 		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")),
 		myLike, likedMe, budget))
+}
+
+// metInPool: активные поиски двоих пересекаются зонами — цель состоит в пуле
+// одного из поисков смотрящего. Пересечение считает справочник: объединяем
+// Intersecting по зонам смотрящего и спрашиваем у базы, есть ли у цели
+// активный поиск в этих зонах.
+func (h *Handler) metInPool(ctx context.Context, viewerID, targetID uuid.UUID) (bool, error) {
+	mine, err := h.searches.ListByUser(ctx, viewerID)
+	if err != nil {
+		return false, err
+	}
+	seen := make(map[string]bool)
+	var union []string
+	for _, s := range mine {
+		if s.Status != entity.SearchActive {
+			continue
+		}
+		for _, z := range h.dir.Intersecting(s.ZoneID) {
+			if !seen[z] {
+				seen[z] = true
+				union = append(union, z)
+			}
+		}
+	}
+	if len(union) == 0 {
+		return false, nil
+	}
+	return h.searches.HasActiveIn(ctx, targetID, union)
 }
 
 // contextZone names the pool the profile was opened from. An id the directory

@@ -16,8 +16,11 @@ import (
 
 // Create runs the §2.3 gates, the insert and the match in one main transaction,
 // then adds a best-effort post-commit match read (for the mirrored like that
-// was still running) and a budget read outside it.
-func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string) (entity.LikeResult, error) {
+// was still running) and a budget read outside it. contextZones — зоны,
+// пересекающие зону контекста (считает справочник в сервисе, БД станций не
+// знает): тратящий лайк требует активного поиска в одной из них — правило
+// «мы увиделись в одном пуле».
+func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string, contextZones []string) (entity.LikeResult, error) {
 	var out entity.LikeResult
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		status, err := lockPair(ctx, tx, fromID, toID)
@@ -59,7 +62,9 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string
 
 		if !reply && !already {
 			hasSearch, err := exists(ctx, tx,
-				`SELECT 1 FROM searches WHERE user_id = $1 AND status = 'active'`, fromID)
+				`SELECT 1 FROM searches
+				 WHERE user_id = $1 AND status = 'active' AND zone_id = ANY($2)`,
+				fromID, contextZones)
 			if err != nil {
 				return err
 			}

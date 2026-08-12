@@ -28,6 +28,10 @@ type fakePhotos struct{}
 
 type fakeDir struct{}
 
+// fakeSearches answers the pool half of «мы увиделись»: met=true means the
+// pair's active searches intersect.
+type fakeSearches struct{ met bool }
+
 // The two halves of authmw, so the handler runs behind the real middleware and
 // finds a real viewer in the context.
 type fakeValidator struct{}
@@ -40,7 +44,7 @@ type fakeAccounts struct{ user entity.User }
 // something only the addressee may learn.
 func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 	likes := &fakeLikes{}
-	router := newRouter(New(&fakePeople{err: entity.ErrNotFound}, likes, fakePhotos{}, fakeDir{}))
+	router := newRouter(New(&fakePeople{err: entity.ErrNotFound}, likes, fakePhotos{}, fakeSearches{}, fakeDir{}))
 
 	rec := get(router, "/people/"+uuid.NewString())
 
@@ -59,7 +63,7 @@ func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 	likes := &fakeLikes{}
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
-	router := newRouter(New(&fakePeople{user: target}, likes, fakePhotos{}, fakeDir{}))
+	router := newRouter(New(&fakePeople{user: target}, likes, fakePhotos{}, fakeSearches{met: true}, fakeDir{}))
 
 	rec := get(router, "/people/"+target.ID.String())
 
@@ -68,6 +72,20 @@ func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 	}
 	if likes.betweenCalls != 1 {
 		t.Errorf("Between calls = %d, want 1", likes.betweenCalls)
+	}
+}
+
+// TestProfileHiddenWithoutMeeting pins the «мы увиделись» rule (§2.3): a
+// visible person whose searches share no pool with the viewer — and with no
+// likes between the two — answers the same 404 as one who does not exist.
+func TestProfileHiddenWithoutMeeting(t *testing.T) {
+	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
+	router := newRouter(New(&fakePeople{user: target}, &fakeLikes{}, fakePhotos{}, fakeSearches{}, fakeDir{}))
+
+	rec := get(router, "/people/"+target.ID.String())
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d — стороннему человеку профиль не показываем", rec.Code, http.StatusNotFound)
 	}
 }
 
@@ -105,6 +123,22 @@ func (f *fakeLikes) Budget(context.Context, uuid.UUID) (entity.LikeBudget, error
 func (fakePhotos) PhotoURL(entity.User) string { return "" }
 
 func (fakeDir) Get(string) (zones.Zone, bool) { return zones.Zone{}, false }
+
+func (fakeDir) Intersecting(id string) []string { return []string{id} }
+
+func (f fakeSearches) ListByUser(context.Context, uuid.UUID) ([]entity.Search, error) {
+	if !f.met {
+		return nil, nil
+	}
+	return []entity.Search{{
+		SearchParams: entity.SearchParams{ZoneID: "z"},
+		Status:       entity.SearchActive,
+	}}, nil
+}
+
+func (f fakeSearches) HasActiveIn(context.Context, uuid.UUID, []string) (bool, error) {
+	return f.met, nil
+}
 
 func (fakeValidator) Validate(string) (tma.InitData, error) {
 	return tma.InitData{User: tma.User{ID: 777000001, FirstName: "Дев"}}, nil

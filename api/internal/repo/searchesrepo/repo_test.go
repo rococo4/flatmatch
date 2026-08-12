@@ -360,3 +360,34 @@ func TestMarkPoolSeen(t *testing.T) {
 		t.Errorf("pool_seen_at of a closed search moved: %v then %v", sameZoneClosed.PoolSeenAt, got)
 	}
 }
+
+// HasActiveIn — половина отношения «мы увиделись» (§2.3): есть ли активный
+// поиск в одной из зон списка. Закрытый поиск отношение снимает.
+func TestHasActiveIn(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	user := seedUser(t, pool, 1, "active", "male", "any")
+
+	created, err := repo.Create(t.Context(), user, testParams("d-khamovniki"))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	if got, err := repo.HasActiveIn(t.Context(), user, []string{"line-1", "d-khamovniki"}); err != nil || !got {
+		t.Errorf("HasActiveIn(matching list) = %v, %v; want true", got, err)
+	}
+	if got, err := repo.HasActiveIn(t.Context(), user, []string{"line-1"}); err != nil || got {
+		t.Errorf("HasActiveIn(foreign list) = %v, %v; want false", got, err)
+	}
+	if got, err := repo.HasActiveIn(t.Context(), user, nil); err != nil || got {
+		t.Errorf("HasActiveIn(nil) = %v, %v; want false", got, err)
+	}
+
+	if _, err := repo.Close(t.Context(), user, created.ID, entity.CloseFoundHere); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+	if got, err := repo.HasActiveIn(t.Context(), user, []string{"d-khamovniki"}); err != nil || got {
+		t.Errorf("HasActiveIn(closed search) = %v, %v; want false", got, err)
+	}
+}

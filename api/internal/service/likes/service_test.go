@@ -18,6 +18,7 @@ type fakeRepo struct {
 	err error
 
 	zoneID        string
+	contextZones  []string
 	createCalls   int
 	incomingCalls int
 	budgetCalls   int
@@ -27,9 +28,10 @@ type fakeRepo struct {
 // drift should break the build here, not at the Task 5 handler wiring.
 var _ Repository = (*likesrepo.Repo)(nil)
 
-func (f *fakeRepo) Create(_ context.Context, _, _ uuid.UUID, zoneID string) (entity.LikeResult, error) {
+func (f *fakeRepo) Create(_ context.Context, _, _ uuid.UUID, zoneID string, contextZones []string) (entity.LikeResult, error) {
 	f.createCalls++
 	f.zoneID = zoneID
+	f.contextZones = contextZones
 	if f.err != nil {
 		return entity.LikeResult{}, f.err
 	}
@@ -90,6 +92,9 @@ func TestLikeWithoutZoneIsLegal(t *testing.T) {
 		t.Errorf("empty zone did not reach the repo as empty: calls=%d zone=%q",
 			repo.createCalls, repo.zoneID)
 	}
+	if repo.contextZones != nil {
+		t.Errorf("empty zone must carry no context zones, got %v", repo.contextZones)
+	}
 }
 
 func TestLikeKnownZoneReachesRepo(t *testing.T) {
@@ -101,6 +106,11 @@ func TestLikeKnownZoneReachesRepo(t *testing.T) {
 	}
 	if repo.zoneID != "d-khamovniki" {
 		t.Errorf("repo got zone %q, want d-khamovniki", repo.zoneID)
+	}
+	// Гейт «мы увиделись» работает списком пересекающихся зон — сам контекст
+	// обязан в него входить, иначе поиск ровно на эту зону лайк не оплатит.
+	if !slices.Contains(repo.contextZones, "d-khamovniki") {
+		t.Errorf("context zones %v must contain the context zone itself", repo.contextZones)
 	}
 }
 

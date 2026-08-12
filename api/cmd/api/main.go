@@ -57,12 +57,14 @@ type deps struct {
 	likes    *likes.Service
 	matches  *matches.Service
 
-	// people and pairLikes are storage read directly: the profile screen only
-	// asks for facts — is this person visible to the viewer, what have the two
-	// already done to each other, how many slots are left — and there is no
-	// policy in between for a service to hold.
-	people    *usersrepo.Repo
-	pairLikes *likesrepo.Repo
+	// people, pairLikes and pairSearches are storage read directly: the profile
+	// screen only asks for facts — is this person visible to the viewer, what
+	// have the two already done to each other, do their searches intersect,
+	// how many slots are left — and there is no policy in between for a
+	// service to hold.
+	people       *usersrepo.Repo
+	pairLikes    *likesrepo.Repo
+	pairSearches *searchesrepo.Repo
 
 	photos *photostore.Dir
 	dir    *zones.Directory
@@ -116,15 +118,16 @@ func run() error {
 	likesRepo := likesrepo.New(pool)
 
 	wired := deps{
-		accounts:  users.New(usersRepo, photos),
-		searches:  searches.New(searchesRepo, dir),
-		pools:     pools.New(searchesRepo, dir, photos),
-		likes:     likes.New(likesRepo, dir),
-		matches:   matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, dir),
-		people:    usersRepo,
-		pairLikes: likesRepo,
-		photos:    photos,
-		dir:       dir,
+		accounts:     users.New(usersRepo, photos),
+		searches:     searches.New(searchesRepo, dir),
+		pools:        pools.New(searchesRepo, dir, photos),
+		likes:        likes.New(likesRepo, dir),
+		matches:      matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, dir),
+		people:       usersRepo,
+		pairLikes:    likesRepo,
+		pairSearches: searchesRepo,
+		photos:       photos,
+		dir:          dir,
 	}
 	validator := tma.NewValidator(cfg.BotToken, cfg.InitDataTTL)
 
@@ -217,7 +220,7 @@ func router(
 		poolsHandler := poolsapi.New(d.pools, d.searches, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
-		r.Get("/people/{id}", peopleapi.New(d.people, d.pairLikes, d.accounts, d.dir).Profile)
+		r.Get("/people/{id}", peopleapi.New(d.people, d.pairLikes, d.accounts, d.pairSearches, d.dir).Profile)
 	})
 
 	return r

@@ -66,6 +66,9 @@ func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Searc
 }
 
 func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]entity.PoolCandidate, error) {
+	// Смэтченные не discovery: вы уже нашли друг друга, в пулах и счётчиках
+	// такая карточка — шум. Фильтр именно здесь, а не в visible_people: пара
+	// остаётся видимой друг другу (детали мэтча, контакты).
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+candidateColumns+`
 		FROM searches s
@@ -73,6 +76,10 @@ func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs [
 		JOIN users u ON u.id = s.user_id
 		WHERE s.status = 'active'
 		  AND s.zone_id = ANY($2)
+		  AND NOT EXISTS (
+		      SELECT 1 FROM matches m
+		      WHERE m.a_id = least($1::uuid, s.user_id)
+		        AND m.b_id = greatest($1::uuid, s.user_id))
 		ORDER BY s.created_at DESC`, viewerID, zoneIDs)
 	if err != nil {
 		return nil, fmt.Errorf("pool candidates for viewer %s: %w", viewerID, err)
@@ -87,6 +94,25 @@ func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs [
 	}
 	return out, nil
 }
+
+// HasActiveIn отвечает половину отношения «мы увиделись» (§2.3): есть ли у
+// человека активный поиск в одной из этих зон. Пересечение зон считает
+// справочник у вызывающего — БД про станции не знает.
+func (r *Repo) HasActiveIn(ctx context.Context, userID uuid.UUID, zoneIDs []string) (bool, error) {
+	var one int
+	err := r.pool.QueryRow(ctx, `
+		SELECT 1 FROM searches
+		WHERE user_id = $1 AND status = 'active' AND zone_id = ANY($2)
+		LIMIT 1`, userID, zoneIDs).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("active searches of %s in zones: %w", userID, err)
+	}
+	return true, nil
+}
+
 func (r *Repo) UpdateParams(ctx context.Context, userID, id uuid.UUID, p entity.SearchParams) (entity.Search, error) {
 	search, err := r.oneEditable(ctx, userID, id, `
 		UPDATE searches SET zone_id = $3, price_min = $4, price_max = $5,

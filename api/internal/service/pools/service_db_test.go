@@ -239,10 +239,10 @@ func TestZonePoolRanksFromAnIntersectingSearch(t *testing.T) {
 	assertSectionHas(t, got, SectionAll, other.ID)
 }
 
-// Without a search of their own the viewer gets one plain list (§6): no
-// Compare, hence no chips — a zero-value search would call everyone a full
-// match. Order is «заполненность параметров, затем свежесть».
-func TestZonePoolUnrankedWithoutOwnSearch(t *testing.T) {
+// Правило «мы увиделись» (§2.3): пул без своего пересекающего поиска не
+// отдаётся вовсе — ErrNeedSearch, анонимного режима нет; тизер зоны несёт
+// промо-блок (Counts).
+func TestZonePoolNeedsOwnSearch(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
 	repo := searchesrepo.New(pool)
@@ -250,53 +250,64 @@ func TestZonePoolUnrankedWithoutOwnSearch(t *testing.T) {
 
 	viewer := seedUser(t, pool, testUser{n: 1, gender: entity.GenderMale, pref: entity.GenderPrefAny,
 		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
-	rich := seedUser(t, pool, testUser{n: 2, gender: entity.GenderFemale, pref: entity.GenderPrefAny,
+	other := seedUser(t, pool, testUser{n: 2, gender: entity.GenderFemale, pref: entity.GenderPrefAny,
 		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
-	plain := seedUser(t, pool, testUser{n: 3, gender: entity.GenderMale, pref: entity.GenderPrefAny,
-		schedule: entity.ScheduleLark, smoking: entity.SmokingHome})
-	switcher := seedUser(t, pool, testUser{n: 4, gender: entity.GenderMale, pref: entity.GenderPrefAny,
+	mustCreate(t, repo, other.ID, entity.SearchParams{ZoneID: "pz-district", PriceMax: 45000})
+
+	if _, err := svc.ZonePool(t.Context(), viewer, "pz-district"); !errors.Is(err, entity.ErrNeedSearch) {
+		t.Fatalf("ZonePool() = %v, want ErrNeedSearch — пул закрыт без своего поиска", err)
+	}
+
+	// Поиск в непересекающейся зоне пул тоже не открывает: «увиделись» — это
+	// пересечение станций, а не сам факт какого-нибудь поиска.
+	mustCreate(t, repo, viewer.ID, entity.SearchParams{ZoneID: "pz-station-west", PriceMax: 45000})
+	if _, err := svc.ZonePool(t.Context(), viewer, "pz-district"); !errors.Is(err, entity.ErrNeedSearch) {
+		t.Fatalf("ZonePool() = %v, want ErrNeedSearch — чужая зона пул не открывает", err)
+	}
+}
+
+// Смэтченные — не discovery (§2.1): пара уже нашла друг друга, её карточки в
+// пуле и счётчиках — шум. Из visible_people пара при этом НЕ выпадает —
+// контакты в деталях мэтча живы; фильтр стоит в кандидатах пула.
+func TestPoolAndCountsHideMatchedPair(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := searchesrepo.New(pool)
+	svc := New(repo, testDir(t), staticPhotos{})
+
+	viewer := seedUser(t, pool, testUser{n: 1, gender: entity.GenderMale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
+	matched := seedUser(t, pool, testUser{n: 2, gender: entity.GenderFemale, pref: entity.GenderPrefAny,
+		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo})
+	stranger := seedUser(t, pool, testUser{n: 3, gender: entity.GenderMale, pref: entity.GenderPrefAny,
 		schedule: entity.ScheduleLark, smoking: entity.SmokingHome})
 
-	detailed := zoneParams("pz-district", 35000, 45000, moveSept)
-	detailed.RoomsMin = pointer.To(2)
-	detailed.Term = pointer.To(entity.TermYear)
-	mustCreate(t, repo, rich.ID, detailed)
-	// Created later, so it wins on freshness and must still lose on detail.
-	mustCreate(t, repo, plain.ID, entity.SearchParams{ZoneID: "pz-district", PriceMax: 45000})
-	// Two active searches of one person, equally detailed and distinguishable
-	// only by «до»: the card must carry the fresher one. Which of them survives
-	// deduplication rides entirely on the repository handing candidates over
-	// freshest first.
-	mustCreate(t, repo, switcher.ID, entity.SearchParams{ZoneID: "pz-district", PriceMax: 50000})
-	mustCreate(t, repo, switcher.ID, entity.SearchParams{ZoneID: "pz-line-east", PriceMax: 70000})
+	params := zoneParams("pz-district", 35000, 45000, moveSept)
+	mustCreate(t, repo, viewer.ID, params)
+	mustCreate(t, repo, matched.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+	mustCreate(t, repo, stranger.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+
+	if _, err := pool.Exec(context.Background(), `
+		INSERT INTO matches (a_id, b_id)
+		VALUES (least($1::uuid, $2::uuid), greatest($1::uuid, $2::uuid))`,
+		viewer.ID, matched.ID); err != nil {
+		t.Fatalf("insert match: %v", err)
+	}
 
 	got, err := svc.ZonePool(t.Context(), viewer, "pz-district")
 	if err != nil {
 		t.Fatalf("ZonePool() failed: %v", err)
 	}
-	if got.Ranked || got.MySearch != nil || len(got.Sections) != 0 {
-		t.Fatalf("viewer has no search, pool must be unranked: %+v", got)
+	assertSectionHas(t, got, SectionAll, stranger.ID)
+	assertNowhere(t, got, "смэтченный скрыт из пула", matched.ID)
+
+	counts, err := svc.Counts(t.Context(), viewer.ID, params, nil)
+	if err != nil {
+		t.Fatalf("Counts() failed: %v", err)
 	}
-	if len(got.People) != 3 {
-		t.Fatalf("got %d people, want 3 — switcher holds two searches, not two cards", len(got.People))
+	if counts.People != 1 {
+		t.Errorf("Counts.People = %d, want 1 — смэтченный не считается", counts.People)
 	}
-	if got.People[0].User.ID != rich.ID {
-		t.Errorf("first card is %s, want the richer search %s", got.People[0].User.ID, rich.ID)
-	}
-	switcherCard := got.People[1]
-	if switcherCard.User.ID != switcher.ID {
-		t.Fatalf("second card is %s, want %s", switcherCard.User.ID, switcher.ID)
-	}
-	if switcherCard.Params.PriceMax != 70000 {
-		t.Errorf("card of %s shows «до %d», want the fresher search's 70000",
-			switcher.ID, switcherCard.Params.PriceMax)
-	}
-	for _, p := range got.People {
-		if p.Chips != nil {
-			t.Errorf("unranked card of %s carries chips: %+v", p.User.ID, p.Chips)
-		}
-	}
-	assertNowhere(t, got, "nobody is in their own pool", viewer.ID)
 }
 
 // The «M новых» badge counts searches newer than the last look; opening the
@@ -439,6 +450,7 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	// pgx uses the extended protocol: one statement per Exec, no semicolons.
 	clean := func() {
 		for _, q := range []string{
+			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM searches WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM blocks WHERE blocker_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM users WHERE tg_id <= $1 AND tg_id > $1-1000`,

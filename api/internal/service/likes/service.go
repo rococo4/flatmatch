@@ -12,7 +12,7 @@ import (
 )
 
 type Repository interface {
-	Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string) (entity.LikeResult, error)
+	Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string, contextZones []string) (entity.LikeResult, error)
 	Incoming(ctx context.Context, userID uuid.UUID) ([]likesrepo.IncomingLike, error)
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
@@ -32,7 +32,13 @@ func (s *Service) Like(ctx context.Context, fromID, toID uuid.UUID, zoneID strin
 	if _, ok := s.dir.Get(zoneID); zoneID != "" && !ok {
 		return entity.LikeResult{}, &entity.FieldsError{Err: ErrInvalidParams, Fields: []string{"zone_id"}}
 	}
-	return s.repo.Create(ctx, fromID, toID, zoneID)
+	// Лайк без зоны контекста тратящим быть не может: пустой список зон валит
+	// гейт поиска в ErrNeedSearch, ответным лайкам гейт и так не мешает.
+	var contextZones []string
+	if zoneID != "" {
+		contextZones = s.dir.Intersecting(zoneID)
+	}
+	return s.repo.Create(ctx, fromID, toID, zoneID, contextZones)
 }
 
 func (s *Service) Incoming(ctx context.Context, userID uuid.UUID) ([]likesrepo.IncomingLike, error) {

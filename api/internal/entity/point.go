@@ -52,6 +52,35 @@ const (
 	SourceRealtor   PointSource = "realtor"
 )
 
+type Bathrooms string
+
+const (
+	BathroomsUnknown Bathrooms = unknown
+
+	BathroomsCombined Bathrooms = "combined"
+	BathroomsSeparate Bathrooms = "separate"
+	BathroomsTwo      Bathrooms = "two"
+)
+
+type Utilities string
+
+const (
+	UtilitiesUnknown Utilities = unknown
+
+	UtilitiesIncluded Utilities = "included"
+	UtilitiesMeters   Utilities = "meters"
+)
+
+type Restriction string
+
+const (
+	RestrictionUnknown Restriction = unknown
+
+	RestrictionNoPets    Restriction = "no_pets"
+	RestrictionNoCouples Restriction = "no_couples"
+	RestrictionNoSmoking Restriction = "no_smoking"
+)
+
 type Point struct {
 	ID    uuid.UUID
 	Type  PointType
@@ -68,9 +97,9 @@ type Point struct {
 	PriceShare   *int // intent_home
 	Rooms        *int
 	Isolated     *bool
-	Bathrooms    *int
-	Utilities    *string
-	Restrictions []string
+	Bathrooms    *Bathrooms
+	Utilities    *Utilities
+	Restrictions []Restriction
 	PhotoKey     string
 
 	URLNorm     *string
@@ -96,4 +125,16 @@ func ParsePointStatus(raw string) PointStatus {
 
 func ParsePointSource(raw string) PointSource {
 	return parseEnum(raw, SourceTGChannel, SourceUserLink, SourceManual, SourceRealtor)
+}
+
+func ParseBathrooms(raw string) Bathrooms {
+	return parseEnum(raw, BathroomsCombined, BathroomsSeparate, BathroomsTwo)
+}
+
+func ParseUtilities(raw string) Utilities {
+	return parseEnum(raw, UtilitiesIncluded, UtilitiesMeters)
+}
+
+func ParseRestriction(raw string) Restriction {
+	return parseEnum(raw, RestrictionNoPets, RestrictionNoCouples, RestrictionNoSmoking)
 }

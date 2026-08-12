@@ -30,6 +30,25 @@ func TestParsePointEnums(t *testing.T) {
 		{"source realtor", string(ParsePointSource("realtor")), string(SourceRealtor)},
 		{"source junk", string(ParsePointSource("avito_parser")), unknown},
 		{"source empty", string(ParsePointSource("")), ""},
+
+		{"bathrooms combined", string(ParseBathrooms("combined")), string(BathroomsCombined)},
+		{"bathrooms separate", string(ParseBathrooms("separate")), string(BathroomsSeparate)},
+		{"bathrooms two", string(ParseBathrooms("two")), string(BathroomsTwo)},
+		// Форма отдаёт код, а не число: «1» осмысленно только вместе с
+		// раздельностью и валидным ответом не является.
+		{"bathrooms count", string(ParseBathrooms("1")), unknown},
+		{"bathrooms empty", string(ParseBathrooms("")), ""},
+
+		{"utilities included", string(ParseUtilities("included")), string(UtilitiesIncluded)},
+		{"utilities meters", string(ParseUtilities("meters")), string(UtilitiesMeters)},
+		{"utilities junk", string(ParseUtilities("free")), unknown},
+		{"utilities empty", string(ParseUtilities("")), ""},
+
+		{"restriction no_pets", string(ParseRestriction("no_pets")), string(RestrictionNoPets)},
+		{"restriction no_couples", string(ParseRestriction("no_couples")), string(RestrictionNoCouples)},
+		{"restriction no_smoking", string(ParseRestriction("no_smoking")), string(RestrictionNoSmoking)},
+		{"restriction label", string(ParseRestriction("без животных")), unknown},
+		{"restriction empty", string(ParseRestriction("")), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

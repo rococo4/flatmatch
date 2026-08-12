@@ -16,18 +16,19 @@ CREATE TABLE points (
 
     zone_id text NOT NULL,
 
-    price_total  int NULL, -- flat: цена квартиры целиком
-    price_share  int NULL, -- intent_home: цена доли въезжающего
-    rooms        int NULL,
-    isolated     boolean NULL,
-    bathrooms    int NULL,
-    utilities    text NULL CHECK (utilities IN ('included', 'meters')),
-    restrictions text[] NOT NULL DEFAULT '{}', -- чипы ограничений квартиры
+    price_total int NULL, -- flat: цена квартиры целиком
+    price_share int NULL, -- intent_home: цена доли въезжающего
+    rooms       int NULL,
+    isolated    boolean NULL,
+    bathrooms text NULL CHECK (bathrooms IN ('combined', 'separate', 'two')),
+    utilities text NULL CHECK (utilities IN ('included', 'meters')),
+    restrictions text[] NOT NULL DEFAULT '{}'
+                 CHECK (restrictions <@ ARRAY['no_pets', 'no_couples', 'no_smoking']::text[]),
     -- Ключ объекта, а не URL: адреса собирает хранилище (как users.photo_key).
     photo_key text NULL,
-    -- Нормализованная ссылка на оригинал; её UNIQUE и есть дедупликация
-    -- квартир («эта квартира уже есть, в пуле N — войти?», §6).
-    url_norm text NULL UNIQUE,
+    -- Нормализованная ссылка на оригинал; её уникальность среди живых точек и
+    -- есть дедупликация («эта квартира уже есть, в пуле N — войти?», §6).
+    url_norm text NULL,
 
     move_in      date NULL,
     deposit      int NULL,
@@ -41,8 +42,12 @@ CREATE TABLE points (
     CHECK ((created_by IS NULL) = (source IN ('tg_channel', 'manual'))),
     CHECK ((stage IS NOT NULL) = (type = 'intent_home')),
     -- «К себе» — предложение конкретного человека, обезличенным не бывает.
-    CHECK (type <> 'intent_home' OR created_by IS NOT NULL)
+    CHECK (type <> 'intent_home' OR created_by IS NOT NULL),
+    CHECK ((status = 'closed') = (close_reason IS NOT NULL)),
+    CHECK (stage IS DISTINCT FROM 'moving_in' OR move_in IS NOT NULL)
 );
+
+CREATE UNIQUE INDEX points_url_norm_active ON points (url_norm) WHERE status <> 'closed';
 
 CREATE INDEX points_active_zone_idx ON points (zone_id) WHERE status = 'active';
 

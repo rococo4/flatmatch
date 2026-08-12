@@ -14,7 +14,9 @@ import (
 	"flatmatch/api/internal/postgres"
 )
 
-// Create runs the whole §2.3 mechanics in one transaction.
+// Create runs the §2.3 gates, the insert and the match in one main transaction,
+// then adds a best-effort post-commit match read (for the mirrored like that
+// was still running) and a budget read outside it.
 func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string) (entity.LikeResult, error) {
 	var out entity.LikeResult
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {

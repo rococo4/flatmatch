@@ -221,7 +221,6 @@ export function MySearchesScreen({
   onOpenFlatPool,
   onRemoveFlat,
   onConfirmAlive,
-  onOpenIncomingLikes,
   onEditHome,
   onRemoveHome,
   onCreateFlatPoint,
@@ -249,8 +248,6 @@ export function MySearchesScreen({
   onRemoveFlat?: (id: string) => void;
   /** «Проверил — она живая»: снимает скрытие по сигналам пула. */
   onConfirmAlive?: (id: string) => void;
-  /** Отклики на комнату живут в общем «Тебя лайкнули» (пометка «на твою комнату»). */
-  onOpenIncomingLikes?: () => void;
   onEditHome?: (id: string) => void;
   onRemoveHome?: (id: string) => void;
   /** → форма «Найди со-съёмщика на свою квартиру» */
@@ -527,9 +524,6 @@ export function MySearchesScreen({
                         </span>
                       </div>
                     </div>
-                    <button type="button" style={S.secondaryButton} onClick={onOpenIncomingLikes}>
-                      Тебя лайкнули · {h.responseCount}
-                    </button>
                     <div style={L.actions}>
                       <button type="button" style={L.actionLink} onClick={() => onEditHome?.(h.id)}>
                         Редактировать

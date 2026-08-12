@@ -29,8 +29,8 @@ const blockedColumn = `EXISTS (
 type MatchWithPeer struct {
 	Match entity.Match
 	Peer  entity.User // Username and TelegramID are filled in by ByID only
-	// Blocked keeps the match in the lists but costs the peer his contacts in
-	// the detail: the pair is not to be reconnected, yet a match never dies.
+	// Blocked reports the fact only — the service decides what to withhold from
+	// a blocked pair: the pair is not to be reconnected, yet a match never dies.
 	Blocked bool
 }
 

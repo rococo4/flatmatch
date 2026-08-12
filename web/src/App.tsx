@@ -654,7 +654,6 @@ export function App() {
             onAddSearch={() => openLookForm(EMPTY_DRAFT)}
             onReactivate={(id) => void reactivate(id)}
             onOpenFlatPool={() => setView('flatPool')}
-            onOpenIncomingLikes={openIncoming}
             onCreateFlatPoint={() => setView('flatForm')}
             onCreateHomePoint={() => setView('homeForm')}
           />
@@ -786,7 +785,6 @@ export function App() {
         return (
           <IncomingLikesScreen
             likes={incoming.map(toIncomingRow)}
-            unreadLikes={unreadLikes}
             replyingId={replying}
             error={incomingError}
             onBack={back}

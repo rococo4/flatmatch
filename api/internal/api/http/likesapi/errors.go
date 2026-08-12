@@ -15,7 +15,7 @@ import (
 // The three messages the front-end shows as they come: the limit, the missing
 // search (the mini-form of §2.3) and the unapproved questionnaire (§5).
 const (
-	likeLimitMessage   = "Лимит на сегодня исчерпан"
+	likeLimitMessage   = "Лимит исчерпан"
 	nextFreeAtTemplate = " — следующий лайк освободится в "
 	needSearchMessage  = "Укажи, где ищешь — и лайк улетит"
 	notApprovedMessage = "Анкета ещё на проверке — лайки откроются после одобрения"

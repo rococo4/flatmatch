@@ -22,8 +22,8 @@ import { fieldLabel, moscowTime, occupationLabel } from '../api/format';
 import { launchedByTelegram } from '../telegram/mockEnv';
 import { PersonProfileScreen, type LikeAction, type MatchRow } from './PersonProfileScreen';
 
-/** Дорогих лайков в сутки (§2.3). Сервер шлёт остаток, потолок знает спека. */
-const LIKES_PER_DAY = 5;
+/** Слотов дорогих лайков на окне 24ч (§2.3). Сервер шлёт остаток, потолок знает спека. */
+const LIKE_SLOTS = 5;
 
 /** Знаменатель «6 ИЗ 9»: девять привычек анкеты, по которым считаются совпадения (§4). */
 const HABIT_FIELDS = 9;
@@ -243,14 +243,14 @@ function likeAction(
     return {
       ...base,
       label: p.budget.next_free_at
-        ? `Лимит на сегодня · следующий в ${moscowTime(p.budget.next_free_at)}`
-        : 'Лимит на сегодня исчерпан',
+        ? `Лимит исчерпан · следующий в ${moscowTime(p.budget.next_free_at)}`
+        : 'Лимит исчерпан',
       disabled: true,
     };
   }
   return {
     ...base,
-    label: `Хочу жить вместе · осталось ${p.budget.remaining} из ${LIKES_PER_DAY}`,
+    label: `Хочу жить вместе · осталось ${p.budget.remaining} из ${LIKE_SLOTS}`,
     disabled: busy,
   };
 }

@@ -7,7 +7,6 @@
    точками (§12 шаг 5), до тех пор рисовать их нечем. */
 import type { CSSProperties } from 'react';
 import { Avatar, Badge, S } from '../ui/primitives';
-import { TabBar } from '../ui/TabBar';
 
 export type IncomingLike = {
   /** id лайкнувшего: он же адресат ответа и вход в его профиль. */
@@ -117,7 +116,6 @@ const L = {
 
 export function IncomingLikesScreen({
   likes,
-  unreadLikes,
   replyingId,
   error,
   onBack,
@@ -127,7 +125,6 @@ export function IncomingLikesScreen({
   onToFeed,
 }: {
   likes: IncomingLike[];
-  unreadLikes: number;
   /** Чей ответ сейчас улетает: кнопки гаснут, второй тап не уходит вторым лайком. */
   replyingId?: string | null;
   error?: string | null;
@@ -246,8 +243,6 @@ export function IncomingLikesScreen({
           ))
         )}
       </div>
-
-      <TabBar active="profile" unreadLikes={unreadLikes} />
     </div>
   );
 }

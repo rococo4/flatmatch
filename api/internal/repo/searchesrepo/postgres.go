@@ -66,9 +66,6 @@ func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Searc
 }
 
 func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]entity.PoolCandidate, error) {
-	// Смэтченные не discovery: вы уже нашли друг друга, в пулах и счётчиках
-	// такая карточка — шум. Фильтр именно здесь, а не в visible_people: пара
-	// остаётся видимой друг другу (детали мэтча, контакты).
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+candidateColumns+`
 		FROM searches s
@@ -95,9 +92,6 @@ func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs [
 	return out, nil
 }
 
-// HasActiveIn отвечает половину отношения «мы увиделись» (§2.3): есть ли у
-// человека активный поиск в одной из этих зон. Пересечение зон считает
-// справочник у вызывающего — БД про станции не знает.
 func (r *Repo) HasActiveIn(ctx context.Context, userID uuid.UUID, zoneIDs []string) (bool, error) {
 	var one int
 	err := r.pool.QueryRow(ctx, `

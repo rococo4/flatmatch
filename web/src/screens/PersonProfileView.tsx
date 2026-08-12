@@ -18,7 +18,7 @@ import {
 } from '@telegram-apps/sdk-react';
 
 import { ApiError, fetchPerson, postLike, type PersonProfileDTO } from '../api/client';
-import { fieldLabel, moscowTime, occupationLabel } from '../api/format';
+import { fieldLabel, occupationLabel, untilTime } from '../api/format';
 import { launchedByTelegram } from '../telegram/mockEnv';
 import { PersonProfileScreen, type LikeAction, type MatchRow } from './PersonProfileScreen';
 
@@ -243,7 +243,7 @@ function likeAction(
     return {
       ...base,
       label: p.budget.next_free_at
-        ? `Лимит исчерпан · следующий в ${moscowTime(p.budget.next_free_at)}`
+        ? `Лимит исчерпан · следующий через ${untilTime(p.budget.next_free_at)}`
         : 'Лимит исчерпан',
       disabled: true,
     };

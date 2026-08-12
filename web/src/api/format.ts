@@ -171,18 +171,8 @@ const DAY_MONTH_FMT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 
 
 const DAY_MS = 86_400_000;
 
-/**
- * Часы возврата лимита лайков — всегда московские, а не телефонные.
- *
- * Сутки лимита сервер считает по Москве (продукт московский, §1), и «следующий
- * в 00:00» на телефоне с другой зоной назвал бы час, которого никто не ждёт.
- */
-const MSK_TIME_FMT = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Europe/Moscow',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
 
 /**
  * Метка чипа параметра у человека в пуле.
@@ -278,9 +268,21 @@ export function occupationLabel(value?: string): string {
   return value ? (OCCUPATION_LABEL[value] ?? '') : '';
 }
 
-/** Час по Москве, «14:30»: когда вернётся истраченный лайк (§2.3). */
-export function moscowTime(iso: string): string {
-  return MSK_TIME_FMT.format(new Date(iso));
+/**
+ * Сколько ждать возврата лайка: «3 ч 20 мин», «40 мин», «минуту» (§2.3).
+ *
+ * Относительное, а не «в 15:00»: абсолютный час без даты двусмыслен —
+ * потратил в 15:00, «освободится в 15:00» читается как «прямо сейчас»,
+ * хотя значит «завтра».
+ */
+export function untilTime(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms < MINUTE_MS) return 'минуту';
+  const h = Math.floor(ms / HOUR_MS);
+  const m = Math.floor((ms % HOUR_MS) / MINUTE_MS);
+  if (h === 0) return `${m} мин`;
+  if (m === 0) return `${h} ч`;
+  return `${h} ч ${m} мин`;
 }
 
 /** Заголовок секции пула: «СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ · 3». */

@@ -14,7 +14,7 @@ import (
 	"flatmatch/api/internal/postgres"
 )
 
-func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string, contextZones []string) (entity.LikeResult, error) {
+func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, lc LikeContext) (entity.LikeResult, error) {
 	var out entity.LikeResult
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		status, err := lockPair(ctx, tx, fromID, toID)
@@ -55,15 +55,8 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string
 		}
 
 		if !reply && !already {
-			hasSearch, err := exists(ctx, tx,
-				`SELECT 1 FROM searches
-				 WHERE user_id = $1 AND status = 'active' AND zone_id = ANY($2)`,
-				fromID, contextZones)
-			if err != nil {
+			if err := contextGate(ctx, tx, fromID, toID, lc); err != nil {
 				return err
-			}
-			if !hasSearch {
-				return entity.ErrNeedSearch
 			}
 			spent, err := spentInWindow(ctx, tx, fromID)
 			if err != nil {
@@ -76,8 +69,8 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string
 
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO likes_users (from_id, to_id, zone_id, point_id, spent)
-			VALUES ($1, $2, NULLIF($3, ''), NULL, $4)
-			ON CONFLICT (from_id, to_id) DO NOTHING`, fromID, toID, zoneID, !reply)
+			VALUES ($1, $2, NULLIF($3, ''), $4, $5)
+			ON CONFLICT (from_id, to_id) DO NOTHING`, fromID, toID, lc.ZoneID, lc.PointID, !reply)
 		if err != nil {
 			return err
 		}
@@ -204,6 +197,66 @@ func lockPair(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) (entity.St
 		}
 	}
 	return entity.StatusUnknown, entity.ErrNotFound
+}
+
+// contextGate asks the context of a SPENDING like for the relation behind it
+// (§2.3). A zone pool proves it with a search of the liker in one of the zones
+// crossing the context; a point carries the relation itself — the pool of a
+// market flat by membership, «к себе» by being the showcase of its author — and
+// asks for no search at all.
+//
+// A point that is not active is answered with ErrNotFound rather than a
+// separate sentinel: an unapproved or closed card is not a card the liker was
+// ever shown.
+func contextGate(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID, lc LikeContext) error {
+	if lc.PointID == nil {
+		hasSearch, err := exists(ctx, tx,
+			`SELECT 1 FROM searches
+			 WHERE user_id = $1 AND status = 'active' AND zone_id = ANY($2)`,
+			fromID, lc.ContextZones)
+		if err != nil {
+			return err
+		}
+		if !hasSearch {
+			return entity.ErrNeedSearch
+		}
+		return nil
+	}
+
+	var kind, status string
+	var createdBy *uuid.UUID
+	err := tx.QueryRow(ctx,
+		`SELECT type, status, created_by FROM points WHERE id = $1`, *lc.PointID).
+		Scan(&kind, &status, &createdBy)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.ErrNotFound
+		}
+		return err
+	}
+	if entity.ParsePointStatus(status) != entity.PointActive {
+		return entity.ErrNotFound
+	}
+
+	switch entity.ParsePointType(kind) {
+	case entity.PointIntentHome:
+		if createdBy == nil || *createdBy != toID {
+			return entity.ErrNotFound
+		}
+		return nil
+	case entity.PointFlat:
+		member, err := exists(ctx, tx,
+			`SELECT 1 FROM likes_points WHERE user_id = $1 AND point_id = $2`, fromID, *lc.PointID)
+		if err != nil {
+			return err
+		}
+		if !member {
+			return entity.ErrNotFound
+		}
+		return nil
+	default:
+		return entity.ErrNotFound
+	}
 }
 
 func ensureMatch(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) error {

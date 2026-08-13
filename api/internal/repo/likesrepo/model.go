@@ -26,6 +26,18 @@ const spentInWindowFilter = `from_id = $1 AND spent AND created_at > now() - mak
 
 var windowSeconds = entity.LikeWindow.Seconds()
 
+// LikeContext is where the dear like was placed from (§2.3) — a zone pool or a
+// point, never both: the service refuses a request that names two contexts.
+type LikeContext struct {
+	ZoneID string
+	// ContextZones — зоны, пересекающие зону контекста: тратящий зонный лайк
+	// оплачивается активным поиском в любой из них.
+	ContextZones []string
+	// PointID переносит отношение на сам контекст — пул квартиры или карточку
+	// «к себе», — и поиска тогда не требуется вовсе.
+	PointID *uuid.UUID
+}
+
 type IncomingLike struct {
 	From         entity.User // partial, like entity.PoolCandidate.User
 	ZoneID       string

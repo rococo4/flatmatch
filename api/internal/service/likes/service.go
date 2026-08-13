@@ -12,7 +12,7 @@ import (
 )
 
 type Repository interface {
-	Create(ctx context.Context, fromID, toID uuid.UUID, zoneID string, contextZones []string) (entity.LikeResult, error)
+	Create(ctx context.Context, fromID, toID uuid.UUID, lc likesrepo.LikeContext) (entity.LikeResult, error)
 	Incoming(ctx context.Context, userID uuid.UUID) ([]likesrepo.IncomingLike, error)
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
@@ -28,7 +28,13 @@ func New(repo Repository, dir *zones.Directory) *Service {
 	return &Service{repo: repo, dir: dir}
 }
 
-func (s *Service) Like(ctx context.Context, fromID, toID uuid.UUID, zoneID string) (entity.LikeResult, error) {
+func (s *Service) Like(ctx context.Context, fromID, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
+	// Один лайк — один контекст: мэтч потом рассказывает, ГДЕ пересеклись, и на
+	// два места сразу этот рассказ не делится (§6).
+	if zoneID != "" && pointID != nil {
+		return entity.LikeResult{}, &entity.FieldsError{
+			Err: ErrInvalidParams, Fields: []string{"zone_id", "point_id"}}
+	}
 	if _, ok := s.dir.Get(zoneID); zoneID != "" && !ok {
 		return entity.LikeResult{}, &entity.FieldsError{Err: ErrInvalidParams, Fields: []string{"zone_id"}}
 	}
@@ -38,7 +44,10 @@ func (s *Service) Like(ctx context.Context, fromID, toID uuid.UUID, zoneID strin
 	if zoneID != "" {
 		contextZones = s.dir.Intersecting(zoneID)
 	}
-	return s.repo.Create(ctx, fromID, toID, zoneID, contextZones)
+	// Точку валидирует транзакция: активность, тип и отношение к ней читаются
+	// там же, где решается трата слота.
+	return s.repo.Create(ctx, fromID, toID,
+		likesrepo.LikeContext{ZoneID: zoneID, ContextZones: contextZones, PointID: pointID})
 }
 
 func (s *Service) Incoming(ctx context.Context, userID uuid.UUID) ([]likesrepo.IncomingLike, error) {

@@ -3,6 +3,8 @@ package matches
 import (
 	"math"
 
+	"github.com/google/uuid"
+
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/service/zones"
 )
@@ -23,9 +25,20 @@ const (
 )
 
 type Summary struct {
-	Zone          *zones.Zone // контекст мэтча, если зонный
+	Zone *zones.Zone // контекст мэтча, если зонный
+	// Point — тот же блок ГДЕ, если пересеклись на точке. Контексты
+	// взаимоисключимы: лайк несёт один (§2.3).
+	Point         *PointContext
 	ParamsOverlap []ParamOverlap
 	SharedAnswers []entity.SharedAnswer
+}
+
+// PointContext is the mini-card of a point match: the label is ready to print,
+// the kind decides the colour of the card's header (§6).
+type PointContext struct {
+	ID    uuid.UUID
+	Kind  entity.PointType
+	Label string
 }
 
 type ParamOverlap struct {
@@ -33,6 +46,25 @@ type ParamOverlap struct {
 	Min, Max int    // вилки: Max == 0 у комнат — верхней границы не назвал никто
 	Month    string // move_in, «2026-09»
 	Term     string
+}
+
+// pointLabel: имя автора и станция могут не приехать — автор забанен, зона
+// ушла из справочника, — и тогда строка просто короче.
+func pointLabel(kind entity.PointType, author, station string) string {
+	if kind == entity.PointIntentHome {
+		room := "на комнату"
+		if author != "" {
+			room += " " + author
+		}
+		if station == "" {
+			return room
+		}
+		return room + " · м. " + station
+	}
+	if station == "" {
+		return "квартира"
+	}
+	return "квартира у м. " + station
 }
 
 func paramsOverlap(mine, theirs entity.SearchParams) []ParamOverlap {

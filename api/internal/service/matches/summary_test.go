@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AlekSi/pointer"
+	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
 )
@@ -182,6 +183,97 @@ func TestSummaryWithoutZoneContext(t *testing.T) {
 
 	if summary.Zone != nil {
 		t.Errorf("Zone = %v, want nil for a context-less match", summary.Zone)
+	}
+}
+
+// Блок ГДЕ у точечного мэтча — мини-карточка точки, и зона в нём молчит:
+// контекст у лайка один (§2.3).
+func TestSummaryPointContext(t *testing.T) {
+	cases := map[string]struct {
+		point entity.Point
+		want  string
+	}{
+		"«к себе» несёт имя автора и метро": {
+			point: entity.Point{
+				Type:      entity.PointIntentHome,
+				Stage:     pointer.To(entity.StageLive),
+				Status:    entity.PointActive,
+				ZoneID:    "st-sokol",
+				CreatedBy: pointer.To(uuid.Nil), // подменяется на автора в тесте
+			},
+			want: "на комнату Катя · м. Сокол",
+		},
+		"квартира с рынка обезличена": {
+			point: entity.Point{Type: entity.PointFlat, Status: entity.PointActive, ZoneID: "st-sokol"},
+			want:  "квартира у м. Сокол",
+		},
+		// Точку закрыли, а мэтч остался: контекст исторический, саммари его помнит.
+		"закрытая точка всё равно рассказывает, где пересеклись": {
+			point: entity.Point{
+				Type:        entity.PointFlat,
+				Status:      entity.PointClosed,
+				CloseReason: pointer.To("rejected"),
+				ZoneID:      "st-sokol",
+			},
+			want: "квартира у м. Сокол",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			if tc.point.CreatedBy != nil {
+				tc.point.CreatedBy = pointer.To(f.peer.ID)
+			}
+			id := f.atPoint(tc.point)
+
+			_, summary := f.detail(t)
+
+			if summary.Zone != nil {
+				t.Errorf("Zone = %v, want none for a point match", summary.Zone)
+			}
+			if summary.Point == nil {
+				t.Fatal("Point context is missing")
+			}
+			if summary.Point.ID != id || summary.Point.Kind != tc.point.Type {
+				t.Errorf("Point = %+v, want point %s of kind %s", summary.Point, id, tc.point.Type)
+			}
+			if summary.Point.Label != tc.want {
+				t.Errorf("Label = %q, want %q", summary.Point.Label, tc.want)
+			}
+		})
+	}
+}
+
+// Блок ГДЕ один: если в строке мэтча оказались оба контекста, рассказывает
+// точка — она конкретнее зоны.
+func TestSummaryPointWinsOverZone(t *testing.T) {
+	f := newFixture(t)
+	f.atPoint(entity.Point{Type: entity.PointFlat, Status: entity.PointActive, ZoneID: "st-sokol"})
+	f.repo.match.Match.ContextZone = "d-khamovniki"
+
+	_, summary := f.detail(t)
+
+	if summary.Point == nil || summary.Zone != nil {
+		t.Errorf("context = %+v / %+v, want the point alone", summary.Point, summary.Zone)
+	}
+}
+
+// Точка могла исчезнуть из справочника зон или из базы — мэтч необратим, а
+// саммари просто теряет блок ГДЕ.
+func TestSummarySurvivesAMissingPoint(t *testing.T) {
+	f := newFixture(t)
+	gone := uuid.New()
+	f.repo.match.Match.ContextZone = ""
+	f.repo.match.Match.ContextPoint = &gone
+
+	_, summary := f.detail(t)
+
+	if summary.Point != nil || summary.Zone != nil {
+		t.Errorf("context = %+v / %+v, want none", summary.Point, summary.Zone)
+	}
+	if len(summary.SharedAnswers) == 0 {
+		t.Error("the rest of the summary must still be there")
 	}
 }
 

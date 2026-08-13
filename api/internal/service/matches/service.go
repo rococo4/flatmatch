@@ -2,6 +2,7 @@ package matches
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 
@@ -23,15 +24,23 @@ type Users interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.User, error)
 }
 
+// Points feeds the ГДЕ block of a point match. The point may well be closed by
+// now — the context of a match is historical (§2.3), so nothing here filters
+// by status.
+type Points interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
+}
+
 type Service struct {
 	repo     Repository
 	searches Searches
 	users    Users
+	points   Points
 	dir      *zones.Directory
 }
 
-func New(repo Repository, searches Searches, users Users, dir *zones.Directory) *Service {
-	return &Service{repo: repo, searches: searches, users: users, dir: dir}
+func New(repo Repository, searches Searches, users Users, points Points, dir *zones.Directory) *Service {
+	return &Service{repo: repo, searches: searches, users: users, points: points, dir: dir}
 }
 
 func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]matchesrepo.MatchWithPeer, error) {
@@ -58,7 +67,15 @@ func (s *Service) Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo
 
 func (s *Service) summary(ctx context.Context, viewer entity.User, match matchesrepo.MatchWithPeer) (Summary, error) {
 	out := Summary{SharedAnswers: viewer.Profile.Shared(match.Peer.Profile)}
-	if zone, ok := s.dir.Get(match.Match.ContextZone); ok {
+	// Блок ГДЕ один: точка конкретнее зоны, и если контекст точечный —
+	// рассказывает она.
+	if match.Match.ContextPoint != nil {
+		point, err := s.pointContext(ctx, *match.Match.ContextPoint)
+		if err != nil {
+			return Summary{}, err
+		}
+		out.Point = point
+	} else if zone, ok := s.dir.Get(match.Match.ContextZone); ok {
 		out.Zone = &zone
 	}
 
@@ -74,6 +91,34 @@ func (s *Service) summary(ctx context.Context, viewer entity.User, match matches
 		out.ParamsOverlap = paramsOverlap(*mine, *theirs)
 	}
 	return out, nil
+}
+
+// pointContext builds «на комнату Кати · м. Сокол» / «квартира у м. Сокол».
+// Точка, которой больше нет, саммари не ломает: мэтч необратим, а его контекст
+// исторический (§2.3) — блок ГДЕ просто не показывается.
+func (s *Service) pointContext(ctx context.Context, pointID uuid.UUID) (*PointContext, error) {
+	point, err := s.points.ByID(ctx, pointID)
+	if errors.Is(err, entity.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var author string
+	if point.Type == entity.PointIntentHome && point.CreatedBy != nil {
+		user, err := s.users.ByID(ctx, *point.CreatedBy)
+		if err != nil && !errors.Is(err, entity.ErrNotFound) {
+			return nil, err
+		}
+		author = user.Name
+	}
+	station, _ := s.dir.Get(point.ZoneID)
+	return &PointContext{
+		ID:    point.ID,
+		Kind:  point.Type,
+		Label: pointLabel(point.Type, author, station.Name),
+	}, nil
 }
 
 func (s *Service) activeSearch(ctx context.Context, userID uuid.UUID) (*entity.SearchParams, error) {

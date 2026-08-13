@@ -19,6 +19,15 @@ type zoneDTO struct {
 	NameGen string `json:"name_gen"`
 }
 
+// pointDTO is the mini-card of «пересеклись: {точка}»: the label is ready to
+// print, the kind colours the card's header (§6). Its twin lives in the match
+// summary — the same phrase in the two places the context is retold.
+type pointDTO struct {
+	ID    uuid.UUID `json:"id"`
+	Kind  string    `json:"kind"`
+	Label string    `json:"label"`
+}
+
 // profileResponse is the whole profile screen (§6) — and it carries no way to
 // reach the person: tg_username and tg_id live in the match detail and nowhere
 // else (§3 приватность структурно). dto_test pins that.
@@ -44,6 +53,9 @@ type profileResponse struct {
 	// ContextZone is the pool the profile was opened from — «пересеклись:
 	// {зона}» — absent when the screen was reached from anywhere else.
 	ContextZone *zoneDTO `json:"context_zone,omitempty"`
+	// ContextPoint is the same line when the screen was opened from a point —
+	// пул квартиры или карточка «к себе».
+	ContextPoint *pointDTO `json:"context_point,omitempty"`
 
 	LikedMe bool      `json:"liked_me"`
 	MyLike  bool      `json:"my_like"`
@@ -64,7 +76,7 @@ type budgetDTO struct {
 
 func toProfile(
 	viewer, target entity.User,
-	photoURL string, zone *zoneDTO,
+	photoURL string, zone *zoneDTO, point *pointDTO,
 	myLike, likedMe bool,
 	budget entity.LikeBudget,
 ) profileResponse {
@@ -86,8 +98,9 @@ func toProfile(
 		Alcohol:    string(p.Alcohol),
 		Expenses:   string(p.Expenses),
 
-		Shared:      toShared(viewer.Profile.Shared(p)),
-		ContextZone: zone,
+		Shared:       toShared(viewer.Profile.Shared(p)),
+		ContextZone:  zone,
+		ContextPoint: point,
 
 		LikedMe: likedMe,
 		MyLike:  myLike,
@@ -107,6 +120,26 @@ func toShared(answers []entity.SharedAnswer) []sharedDTO {
 		out = append(out, sharedDTO{Field: a.Field, Value: a.Value})
 	}
 	return out
+}
+
+// pointLabel is the twin of the match summary's: «на комнату Кати · м. Сокол»
+// у «к себе», «квартира у м. Сокол» у квартиры с рынка. Имя автора и станция
+// могут не приехать — строка тогда просто короче.
+func pointLabel(kind entity.PointType, author, station string) string {
+	if kind == entity.PointIntentHome {
+		room := "на комнату"
+		if author != "" {
+			room += " " + author
+		}
+		if station == "" {
+			return room
+		}
+		return room + " · м. " + station
+	}
+	if station == "" {
+		return "квартира"
+	}
+	return "квартира у м. " + station
 }
 
 func toZoneDTO(z zones.Zone) zoneDTO {

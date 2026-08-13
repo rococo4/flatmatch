@@ -45,6 +45,13 @@ type Searches interface {
 	HasActiveIn(ctx context.Context, userID uuid.UUID, zoneIDs []string) (bool, error)
 }
 
+// Points answers the point half of «мы увиделись» (§2.3): пул квартиры несёт
+// отношение членством обоих, «к себе» — тем, что цель и есть автор карточки.
+type Points interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
+	InPool(ctx context.Context, userID, pointID uuid.UUID) (bool, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 	Intersecting(id string) []string
@@ -55,13 +62,17 @@ type Handler struct {
 	likes    Likes
 	photos   Photos
 	searches Searches
+	points   Points
 	dir      ZoneDir
 }
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-func New(people People, likes Likes, photos Photos, searches Searches, dir ZoneDir) *Handler {
-	return &Handler{people: people, likes: likes, photos: photos, searches: searches, dir: dir}
+func New(people People, likes Likes, photos Photos, searches Searches, points Points, dir ZoneDir) *Handler {
+	return &Handler{
+		people: people, likes: likes, photos: photos,
+		searches: searches, points: points, dir: dir,
+	}
 }
 
 func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
@@ -93,10 +104,17 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	point, metAtPoint, err := h.contextPoint(r.Context(), viewer.ID, target, r.URL.Query().Get("point"))
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
 	// Отношение «мы увиделись» (§2.3): без пары лайков профиль открыт только
-	// со-пульнику — активные поиски двоих должны пересекаться. Чужой человек
-	// из другого конца города получает тот же 404, что и невидимый.
-	if !myLike && !likedMe {
+	// со-пульнику — активные поиски двоих должны пересекаться либо их сводит
+	// точка. Чужой человек из другого конца города получает тот же 404, что и
+	// невидимый.
+	if !myLike && !likedMe && !metAtPoint {
 		met, err := h.metInPool(r.Context(), viewer.ID, target.ID)
 		if err != nil {
 			handleError(w, r, err)
@@ -115,7 +133,7 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, r, http.StatusOK, toProfile(viewer, target,
-		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")),
+		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")), point,
 		myLike, likedMe, budget))
 }
 
@@ -145,6 +163,64 @@ func (h *Handler) metInPool(ctx context.Context, viewerID, targetID uuid.UUID) (
 		return false, nil
 	}
 	return h.searches.HasActiveIn(ctx, targetID, union)
+}
+
+// contextPoint reads ?point= as the second half of «мы увиделись» (§2.3) and,
+// when the relation holds, as the mini-card «пересеклись: {точка}» of the
+// screen. Отношение считается ТОЛЬКО по названной точке: перебирать все точки
+// пары дорого, а профиль из пула или с карточки всегда открывается с
+// параметром.
+//
+// Точка без отношения — как её отсутствие: ни карточки, ни доступа. Иначе
+// посторонний вешал бы себе на экран чужую квартиру.
+func (h *Handler) contextPoint(
+	ctx context.Context, viewerID uuid.UUID, target entity.User, raw string,
+) (*pointDTO, bool, error) {
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return nil, false, nil
+	}
+	point, err := h.points.ByID(ctx, id)
+	switch {
+	case errors.Is(err, entity.ErrNotFound):
+		return nil, false, nil
+	case err != nil:
+		return nil, false, err
+	}
+	if point.Status != entity.PointActive {
+		return nil, false, nil
+	}
+
+	switch point.Type {
+	case entity.PointIntentHome:
+		if point.CreatedBy == nil || *point.CreatedBy != target.ID {
+			return nil, false, nil
+		}
+		return pointer.To(h.toPointDTO(point, target.Name)), true, nil
+	case entity.PointFlat:
+		mine, err := h.points.InPool(ctx, viewerID, point.ID)
+		if err != nil {
+			return nil, false, err
+		}
+		theirs, err := h.points.InPool(ctx, target.ID, point.ID)
+		if err != nil {
+			return nil, false, err
+		}
+		if !mine || !theirs {
+			return nil, false, nil
+		}
+		return pointer.To(h.toPointDTO(point, "")), true, nil
+	default:
+		return nil, false, nil
+	}
+}
+
+// toPointDTO строит ту же подпись, что и саммари мэтча: «на комнату Кати ·
+// м. Сокол» / «квартира у м. Сокол». Станция — из справочника; зона, которой
+// он больше не знает, оставляет строку без хвоста, а не без карточки.
+func (h *Handler) toPointDTO(p entity.Point, author string) pointDTO {
+	station, _ := h.dir.Get(p.ZoneID)
+	return pointDTO{ID: p.ID, Kind: string(p.Type), Label: pointLabel(p.Type, author, station.Name)}
 }
 
 // contextZone names the pool the profile was opened from. An id the directory

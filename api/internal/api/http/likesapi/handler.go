@@ -26,7 +26,7 @@ import (
 const maxBodyBytes = 64 << 10
 
 type Likes interface {
-	Like(ctx context.Context, fromID, toID uuid.UUID, zoneID string) (entity.LikeResult, error)
+	Like(ctx context.Context, fromID, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error)
 	Incoming(ctx context.Context, userID uuid.UUID) ([]likesrepo.IncomingLike, error)
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
@@ -87,7 +87,8 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.likes.Like(r.Context(), user.ID, toID, body.ZoneID)
+	// Точечный контекст тело научится принимать вместе с pointsapi.
+	result, err := h.likes.Like(r.Context(), user.ID, toID, body.ZoneID, nil)
 	if err != nil {
 		h.handleError(w, r, user.ID, err)
 		return

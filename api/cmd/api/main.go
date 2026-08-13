@@ -28,6 +28,7 @@ import (
 	"flatmatch/api/internal/postgres"
 	"flatmatch/api/internal/repo/likesrepo"
 	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
 	"flatmatch/api/internal/service/likes"
@@ -65,6 +66,9 @@ type deps struct {
 	people       *usersrepo.Repo
 	pairLikes    *likesrepo.Repo
 	pairSearches *searchesrepo.Repo
+	// pairPoints is the point half of the same question: does a point put these
+	// two in one place (§2.3).
+	pairPoints *pointsrepo.Repo
 
 	photos *photostore.Dir
 	dir    *zones.Directory
@@ -116,16 +120,18 @@ func run() error {
 	usersRepo := usersrepo.New(pool)
 	searchesRepo := searchesrepo.New(pool)
 	likesRepo := likesrepo.New(pool)
+	pointsRepo := pointsrepo.New(pool)
 
 	wired := deps{
 		accounts:     users.New(usersRepo, photos),
 		searches:     searches.New(searchesRepo, dir),
 		pools:        pools.New(searchesRepo, dir, photos),
 		likes:        likes.New(likesRepo, dir),
-		matches:      matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, dir),
+		matches:      matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, pointsRepo, dir),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,
+		pairPoints:   pointsRepo,
 		photos:       photos,
 		dir:          dir,
 	}
@@ -220,7 +226,8 @@ func router(
 		poolsHandler := poolsapi.New(d.pools, d.searches, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
-		r.Get("/people/{id}", peopleapi.New(d.people, d.pairLikes, d.accounts, d.pairSearches, d.dir).Profile)
+		r.Get("/people/{id}", peopleapi.New(
+			d.people, d.pairLikes, d.accounts, d.pairSearches, d.pairPoints, d.dir).Profile)
 	})
 
 	return r

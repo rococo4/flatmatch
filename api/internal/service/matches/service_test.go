@@ -10,6 +10,7 @@ import (
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
 	"flatmatch/api/internal/service/zones"
@@ -21,6 +22,7 @@ var (
 	_ Repository = (*matchesrepo.Repo)(nil)
 	_ Searches   = (*searchesrepo.Repo)(nil)
 	_ Users      = (*usersrepo.Repo)(nil)
+	_ Points     = (*pointsrepo.Repo)(nil)
 )
 
 type fakeRepo struct {
@@ -34,10 +36,14 @@ type fakeSearches map[uuid.UUID][]entity.Search
 
 type fakeUsers map[uuid.UUID]entity.User
 
+type fakePoints map[uuid.UUID]entity.Point
+
 type fixture struct {
 	svc      *Service
 	repo     *fakeRepo
 	searches fakeSearches
+	users    fakeUsers
+	points   fakePoints
 	viewer   entity.User
 	peer     entity.User
 }
@@ -67,6 +73,14 @@ func (f fakeUsers) ByID(_ context.Context, id uuid.UUID) (entity.User, error) {
 		return entity.User{}, entity.ErrNotFound
 	}
 	return u, nil
+}
+
+func (f fakePoints) ByID(_ context.Context, id uuid.UUID) (entity.Point, error) {
+	p, ok := f[id]
+	if !ok {
+		return entity.Point{}, entity.ErrNotFound
+	}
+	return p, nil
 }
 
 func testDir(t *testing.T) *zones.Directory {
@@ -105,11 +119,22 @@ func newFixture(t *testing.T) *fixture {
 			Peer:  peer,
 		}},
 		searches: fakeSearches{},
+		users:    fakeUsers{viewer.ID: viewer, peer.ID: peer},
+		points:   fakePoints{},
 		viewer:   viewer,
 		peer:     peer,
 	}
-	f.svc = New(f.repo, f.searches, fakeUsers{viewer.ID: viewer}, testDir(t))
+	f.svc = New(f.repo, f.searches, f.users, f.points, testDir(t))
 	return f
+}
+
+// atPoint переводит мэтч фикстуры на точечный контекст: зоны у такого мэтча нет.
+func (f *fixture) atPoint(p entity.Point) uuid.UUID {
+	p.ID = uuid.New()
+	f.points[p.ID] = p
+	f.repo.match.Match.ContextZone = ""
+	f.repo.match.Match.ContextPoint = &p.ID
+	return p.ID
 }
 
 func (f *fixture) detail(t *testing.T) (matchesrepo.MatchWithPeer, Summary) {

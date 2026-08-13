@@ -26,9 +26,17 @@ type PhotoStore interface {
 	URL(key string) string
 }
 
+// Notifier shows a questionnaire to the moderator. Best-effort and without an
+// error: очередь живёт в БД (§5), чат — только способ до неё дотянуться, и
+// молчащий бот не должен ронять отправку анкеты.
+type Notifier interface {
+	UserPending(ctx context.Context, u entity.User)
+}
+
 type Service struct {
 	repo   Repository
 	photos PhotoStore
+	notify Notifier
 }
 
 var (
@@ -40,8 +48,8 @@ var (
 	ErrUnsupportedImage = imagetype.ErrUnsupported
 )
 
-func New(repo Repository, photos PhotoStore) *Service {
-	return &Service{repo: repo, photos: photos}
+func New(repo Repository, photos PhotoStore, notify Notifier) *Service {
+	return &Service{repo: repo, photos: photos, notify: notify}
 }
 
 func (s *Service) EnsureFromTelegram(ctx context.Context, tg entity.TelegramIdentity) (entity.User, error) {
@@ -66,7 +74,16 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Prof
 	if bad := p.InvalidFields(); len(bad) > 0 {
 		return entity.User{}, &entity.FieldsError{Err: ErrInvalidPatch, Fields: bad}
 	}
-	return s.repo.UpdateProfile(ctx, id, p)
+	user, err := s.repo.UpdateProfile(ctx, id, p)
+	if err != nil {
+		return entity.User{}, err
+	}
+	// Из всей анкеты модератор смотрит фото и «о себе» (§5) — привычки и возраст
+	// меняются молча.
+	if p.About != nil && user.Status == entity.StatusActive {
+		s.enqueue(ctx, user)
+	}
+	return user, nil
 }
 
 func (s *Service) SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error) {
@@ -80,7 +97,17 @@ func (s *Service) SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker
 	if err := s.photos.Put(ctx, key, file, contentType); err != nil {
 		return entity.User{}, fmt.Errorf("store photo of user %s: %w", id, err)
 	}
-	return s.repo.SetPhoto(ctx, id, key)
+	user, err := s.repo.SetPhoto(ctx, id, key)
+	if err != nil {
+		return entity.User{}, err
+	}
+	// У одобренной анкеты перезалитое фото — это правка на перепроверку; у
+	// незаконченной карточку покажет сабмит (§5: в очередь попадают только
+	// отправленные).
+	if user.Status == entity.StatusActive {
+		s.enqueue(ctx, user)
+	}
+	return user, nil
 }
 
 func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error) {
@@ -97,7 +124,15 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error)
 	if user.Status == entity.StatusActive {
 		return user, nil
 	}
-	return s.repo.SetStatus(ctx, id, entity.StatusPending)
+	submitted, err := s.repo.SetStatus(ctx, id, entity.StatusPending)
+	if err != nil {
+		return entity.User{}, err
+	}
+	// Повторный сабмит уже отправленной анкеты не дублирует карточку в чате.
+	if user.Status != entity.StatusPending {
+		s.enqueue(ctx, submitted)
+	}
+	return submitted, nil
 }
 
 func (s *Service) PhotoURL(u entity.User) string {
@@ -109,4 +144,13 @@ func (s *Service) PhotoURL(u entity.User) string {
 
 func (s *Service) OwnPhotoURL(u entity.User) string {
 	return s.photos.URL(u.PhotoKey)
+}
+
+// enqueue is the one door to the moderation chat: без него (тесты, стенд без
+// чата) очередь всё равно копится в БД.
+func (s *Service) enqueue(ctx context.Context, u entity.User) {
+	if s.notify == nil {
+		return
+	}
+	s.notify.UserPending(ctx, u)
 }

@@ -67,7 +67,22 @@ func (f *fakeStore) Put(_ context.Context, key string, _ io.Reader, _ string) er
 func (f *fakeStore) Delete(context.Context, string) error { return nil }
 func (f *fakeStore) URL(key string) string                { return "/media/" + key }
 
-func newService(repo *fakeRepo) *Service { return New(repo, &fakeStore{}) }
+// fakeNotifier is the moderation chat: what matters is only whether a
+// questionnaire was put in front of the moderator, and which one.
+type fakeNotifier struct{ queued []entity.User }
+
+func (f *fakeNotifier) UserPending(_ context.Context, u entity.User) {
+	f.queued = append(f.queued, u)
+}
+
+// newService leaves the notifier nil on purpose: a stand without a bot is a
+// valid setup, and every test that does not mention moderation covers it.
+func newService(repo *fakeRepo) *Service { return New(repo, &fakeStore{}, nil) }
+
+func newModeratedService(repo *fakeRepo) (*Service, *fakeNotifier) {
+	notifier := &fakeNotifier{}
+	return New(repo, &fakeStore{}, notifier), notifier
+}
 
 // completeProfile is an answer to every question in §4, so tests about one
 // missing field can remove exactly that one.
@@ -235,7 +250,7 @@ func TestSetPhotoKeepsOneObjectPerUser(t *testing.T) {
 	repo := &fakeRepo{}
 	id := uuid.New()
 
-	if _, err := New(repo, store).SetPhoto(t.Context(), id, bytes.NewReader(jpegFile)); err != nil {
+	if _, err := New(repo, store, nil).SetPhoto(t.Context(), id, bytes.NewReader(jpegFile)); err != nil {
 		t.Fatalf("SetPhoto() failed: %v", err)
 	}
 
@@ -255,7 +270,7 @@ func TestSetPhotoRefusesWhatIsNotAnImage(t *testing.T) {
 	store := &fakeStore{}
 	repo := &fakeRepo{}
 
-	_, err := New(repo, store).SetPhoto(t.Context(), uuid.New(), strings.NewReader("PDF-1.4 или что угодно"))
+	_, err := New(repo, store, nil).SetPhoto(t.Context(), uuid.New(), strings.NewReader("PDF-1.4 или что угодно"))
 	if !errors.Is(err, ErrUnsupportedImage) {
 		t.Fatalf("SetPhoto() error = %v, want ErrUnsupportedImage", err)
 	}
@@ -279,5 +294,104 @@ func TestPhotoURLHidesAnUnreviewedPhoto(t *testing.T) {
 	// whether to replace it.
 	if got := svc.OwnPhotoURL(user); got == "" {
 		t.Error("OwnPhotoURL() is empty, the owner must see their own upload")
+	}
+}
+
+func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Name:     "Катя",
+		Status:   entity.StatusDraft,
+		Profile:  completeProfile(),
+		PhotoKey: "photos/x.jpg",
+	}}
+	svc, notifier := newModeratedService(repo)
+
+	if _, err := svc.Submit(t.Context(), uuid.New()); err != nil {
+		t.Fatalf("Submit() failed: %v", err)
+	}
+	if len(notifier.queued) != 1 {
+		t.Fatalf("queued %d questionnaires, want 1", len(notifier.queued))
+	}
+	if notifier.queued[0].Name != "Катя" {
+		t.Errorf("queued %q, want the submitted account", notifier.queued[0].Name)
+	}
+}
+
+func TestResubmitDoesNotDuplicateTheCard(t *testing.T) {
+	// Уже отправленная анкета в очереди есть; второй тап по «готово» не должен
+	// класть модератору вторую карточку.
+	repo := &fakeRepo{user: entity.User{
+		Status:   entity.StatusPending,
+		Profile:  completeProfile(),
+		PhotoKey: "photos/x.jpg",
+	}}
+	svc, notifier := newModeratedService(repo)
+
+	if _, err := svc.Submit(t.Context(), uuid.New()); err != nil {
+		t.Fatalf("Submit() failed: %v", err)
+	}
+	if len(notifier.queued) != 0 {
+		t.Errorf("queued %d questionnaires, want none", len(notifier.queued))
+	}
+}
+
+func TestPhotoEditOfAnApprovedProfileGoesBackToTheModerator(t *testing.T) {
+	// Правка одобренной анкеты уходит на перепроверку — ровно фото и «о себе»
+	// (§5), а очередь узнаёт об этом здесь.
+	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
+	svc, notifier := newModeratedService(repo)
+
+	if _, err := svc.SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("SetPhoto() failed: %v", err)
+	}
+	if len(notifier.queued) != 1 {
+		t.Errorf("queued %d questionnaires, want 1", len(notifier.queued))
+	}
+}
+
+func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
+	// В очередь модерации попадают только отправленные (§5): черновик модератор
+	// не видит, даже когда фото уже загружено.
+	repo := &fakeRepo{user: entity.User{Status: entity.StatusDraft}}
+	svc, notifier := newModeratedService(repo)
+
+	if _, err := svc.SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("SetPhoto() failed: %v", err)
+	}
+	if len(notifier.queued) != 0 {
+		t.Errorf("queued %d questionnaires, want none", len(notifier.queued))
+	}
+}
+
+func TestOnlyAboutSendsAnApprovedProfileBackToTheModerator(t *testing.T) {
+	// «Сова → жаворонок» не должна выкидывать человека из пулов и не касается
+	// модератора (§5).
+	for _, tc := range []struct {
+		name  string
+		patch entity.ProfilePatch
+		want  int
+	}{
+		{"about", entity.ProfilePatch{About: pointer.To("Люблю тишину")}, 1},
+		{"habits", entity.ProfilePatch{Schedule: pointer.To(entity.ScheduleLark)}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
+			svc, notifier := newModeratedService(repo)
+
+			if _, err := svc.UpdateProfile(t.Context(), uuid.New(), tc.patch); err != nil {
+				t.Fatalf("UpdateProfile() failed: %v", err)
+			}
+			if len(notifier.queued) != tc.want {
+				t.Errorf("queued %d questionnaires, want %d", len(notifier.queued), tc.want)
+			}
+		})
+	}
+}
+
+func TestAStandWithoutABotStillWorks(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
+
+	if _, err := newService(repo).SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("SetPhoto() failed without a moderation chat: %v", err)
 	}
 }

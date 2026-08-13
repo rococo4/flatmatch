@@ -33,6 +33,7 @@ import (
 	"flatmatch/api/internal/repo/usersrepo"
 	"flatmatch/api/internal/service/likes"
 	"flatmatch/api/internal/service/matches"
+	"flatmatch/api/internal/service/moderation"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/searches"
 	"flatmatch/api/internal/service/users"
@@ -122,8 +123,14 @@ func run() error {
 	likesRepo := likesrepo.New(pool)
 	pointsRepo := pointsrepo.New(pool)
 
+	// The bot client is built before the services because moderation sends
+	// through it, and the polling bot in turn routes taps back into moderation.
+	botClient := tgbot.NewClient(cfg.BotToken)
+	moderator := moderation.New(tgbot.NewModerationSender(botClient),
+		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir)
+
 	wired := deps{
-		accounts:     users.New(usersRepo, photos),
+		accounts:     users.New(usersRepo, photos, moderator),
 		searches:     searches.New(searchesRepo, dir),
 		pools:        pools.New(searchesRepo, dir, photos),
 		likes:        likes.New(likesRepo, dir),
@@ -158,7 +165,7 @@ func run() error {
 	}()
 
 	if cfg.BotPollingEnabled {
-		bot := tgbot.NewBot(tgbot.NewClient(cfg.BotToken), cfg.AppURL, log)
+		bot := tgbot.NewBot(botClient, cfg.AppURL, log, moderator, cfg.ModerationChatID)
 		go func() {
 			if err := bot.Run(ctx); err != nil {
 				failed <- fmt.Errorf("telegram bot: %w", err)

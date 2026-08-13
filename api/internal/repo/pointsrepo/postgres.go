@@ -73,6 +73,71 @@ func (r *Repo) ByURLNorm(ctx context.Context, urlNorm string) (*entity.Point, er
 	}
 }
 
+func (r *Repo) Feed(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]FeedPoint, error) {
+	points, err := r.feed(ctx, `p.status = 'active' AND p.zone_id = ANY($2)
+		  AND (p.type = 'flat'
+		       OR (EXISTS (SELECT 1 FROM visible_people($1) vp WHERE vp = p.created_by)
+		           AND `+notMatchedWith("p.created_by")+`))`, viewerID, zoneIDs)
+	if err != nil {
+		return nil, fmt.Errorf("feed for viewer %s: %w", viewerID, err)
+	}
+	return points, nil
+}
+
+func (r *Repo) Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []FeedPoint, err error) {
+
+	created, err = r.feed(ctx, `p.created_by = $1 AND p.status <> 'closed'`, viewerID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("points created by %s: %w", viewerID, err)
+	}
+	entered, err = r.feed(ctx, `p.status = 'active' AND p.created_by IS DISTINCT FROM $1
+		  AND EXISTS (SELECT 1 FROM likes_points lp
+		              WHERE lp.point_id = p.id AND lp.user_id = $1)`, viewerID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pools entered by %s: %w", viewerID, err)
+	}
+	return created, entered, nil
+}
+
+func (r *Repo) PoolMembers(ctx context.Context, viewerID, pointID uuid.UUID) ([]Member, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+memberColumns+`
+		FROM likes_points lp
+		JOIN visible_people($1) vp ON vp = lp.user_id
+		JOIN users u ON u.id = lp.user_id
+		LEFT JOIN LATERAL (
+			SELECT * FROM searches s
+			WHERE s.user_id = lp.user_id AND s.status = 'active'
+			ORDER BY s.created_at DESC, s.id DESC
+			LIMIT 1
+		) s ON true
+		WHERE lp.point_id = $2
+		  AND `+notMatchedWith("lp.user_id")+`
+		ORDER BY lp.created_at DESC, lp.user_id`, viewerID, pointID)
+	if err != nil {
+		return nil, fmt.Errorf("pool members of point %s: %w", pointID, err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[memberRow])
+	if err != nil {
+		return nil, fmt.Errorf("pool members of point %s: %w", pointID, err)
+	}
+	out := make([]Member, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
+}
+
+func (r *Repo) CountActiveIn(ctx context.Context, zoneIDs []string) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx,
+		`SELECT count(*) FROM points WHERE status = 'active' AND zone_id = ANY($1)`, zoneIDs).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count active points in zones: %w", err)
+	}
+	return n, nil
+}
+
 func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		open, err := exists(ctx, tx, `
@@ -116,6 +181,52 @@ func (r *Repo) InPool(ctx context.Context, userID, pointID uuid.UUID) (bool, err
 	default:
 		return true, nil
 	}
+}
+
+func (r *Repo) feed(ctx context.Context, where string, args ...any) ([]FeedPoint, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+joinedPointColumns+`, `+personColumns+`,
+			coalesce(pool.n, 0) AS pool_count,
+			coalesce(resp.n, 0) AS responses,
+			EXISTS (SELECT 1 FROM likes_points lp
+			        WHERE lp.point_id = p.id AND lp.user_id = $1) AS in_pool
+		FROM points p
+		LEFT JOIN users u ON u.id = p.created_by AND p.type = 'intent_home'
+		LEFT JOIN LATERAL (
+			SELECT count(*) AS n
+			FROM likes_points lp
+			JOIN visible_people($1) vp ON vp = lp.user_id
+			WHERE lp.point_id = p.id
+			  AND `+notMatchedWith("lp.user_id")+`
+		) pool ON p.type = 'flat'
+		LEFT JOIN LATERAL (
+			SELECT count(*) AS n FROM likes_users lu WHERE lu.point_id = p.id
+		) resp ON p.type = 'intent_home'
+		WHERE `+where+`
+		ORDER BY (coalesce(pool.n, resp.n, 0) + 1)
+		         / power(extract(epoch FROM now() - p.created_at) / 86400 + 2, 1.5) DESC,
+		         p.created_at DESC, p.id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[feedRow])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]FeedPoint, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
+}
+
+// notMatchedWith is the filter searchesrepo.PoolCandidates carries too: the
+// person you already matched with is out of discovery (§2.3), and a pool of a
+// point is discovery as much as a zone pool is. The viewer is always $1.
+func notMatchedWith(userColumn string) string {
+	return `NOT EXISTS (SELECT 1 FROM matches m
+			      WHERE m.a_id = least($1::uuid, ` + userColumn + `)
+			        AND m.b_id = greatest($1::uuid, ` + userColumn + `))`
 }
 
 func lockAndCheckLimits(ctx context.Context, tx pgx.Tx, p entity.Point) error {

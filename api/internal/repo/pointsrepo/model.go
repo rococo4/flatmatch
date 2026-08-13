@@ -14,7 +14,41 @@ const pointColumns = `id, type, stage, status, source, created_by, zone_id,
 	restrictions, photo_key, url_norm, move_in, deposit, close_reason,
 	created_at, edited_at`
 
+const joinedPointColumns = `p.id, p.type, p.stage, p.status, p.source, p.created_by,
+	p.zone_id, p.price_total, p.price_share, p.rooms, p.isolated, p.bathrooms,
+	p.utilities, p.restrictions, p.photo_key, p.url_norm, p.move_in, p.deposit,
+	p.close_reason, p.created_at, p.edited_at`
+
+const personColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
+	u.gender AS u_gender, u.schedule AS u_schedule, u.smoking AS u_smoking,
+	u.pets_own AS u_pets_own, u.pets_ok AS u_pets_ok, u.noise AS u_noise,
+	u.guests AS u_guests, u.cleaning AS u_cleaning, u.alcohol AS u_alcohol,
+	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
+	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
+
+const memberColumns = `lp.created_at AS entered_at, ` + personColumns + `,
+	s.id AS s_id, s.zone_id AS s_zone_id, s.price_min AS s_price_min,
+	s.price_max AS s_price_max, s.rooms_min AS s_rooms_min,
+	s.rooms_max AS s_rooms_max, s.move_in AS s_move_in, s.term AS s_term,
+	s.has_stuff AS s_has_stuff, s.status AS s_status,
+	s.pool_seen_at AS s_pool_seen_at, s.created_at AS s_created_at,
+	s.updated_at AS s_updated_at`
+
 const livePoint = `status IN ('pending', 'active')`
+
+type FeedPoint struct {
+	Point     entity.Point
+	PoolCount int
+	Responses int
+	InPool    bool
+	Author    *entity.User
+}
+
+type Member struct {
+	User      entity.User
+	Search    *entity.Search
+	EnteredAt time.Time
+}
 
 type pointRow struct {
 	ID           uuid.UUID  `db:"id"`
@@ -38,6 +72,56 @@ type pointRow struct {
 	CloseReason  *string    `db:"close_reason"`
 	CreatedAt    time.Time  `db:"created_at"`
 	EditedAt     time.Time  `db:"edited_at"`
+}
+
+type personRow struct {
+	UID          *uuid.UUID `db:"u_id"`
+	UName        *string    `db:"u_name"`
+	UAge         *int       `db:"u_age"`
+	UGender      *string    `db:"u_gender"`
+	USchedule    *string    `db:"u_schedule"`
+	USmoking     *string    `db:"u_smoking"`
+	UPetsOwn     *string    `db:"u_pets_own"`
+	UPetsOK      *string    `db:"u_pets_ok"`
+	UNoise       *string    `db:"u_noise"`
+	UGuests      *string    `db:"u_guests"`
+	UCleaning    *string    `db:"u_cleaning"`
+	UAlcohol     *string    `db:"u_alcohol"`
+	UExpenses    *string    `db:"u_expenses"`
+	UPhotoKey    *string    `db:"u_photo_key"`
+	UPhotoStatus *string    `db:"u_photo_status"`
+	ULastSeen    *time.Time `db:"u_last_seen"`
+}
+
+type feedRow struct {
+	pointRow
+	personRow
+
+	PoolCount int  `db:"pool_count"`
+	Responses int  `db:"responses"`
+	InPool    bool `db:"in_pool"`
+}
+
+type memberRow struct {
+	personRow
+
+	EnteredAt time.Time `db:"entered_at"`
+
+	// The search side of the LEFT JOIN LATERAL; close_reason is not among the
+	// columns because the lateral only ever picks an active search.
+	SID         *uuid.UUID `db:"s_id"`
+	SZoneID     *string    `db:"s_zone_id"`
+	SPriceMin   *int       `db:"s_price_min"`
+	SPriceMax   *int       `db:"s_price_max"`
+	SRoomsMin   *int       `db:"s_rooms_min"`
+	SRoomsMax   *int       `db:"s_rooms_max"`
+	SMoveIn     *time.Time `db:"s_move_in"`
+	STerm       *string    `db:"s_term"`
+	SHasStuff   []string   `db:"s_has_stuff"`
+	SStatus     *string    `db:"s_status"`
+	SPoolSeenAt *time.Time `db:"s_pool_seen_at"`
+	SCreatedAt  *time.Time `db:"s_created_at"`
+	SUpdatedAt  *time.Time `db:"s_updated_at"`
 }
 
 func (r pointRow) toEntity() entity.Point {
@@ -73,6 +157,81 @@ func (r pointRow) toEntity() entity.Point {
 		p.Restrictions = append(p.Restrictions, entity.ParseRestriction(code))
 	}
 	return p
+}
+
+func (r personRow) toEntity() *entity.User {
+	if r.UID == nil {
+		return nil
+	}
+	return &entity.User{
+		ID:   *r.UID,
+		Name: pointer.Get(r.UName),
+		Profile: entity.Profile{
+			Age:      pointer.Get(r.UAge),
+			Gender:   entity.ParseGender(pointer.Get(r.UGender)),
+			Schedule: entity.ParseSchedule(pointer.Get(r.USchedule)),
+			Smoking:  entity.ParseSmoking(pointer.Get(r.USmoking)),
+			PetsOwn:  entity.ParsePetsOwn(pointer.Get(r.UPetsOwn)),
+			PetsOK:   entity.ParsePetsOK(pointer.Get(r.UPetsOK)),
+			Noise:    entity.ParseNoise(pointer.Get(r.UNoise)),
+			Guests:   entity.ParseGuests(pointer.Get(r.UGuests)),
+			Cleaning: entity.ParseCleaning(pointer.Get(r.UCleaning)),
+			Alcohol:  entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
+			Expenses: entity.ParseExpenses(pointer.Get(r.UExpenses)),
+		},
+		PhotoKey:    pointer.Get(r.UPhotoKey),
+		PhotoStatus: entity.ParseModerationStatus(pointer.Get(r.UPhotoStatus)),
+		LastSeen:    pointer.Get(r.ULastSeen),
+		// Not read from the row: everyone who gets here has already passed
+		// visible_people, which only ever returns active people (§4). Stating
+		// that guarantee beats leaving a zero that would make User.Visible() lie.
+		Status: entity.StatusActive,
+	}
+}
+
+func (r feedRow) toEntity() FeedPoint {
+	return FeedPoint{
+		Point:     r.pointRow.toEntity(),
+		PoolCount: r.PoolCount,
+		Responses: r.Responses,
+		InPool:    r.InPool,
+		Author:    r.personRow.toEntity(),
+	}
+}
+
+func (r memberRow) toEntity() Member {
+	// Never nil here: a member comes through an inner join on users.
+	user := r.personRow.toEntity()
+	return Member{User: *user, Search: r.toSearch(user.ID), EnteredAt: r.EnteredAt}
+}
+
+func (r memberRow) toSearch(userID uuid.UUID) *entity.Search {
+	if r.SID == nil {
+		return nil
+	}
+	s := entity.Search{
+		ID:     *r.SID,
+		UserID: userID,
+		SearchParams: entity.SearchParams{
+			ZoneID:   pointer.Get(r.SZoneID),
+			PriceMin: r.SPriceMin,
+			PriceMax: pointer.Get(r.SPriceMax),
+			RoomsMin: r.SRoomsMin,
+			RoomsMax: r.SRoomsMax,
+			MoveIn:   r.SMoveIn,
+		},
+		Status:     entity.ParseSearchStatus(pointer.Get(r.SStatus)),
+		PoolSeenAt: pointer.Get(r.SPoolSeenAt),
+		CreatedAt:  pointer.Get(r.SCreatedAt),
+		UpdatedAt:  pointer.Get(r.SUpdatedAt),
+	}
+	if r.STerm != nil {
+		s.Term = pointer.To(entity.ParseTerm(*r.STerm))
+	}
+	for _, c := range r.SHasStuff {
+		s.HasStuff = append(s.HasStuff, entity.ParseStuffChip(c))
+	}
+	return &s
 }
 
 func enumArg[T ~string](v *T) *string {

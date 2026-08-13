@@ -1,17 +1,24 @@
 // Command devseed fills a local database with fake people so that zone pools,
-// their three sections and the verdict chips have something to show (§2.1).
-// Without it every pool is empty and the feed's promo block counts nobody.
+// their three sections and the verdict chips have something to show (§2.1),
+// and with a few points so that the feed, the flat pools and «к себе» are not
+// empty either (§2.2). Without it every pool is empty and the feed's promo
+// block counts nobody.
 //
 // The crowd is deterministic: fixed Telegram ids from seedTGBase up, upserted
-// by tg_id, searches wiped and re-inserted. Reruns converge to the same state
-// instead of piling up copies, and the same tg_id range removes everything —
-// in reference order, and likes and matches name a seed person on either side
-// (the other one is usually the dev account of cmd/devinitdata):
+// by tg_id, searches wiped and re-inserted; points carry fixed ids with the
+// seedPointPrefix. Reruns converge to the same state instead of piling up
+// copies, and the same two markers remove everything — in reference order,
+// and likes and matches name a seed person on either side (the other one is
+// usually the dev account of cmd/devinitdata):
 //
 //	DELETE FROM matches USING users u
 //	 WHERE u.tg_id >= 900000001 AND (a_id = u.id OR b_id = u.id);
 //	DELETE FROM likes_users USING users u
 //	 WHERE u.tg_id >= 900000001 AND (from_id = u.id OR to_id = u.id);
+//	DELETE FROM likes_points
+//	 WHERE point_id IN (SELECT id FROM points WHERE id::text LIKE '5eed%')
+//	    OR user_id IN (SELECT id FROM users WHERE tg_id >= 900000001);
+//	DELETE FROM points WHERE id::text LIKE '5eed%';
 //	DELETE FROM searches WHERE user_id IN (SELECT id FROM users WHERE tg_id >= 900000001);
 //	DELETE FROM users WHERE tg_id >= 900000001;
 //
@@ -80,6 +87,11 @@ const (
 	// Хамовники for both, including Ира — her search is on line-1, and line-1
 	// reaches the Хамовники pool through its stations (§2.1).
 	devLikeZone = "d-khamovniki"
+
+	// seedPointPrefix is to points what seedTGBase is to people: a point has no
+	// natural key to upsert by, so the ids are fixed here, and one LIKE finds
+	// the whole crop again.
+	seedPointPrefix = "5eed"
 )
 
 // seedPerson is one row of the table: the questionnaire a pool card renders,
@@ -222,6 +234,43 @@ var (
 // manual half of the acceptance walkthrough.
 var devLikers = []int64{1, 3}
 
+// The fixed ids of everything this tool writes into points. «5eed» reads as
+// «seed» in hex, and the prefix is what the wipe above matches on.
+var (
+	flatCrowded = uuid.MustParse("5eed0000-0000-4000-8000-000000000001")
+	flatFresh   = uuid.MustParse("5eed0000-0000-4000-8000-000000000002")
+	flatRedLine = uuid.MustParse("5eed0000-0000-4000-8000-000000000003")
+	homeOfKatya = uuid.MustParse("5eed0000-0000-4000-8000-000000000004")
+	devFlat     = uuid.MustParse("5eed0000-0000-4000-8000-000000000005")
+)
+
+// seedFlat is a market flat: source 'manual' and no created_by, because such a
+// point is impersonal — the author is nobody and the card shows no face (§2.2).
+type seedFlat struct {
+	id      uuid.UUID
+	zone    string
+	price   int // общая цена; «с человека» карточка считает сама
+	rooms   int
+	ageDays int
+	// pool is who already entered, by seedPerson.n. Nobody with «только свой
+	// пол» is here: their membership would be counted for one viewer and not
+	// for another, and «в пуле N» is the number this seed is checked by.
+	pool []int64
+}
+
+// flats are three, and the three differ in both terms of the ranking formula
+// (§8: pool size against age), so the order of the feed is something to look
+// at rather than something to take on trust.
+var flats = []seedFlat{
+	// Неделя в ленте и самый людный пул.
+	{flatCrowded, "st-frunzenskaya", 165000, 3, 7, []int64{2, 3, 4, 5, 7}},
+	// Свежая и почти пустая — и всё равно выше первой.
+	{flatFresh, "st-sportivnaya", 135000, 2, 0, []int64{1, 16}},
+	// На красной ветке, но вне Хамовников: в выдаче хамовнического поиска её
+	// нет, в выдаче Иры (line-1) есть — граница зоны видна глазами.
+	{flatRedLine, "st-sokolniki", 128000, 2, 21, []int64{3, 9, 13}},
+}
+
 // localHosts is the whole permission of this tool. It writes twenty active
 // people with approved photos; against a production database that is not a
 // mistake to notice the next day. A unix socket is not listed — any host that
@@ -257,7 +306,8 @@ func run() error {
 		return fmt.Errorf("upload the placeholder avatar: %w", err)
 	}
 
-	var users, searches, likes int
+	var users, searches, members int
+	var hasDev bool
 	err = postgres.InTx(ctx, pool, func(tx pgx.Tx) error {
 		ids, err := upsertPeople(ctx, tx)
 		if err != nil {
@@ -269,8 +319,24 @@ func run() error {
 			return err
 		}
 
-		likes, err = likeDevUser(ctx, tx)
-		return err
+		byOffset := offsetIndex(ids)
+		if members, err = seedFlats(ctx, tx, byOffset); err != nil {
+			return err
+		}
+		if err := seedIntentHome(ctx, tx, byOffset); err != nil {
+			return err
+		}
+
+		devID, err := findDev(ctx, tx)
+		if err != nil || devID == uuid.Nil {
+			return err
+		}
+		hasDev = true
+
+		if err := likeDevUser(ctx, tx, devID); err != nil {
+			return err
+		}
+		return seedDevFlat(ctx, tx, devID)
 	})
 	if err != nil {
 		return err
@@ -278,10 +344,13 @@ func run() error {
 
 	fmt.Printf("seeded %d people and %d searches; tg_id %d…%d, photo %s\n",
 		users, searches, seedTGBase, seedTGBase+int64(len(people))-1, photos.URL(avatarKey))
-	if likes == 0 {
-		fmt.Printf("dev user %d is not in the database — incoming likes skipped\n", devTGID)
+	fmt.Printf("seeded %d market flats with %d pool entries, and Катя's «к себе» with one response\n",
+		len(flats), members)
+	if hasDev {
+		fmt.Printf("dev user %d has %d incoming likes from the crowd and one flat of their own on moderation\n",
+			devTGID, len(devLikers))
 	} else {
-		fmt.Printf("dev user %d has %d incoming likes from the crowd\n", devTGID, likes)
+		fmt.Printf("dev user %d is not in the database — incoming likes and the pending flat skipped\n", devTGID)
 	}
 	return nil
 }
@@ -362,24 +431,112 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 	return len(people), nil
 }
 
-// likeDevUser hangs the incoming likes of devLikers on the dev account and
-// returns how many it ends up with — not how many this run inserted, because a
-// rerun inserts nothing and has to report the same number. Zero means the
-// account is absent, which is the normal state of a fresh database: it appears
-// when the dev logs in, and the seeder has no business creating it.
+// seedFlats writes the market flats and fills their pools, returning how many
+// memberships the pools hold in total — the number this run inserted is zero on
+// a rerun, and the report has to say the same thing both times.
+//
+// The points are upserted by their fixed ids: unlike a search, a point cannot
+// be wiped and rewritten, because the pool under it references it and entering
+// a pool is a thing the dev does by hand during a walkthrough.
+func seedFlats(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) (int, error) {
+	const query = `
+		INSERT INTO points (id, type, status, source, zone_id, price_total, rooms,
+			isolated, photo_key, created_at, edited_at)
+		VALUES ($1, 'flat', 'active', 'manual', $2, $3, $4, true, $5,
+			now() - make_interval(days => $6::int), now() - make_interval(days => $6::int))
+		ON CONFLICT (id) DO UPDATE SET
+			status = 'active', zone_id = EXCLUDED.zone_id,
+			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
+			isolated = EXCLUDED.isolated, photo_key = EXCLUDED.photo_key,
+			created_at = EXCLUDED.created_at, edited_at = EXCLUDED.edited_at`
+
+	members := 0
+	for _, f := range flats {
+		if _, err := tx.Exec(ctx, query, f.id, f.zone, f.price, f.rooms, avatarKey, f.ageDays); err != nil {
+			return 0, fmt.Errorf("upsert flat %s: %w", f.zone, err)
+		}
+		if err := enterPool(ctx, tx, f.id, offsetIDs(byOffset, f.pool)); err != nil {
+			return 0, fmt.Errorf("fill the pool of %s: %w", f.zone, err)
+		}
+		members += len(f.pool)
+	}
+	return members, nil
+}
+
+// enterPool is the cheap like of §2.2 written directly. The rows are hours
+// apart because the pool is ordered by created_at: everything written in one
+// transaction shares now(), and with a plain default the order of the cards
+// would flip between runs.
+func enterPool(ctx context.Context, tx pgx.Tx, pointID uuid.UUID, userIDs []uuid.UUID) error {
+	const query = `
+		INSERT INTO likes_points (user_id, point_id, created_at)
+		SELECT member.id, $1, now() - make_interval(hours => member.ord::int)
+		FROM unnest($2::uuid[]) WITH ORDINALITY AS member(id, ord)
+		ON CONFLICT DO NOTHING`
+	_, err := tx.Exec(ctx, query, pointID, userIDs)
+	return err
+}
+
+// seedIntentHome gives Катя a room to fill and Олег one response to it. Both
+// of them are «с любым полом», so the response is visible from either side
+// (§4) — a like across a gender_pref wall would exist in the table and nowhere
+// in the product.
+//
+// There is no pool here: everyone who responds wants the same room, and a
+// match between them would be about nothing (§2.2). The response is a spent
+// expensive like, exactly what «Хочу эту комнату» sends.
+func seedIntentHome(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) error {
+	katya, oleg := byOffset[1], byOffset[2]
+
+	const point = `
+		INSERT INTO points (id, type, stage, status, source, created_by, zone_id,
+			price_share, rooms, isolated, restrictions, photo_key, deposit,
+			created_at, edited_at)
+		VALUES ($1, 'intent_home', 'live', 'active', 'user_link', $2, $3,
+			45000, 2, true, ARRAY['no_smoking']::text[], $4, 45000,
+			now() - make_interval(days => 3), now() - make_interval(days => 3))
+		ON CONFLICT (id) DO UPDATE SET
+			status = 'active', created_by = EXCLUDED.created_by,
+			zone_id = EXCLUDED.zone_id, price_share = EXCLUDED.price_share,
+			rooms = EXCLUDED.rooms, isolated = EXCLUDED.isolated,
+			restrictions = EXCLUDED.restrictions, photo_key = EXCLUDED.photo_key,
+			deposit = EXCLUDED.deposit, created_at = EXCLUDED.created_at,
+			edited_at = EXCLUDED.edited_at`
+	if _, err := tx.Exec(ctx, point, homeOfKatya, katya, "st-sportivnaya", avatarKey); err != nil {
+		return fmt.Errorf("upsert the room of Катя: %w", err)
+	}
+
+	const response = `
+		INSERT INTO likes_users (from_id, to_id, point_id, spent, created_at)
+		VALUES ($1, $2, $3, true, now() - make_interval(hours => 5))
+		ON CONFLICT (from_id, to_id) DO NOTHING`
+	if _, err := tx.Exec(ctx, response, oleg, katya, homeOfKatya); err != nil {
+		return fmt.Errorf("respond to the room of Катя: %w", err)
+	}
+	return nil
+}
+
+// findDev looks up the dev account and returns uuid.Nil when it is absent,
+// which is the normal state of a fresh database: it appears when the dev logs
+// in, and the seeder has no business creating it.
+func findDev(ctx context.Context, tx pgx.Tx) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE tg_id = $1`, devTGID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, nil
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("look up the dev user: %w", err)
+	}
+	return id, nil
+}
+
+// likeDevUser hangs the incoming likes of devLikers on the dev account so that
+// «Тебя лайкнули» is not empty without a second Telegram on the other end.
 //
 // The likes are spent ones, as if sent from the pool: an unspent like is what
 // the reply is (§2.3), and the reply is the manual part of the walkthrough.
-func likeDevUser(ctx context.Context, tx pgx.Tx) (int, error) {
-	var devID uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE tg_id = $1`, devTGID).Scan(&devID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("look up the dev user: %w", err)
-	}
-
+func likeDevUser(ctx context.Context, tx pgx.Tx, devID uuid.UUID) error {
 	tgIDs := make([]int64, len(devLikers))
 	for i, n := range devLikers {
 		tgIDs[i] = seedTGBase + n - 1
@@ -395,9 +552,57 @@ func likeDevUser(ctx context.Context, tx pgx.Tx) (int, error) {
 		JOIN users u ON u.tg_id = liker.tg_id
 		ON CONFLICT (from_id, to_id) DO NOTHING`
 	if _, err := tx.Exec(ctx, query, devID, devLikeZone, tgIDs); err != nil {
-		return 0, fmt.Errorf("like the dev user: %w", err)
+		return fmt.Errorf("like the dev user: %w", err)
 	}
-	return len(devLikers), nil
+	return nil
+}
+
+// seedDevFlat gives the dev account a flat of their own, waiting for a verdict:
+// it is what «Присмотренные» and the moderation queue are looked at with.
+//
+// The creator is put into the pool by hand — the same row the create
+// transaction writes, so that «ты первый в пуле» (§6) holds for a seeded point
+// too.
+func seedDevFlat(ctx context.Context, tx pgx.Tx, devID uuid.UUID) error {
+	const query = `
+		INSERT INTO points (id, type, status, source, created_by, zone_id,
+			price_total, rooms, isolated, photo_key, url_norm, created_at, edited_at)
+		VALUES ($1, 'flat', 'pending', 'user_link', $2, 'st-frunzenskaya',
+			150000, 2, true, $3, $4,
+			now() - make_interval(hours => 2), now() - make_interval(hours => 2))
+		ON CONFLICT (id) DO UPDATE SET
+			created_by = EXCLUDED.created_by, zone_id = EXCLUDED.zone_id,
+			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
+			isolated = EXCLUDED.isolated, photo_key = EXCLUDED.photo_key,
+			url_norm = EXCLUDED.url_norm, created_at = EXCLUDED.created_at,
+			edited_at = EXCLUDED.edited_at`
+	// Уже нормализованная ссылка: так её пишет форма (§6, валидация домена).
+	const url = "https://avito.ru/moskva/kvartiry/2-k._kvartira_55m_57et._1234567890"
+	if _, err := tx.Exec(ctx, query, devFlat, devID, avatarKey, url); err != nil {
+		return fmt.Errorf("upsert the flat of the dev user: %w", err)
+	}
+	if err := enterPool(ctx, tx, devFlat, []uuid.UUID{devID}); err != nil {
+		return fmt.Errorf("put the dev user into their own pool: %w", err)
+	}
+	return nil
+}
+
+// offsetIndex keys the crowd by seedPerson.n, so the tables above can name
+// people the way the comments do — «Катя (n=1)» — instead of by row number.
+func offsetIndex(ids []uuid.UUID) map[int64]uuid.UUID {
+	byOffset := make(map[int64]uuid.UUID, len(people))
+	for i, p := range people {
+		byOffset[p.n] = ids[i]
+	}
+	return byOffset
+}
+
+func offsetIDs(byOffset map[int64]uuid.UUID, offsets []int64) []uuid.UUID {
+	ids := make([]uuid.UUID, len(offsets))
+	for i, n := range offsets {
+		ids[i] = byOffset[n]
+	}
+	return ids
 }
 
 // profile completes the questionnaire. Every field is filled in: these people

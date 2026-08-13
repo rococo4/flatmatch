@@ -12,6 +12,7 @@ import (
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/repo/pointsrepo"
+	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
 )
 
@@ -47,7 +48,8 @@ type fakeSearches struct {
 }
 
 type fakeNotifier struct {
-	got []entity.Point
+	got  []entity.Point
+	ctxs []context.Context
 }
 
 func (f *fakeRepo) Create(_ context.Context, p entity.Point) (entity.Point, error) {
@@ -108,8 +110,9 @@ func (f *fakeSearches) ListByUser(context.Context, uuid.UUID) ([]entity.Search, 
 	return f.list, nil
 }
 
-func (f *fakeNotifier) PointPending(_ context.Context, p entity.Point) {
+func (f *fakeNotifier) PointPending(ctx context.Context, p entity.Point) {
 	f.got = append(f.got, p)
+	f.ctxs = append(f.ctxs, ctx)
 }
 
 func newService(t *testing.T, repo *fakeRepo, searches *fakeSearches, notify Notifier) *Service {
@@ -159,6 +162,8 @@ func TestNormalizeURL(t *testing.T) {
 		"mobile mirror":    "https://m.avito.ru/moskva/kvartiry/2-k_kvartira_1234567",
 		"query":            "https://avito.ru/moskva/kvartiry/2-k_kvartira_1234567?context=H4sI&slocation=1",
 		"trailing slash":   "https://avito.ru/moskva/kvartiry/2-k_kvartira_1234567/",
+		"two slashes":      "https://avito.ru/moskva/kvartiry/2-k_kvartira_1234567//",
+		"percent-encoded":  "https://avito.ru/moskva/kvartiry/2-k_kv%61rtira_1234567",
 		"http":             "http://avito.ru/moskva/kvartiry/2-k_kvartira_1234567",
 		"no scheme":        "avito.ru/moskva/kvartiry/2-k_kvartira_1234567",
 		"uppercase host":   "https://AVITO.RU/moskva/kvartiry/2-k_kvartira_1234567",
@@ -181,6 +186,11 @@ func TestNormalizeURL(t *testing.T) {
 		"subdomain":        "https://spb.avito.ru/kvartira/1",
 		"not a url":        "квартира на авито",
 		"other scheme":     "ftp://avito.ru/1",
+		// Главная площадки — не квартира, и первый же такой «дубль» запер бы
+		// весь домен.
+		"bare host":              "https://avito.ru",
+		"bare host with a slash": "https://avito.ru/",
+		"bare host no scheme":    "avito.ru",
 	}
 	for name, raw := range bad {
 		t.Run(name, func(t *testing.T) {
@@ -188,6 +198,12 @@ func TestNormalizeURL(t *testing.T) {
 				t.Errorf("normalizeURL(%q) = %q, true; want it refused", raw, got)
 			}
 		})
+	}
+
+	// Регистр пути — часть идентификатора объявления: слить два разных в одно
+	// хуже, чем пропустить обход дедупа.
+	if got, _ := normalizeURL("https://avito.ru/Moskva/Kvartiry/1"); got != "https://avito.ru/Moskva/Kvartiry/1" {
+		t.Errorf("path case changed: %q", got)
 	}
 
 	// Циан живёт по тем же правилам.
@@ -283,11 +299,34 @@ func TestCreateFlatFillsProvenance(t *testing.T) {
 	}
 }
 
+// Точка уже создана: отменённый запрос не должен отменить сообщение
+// модератору — иначе она молча зависнет в очереди до /queue.
+func TestModerationSurvivesACancelledRequest(t *testing.T) {
+	notify := &fakeNotifier{}
+	s := newService(t, &fakeRepo{}, &fakeSearches{}, notify)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := s.CreateFlat(ctx, uuid.New(), validFlat()); err != nil {
+		t.Fatalf("CreateFlat() failed: %v", err)
+	}
+	if len(notify.ctxs) != 1 {
+		t.Fatalf("moderation was called %d times, want 1", len(notify.ctxs))
+	}
+	if err := notify.ctxs[0].Err(); err != nil {
+		t.Errorf("moderation got a cancelled context: %v", err)
+	}
+}
+
 func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 	existing := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive}
 
 	t.Run("already there", func(t *testing.T) {
-		repo := &fakeRepo{byURL: []*entity.Point{&existing}}
+		repo := &fakeRepo{
+			byURL: []*entity.Point{&existing},
+			card:  pointsrepo.FeedPoint{Point: existing, PoolCount: 3},
+		}
 		s := newService(t, repo, &fakeSearches{}, nil)
 
 		_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
@@ -295,8 +334,33 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 		if !errors.As(err, &dup) || dup.Existing.ID != existing.ID {
 			t.Fatalf("CreateFlat() = %v, want ErrDuplicateURL with %s", err, existing.ID)
 		}
+		// «Эта квартира уже есть, в пуле N — войти?» (§6): без N предлагать
+		// нечего.
+		if dup.PoolCount != 3 {
+			t.Errorf("PoolCount = %d, want 3", dup.PoolCount)
+		}
 		if repo.createCalls != 0 {
 			t.Errorf("a duplicate reached the repository %d times", repo.createCalls)
+		}
+	})
+
+	// Точка на проверке пула ещё не имеет: войти некуда, и предлагать нечего.
+	t.Run("still on review", func(t *testing.T) {
+		pending := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPending}
+		repo := &fakeRepo{
+			byURL:   []*entity.Point{&pending},
+			cardErr: entity.ErrNotFound,
+		}
+		s := newService(t, repo, &fakeSearches{}, nil)
+
+		_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
+		var dup *ErrDuplicateURL
+		if !errors.As(err, &dup) {
+			t.Fatalf("CreateFlat() = %v, want ErrDuplicateURL", err)
+		}
+		if dup.Existing.ID != pending.ID || dup.PoolCount != 0 {
+			t.Errorf("duplicate = %s / pool %d, want the pending point with an empty pool",
+				dup.Existing.ID, dup.PoolCount)
 		}
 	})
 
@@ -418,6 +482,18 @@ func TestPointHidesWhatIsNotApproved(t *testing.T) {
 	if _, err := s.Point(t.Context(), stranger, card.Point.ID); err != nil {
 		t.Errorf("Point() of an active flat failed: %v", err)
 	}
+
+	// У досыпки и парсера создателя нет вовсе (§8): «пустой создатель равен
+	// пустому смотрящему» открывал бы неодобренную точку кому попало.
+	orphan := pointsrepo.FeedPoint{Point: entity.Point{
+		ID: uuid.New(), Type: entity.PointFlat, Source: entity.SourceManual,
+		Status: entity.PointPending, CreatedBy: nil}}
+	s = newService(t, &fakeRepo{card: orphan}, &fakeSearches{}, nil)
+	for _, viewer := range []uuid.UUID{stranger, uuid.Nil} {
+		if _, err := s.Point(t.Context(), viewer, orphan.Point.ID); !errors.Is(err, entity.ErrNotFound) {
+			t.Errorf("Point() of an ownerless pending point for %s = %v, want ErrNotFound", viewer, err)
+		}
+	}
 }
 
 func TestPoolOpensAfterEntry(t *testing.T) {
@@ -490,6 +566,74 @@ func TestPoolChipsNeedBothSearches(t *testing.T) {
 				t.Error("SharedAnswers = 0, want the questionnaire counted")
 			}
 		})
+	}
+}
+
+// Чипы читаются со стороны смотрящего: это ЕГО параметры против чужих, и
+// «не указана» у другого — серое «неважно», а не зелёное совпадение (§6).
+func TestPoolChipsSpeakFromTheViewerSide(t *testing.T) {
+	card := pointsrepo.FeedPoint{Point: entity.Point{
+		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, ZoneID: station}}
+	// Асимметрия нарочно: у смотрящего комнатность и месяц заезда указаны, у
+	// участника нет — перестановка сторон вернула бы по ним зелёное.
+	viewerParams := entity.SearchParams{
+		ZoneID: district, PriceMin: pointer.To(35000), PriceMax: 45000,
+		RoomsMin: pointer.To(2), RoomsMax: pointer.To(2),
+		MoveIn: pointer.To(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)),
+	}
+	member := pointsrepo.Member{
+		User: entity.User{ID: uuid.New()},
+		Search: &entity.Search{Status: entity.SearchActive, SearchParams: entity.SearchParams{
+			ZoneID: district, PriceMin: pointer.To(40000), PriceMax: 55000}},
+	}
+
+	repo := &fakeRepo{card: card, inPool: true, members: []pointsrepo.Member{member}}
+	s := newService(t, repo, &fakeSearches{list: []entity.Search{
+		{Status: entity.SearchActive, SearchParams: viewerParams}}}, nil)
+
+	view, err := s.Pool(t.Context(), entity.User{ID: uuid.New()}, card.Point.ID)
+	if err != nil {
+		t.Fatalf("Pool() failed: %v", err)
+	}
+	want := []pools.Chip{
+		{Param: pools.ParamPrice, Verdict: pools.VerdictGreen},
+		{Param: pools.ParamRooms, Verdict: pools.VerdictNone},
+		{Param: pools.ParamMoveIn, Verdict: pools.VerdictNone},
+		{Param: pools.ParamTerm, Verdict: pools.VerdictNone},
+	}
+	if !slices.Equal(view.Members[0].Chips, want) {
+		t.Errorf("chips = %v, want %v", view.Members[0].Chips, want)
+	}
+}
+
+// Из нескольких пересекающих поисков чипы говорят от свежайшего — того, чем
+// человек живёт сейчас.
+func TestPoolChipsUseTheFreshestSearch(t *testing.T) {
+	card := pointsrepo.FeedPoint{Point: entity.Point{
+		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, ZoneID: station}}
+	member := pointsrepo.Member{
+		User: entity.User{ID: uuid.New()},
+		Search: &entity.Search{Status: entity.SearchActive, SearchParams: entity.SearchParams{
+			ZoneID: district, PriceMin: pointer.To(40000), PriceMax: 55000}},
+	}
+	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	stale := entity.Search{Status: entity.SearchActive, CreatedAt: base,
+		SearchParams: entity.SearchParams{ZoneID: district, PriceMin: pointer.To(100000), PriceMax: 120000}}
+	fresh := entity.Search{Status: entity.SearchActive, CreatedAt: base.Add(time.Hour),
+		SearchParams: entity.SearchParams{ZoneID: district, PriceMin: pointer.To(35000), PriceMax: 45000}}
+
+	for _, order := range [][]entity.Search{{stale, fresh}, {fresh, stale}} {
+		repo := &fakeRepo{card: card, inPool: true, members: []pointsrepo.Member{member}}
+		s := newService(t, repo, &fakeSearches{list: order}, nil)
+
+		view, err := s.Pool(t.Context(), entity.User{ID: uuid.New()}, card.Point.ID)
+		if err != nil {
+			t.Fatalf("Pool() failed: %v", err)
+		}
+		// Свежий бюджет пересекается с участником, старый — нет.
+		if got := view.Members[0].Chips[0]; got.Verdict != pools.VerdictGreen {
+			t.Errorf("price chip = %v, want green — чипы взяли не свежайший поиск", got.Verdict)
+		}
 	}
 }
 

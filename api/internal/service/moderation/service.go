@@ -131,13 +131,28 @@ func (s *Service) pointCaption(p entity.Point) string {
 }
 
 func userCaption(u entity.User) string {
-	// Одобренная анкета в очереди — это правка фото или «о себе»: остальное
-	// меняется молча (§5).
-	status := string(entity.StatusPending)
-	if u.Status == entity.StatusActive {
-		status = "правка"
+	return fmt.Sprintf("%s, %d\n%s\nстатус: %s", u.Name, u.Profile.Age, u.Profile.About, statusLine(u))
+}
+
+// statusLine tells the moderator, что именно он смотрит: у одобренной анкеты в
+// очереди на перепроверку уходят только фото и «о себе», остальное меняется
+// молча (§5).
+func statusLine(u entity.User) string {
+	if u.Status != entity.StatusActive {
+		return "первичная анкета"
 	}
-	return fmt.Sprintf("%s, %d\n%s\nстатус: %s", u.Name, u.Profile.Age, u.Profile.About, status)
+	photo := u.PhotoStatus == entity.ModerationPending
+	about := u.AboutStatus == entity.ModerationPending
+	switch {
+	case photo && about:
+		return "правка фото и «о себе»"
+	case photo:
+		return "правка фото"
+	case about:
+		return "правка «о себе»"
+	default:
+		return "правка"
+	}
 }
 
 func stageLabel(stage *entity.PointStage) string {

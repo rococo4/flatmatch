@@ -118,8 +118,10 @@ func invalidFields(checks []check) []string {
 }
 
 // normalizeURL turns a pasted link into the key the dedup is built on: схема
-// всегда https, зеркала m./www. сведены к одному хосту, хвостовой слэш и
-// query отброшены — иначе одна и та же квартира заводится трижды (§6).
+// всегда https, зеркала m./www. сведены к одному хосту, проценты в пути
+// раскрыты, хвостовые слэши и query отброшены — иначе одна и та же квартира
+// заводится трижды (§6). Регистр пути остаётся как есть: слить два разных
+// объявления в одно хуже, чем пропустить обход дедупа.
 func normalizeURL(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -141,7 +143,13 @@ func normalizeURL(raw string) (string, bool) {
 	if !slices.Contains(listingHosts, host) {
 		return "", false
 	}
-	return "https://" + host + strings.TrimSuffix(u.EscapedPath(), "/"), true
+	// Голый хост — не квартира: без пути ссылка ведёт на главную площадки, и
+	// первый же такой «дубль» запер бы весь домен.
+	path := strings.TrimRight(u.Path, "/")
+	if path == "" {
+		return "", false
+	}
+	return "https://" + host + path, true
 }
 
 // validRestrictions drops repeats: чипы «без животных» дважды — один и тот же

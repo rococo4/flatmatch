@@ -30,6 +30,9 @@ var ErrInvalidForm = errors.New("point form has invalid fields")
 // author can go.
 type ErrDuplicateURL struct {
 	Existing entity.Point
+	// PoolCount is «в пуле N» существующей точки — то самое N предложения
+	// войти, и оно персонально, как и всякий счётчик пула (§4).
+	PoolCount int
 }
 
 type Repository interface {
@@ -144,7 +147,11 @@ func (s *Service) Point(ctx context.Context, viewerID, pointID uuid.UUID) (point
 	if err != nil {
 		return pointsrepo.FeedPoint{}, err
 	}
-	if card.Point.Status != entity.PointActive && pointer.Get(card.Point.CreatedBy) != viewerID {
+	// Создателя сравниваем явным разыменованием: у досыпки и парсера его нет
+	// вовсе (§8), и «пустой создатель равен пустому смотрящему» открывал бы
+	// такую точку кому попало.
+	if card.Point.Status != entity.PointActive &&
+		(card.Point.CreatedBy == nil || *card.Point.CreatedBy != viewerID) {
 		return pointsrepo.FeedPoint{}, entity.ErrNotFound
 	}
 	return card, nil
@@ -215,7 +222,7 @@ func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, err
 			return entity.Point{}, err
 		}
 		if existing != nil {
-			return entity.Point{}, &ErrDuplicateURL{Existing: *existing}
+			return entity.Point{}, s.duplicate(ctx, p, *existing)
 		}
 	}
 
@@ -224,7 +231,7 @@ func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, err
 	// что и опоздавший на секунду, а не ошибку базы.
 	if errors.Is(err, pointsrepo.ErrURLTaken) && p.URLNorm != nil {
 		if existing, e := s.repo.ByURLNorm(ctx, *p.URLNorm); e == nil && existing != nil {
-			return entity.Point{}, &ErrDuplicateURL{Existing: *existing}
+			return entity.Point{}, s.duplicate(ctx, p, *existing)
 		}
 	}
 	if err != nil {
@@ -232,9 +239,21 @@ func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, err
 	}
 
 	if s.notify != nil {
-		s.notify.PointPending(ctx, created)
+		// Отменённый запрос не отменяет модерацию: точка уже создана, и
+		// сообщение в чат ей нужно (§5).
+		s.notify.PointPending(context.WithoutCancel(ctx), created)
 	}
 	return created, nil
+}
+
+// duplicate дособирает «в пуле N» к предложению войти. Счётчик — украшение
+// отказа: не прочитался — 409 всё равно уходит, с нулём.
+func (s *Service) duplicate(ctx context.Context, mine entity.Point, existing entity.Point) error {
+	dup := &ErrDuplicateURL{Existing: existing}
+	if card, err := s.repo.CardByID(ctx, pointer.Get(mine.CreatedBy), existing.ID); err == nil {
+		dup.PoolCount = card.PoolCount
+	}
+	return dup
 }
 
 // searchNear picks the search the chips speak for: зона точки — станция, так

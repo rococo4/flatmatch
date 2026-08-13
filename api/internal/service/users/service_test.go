@@ -69,10 +69,14 @@ func (f *fakeStore) URL(key string) string                { return "/media/" + k
 
 // fakeNotifier is the moderation chat: what matters is only whether a
 // questionnaire was put in front of the moderator, and which one.
-type fakeNotifier struct{ queued []entity.User }
+type fakeNotifier struct {
+	queued []entity.User
+	ctxs   []context.Context
+}
 
-func (f *fakeNotifier) UserPending(_ context.Context, u entity.User) {
+func (f *fakeNotifier) UserPending(ctx context.Context, u entity.User) {
 	f.queued = append(f.queued, u)
+	f.ctxs = append(f.ctxs, ctx)
 }
 
 // newService leaves the notifier nil on purpose: a stand without a bot is a
@@ -306,7 +310,12 @@ func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
 	}}
 	svc, notifier := newModeratedService(repo)
 
-	if _, err := svc.Submit(t.Context(), uuid.New()); err != nil {
+	// Запрос отменён на полпути: анкета уже отправлена, и сообщение модератору
+	// ей нужно — иначе она молча зависнет в очереди до /queue.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := svc.Submit(ctx, uuid.New()); err != nil {
 		t.Fatalf("Submit() failed: %v", err)
 	}
 	if len(notifier.queued) != 1 {
@@ -314,6 +323,9 @@ func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
 	}
 	if notifier.queued[0].Name != "Катя" {
 		t.Errorf("queued %q, want the submitted account", notifier.queued[0].Name)
+	}
+	if err := notifier.ctxs[0].Err(); err != nil {
+		t.Errorf("the moderator got a cancelled context: %v", err)
 	}
 }
 

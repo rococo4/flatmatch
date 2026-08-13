@@ -152,5 +152,7 @@ func (s *Service) enqueue(ctx context.Context, u entity.User) {
 	if s.notify == nil {
 		return
 	}
-	s.notify.UserPending(ctx, u)
+	// Отменённый запрос не отменяет модерацию: анкета уже отправлена, и
+	// сообщение в чат ей нужно (§5).
+	s.notify.UserPending(context.WithoutCancel(ctx), u)
 }

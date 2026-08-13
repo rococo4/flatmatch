@@ -192,6 +192,27 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 			op:   opOK, ack: ackDone,
 		},
 		{
+			// Состояние после «фото не ок»: анкета в draft, «о себе» так и
+			// висит pending. Кнопка «ок» из соседнего сообщения не имеет права
+			// её воскресить — дорога назад одна, «загрузи другое» (§5).
+			name: "stale approval after a rejected photo",
+			user: func(u entity.User) entity.User {
+				u.Status = entity.StatusDraft
+				u.PhotoStatus = entity.ModerationRejected
+				return u
+			},
+			op: opOK, ack: ackDone,
+		},
+		{
+			name: "stale approval after rejected text",
+			user: func(u entity.User) entity.User {
+				u.Status = entity.StatusDraft
+				u.AboutStatus = entity.ModerationRejected
+				return u
+			},
+			op: opOK, ack: ackDone,
+		},
+		{
 			name: "second tap on an already rejected photo",
 			user: func(u entity.User) entity.User {
 				u.PhotoStatus = entity.ModerationRejected
@@ -317,7 +338,7 @@ func TestUserPendingCarriesTheThreeVerdicts(t *testing.T) {
 	if got.chatID != testChat || got.path != "/photos/photos/katya.jpg" {
 		t.Errorf("message went to %d with photo %q", got.chatID, got.path)
 	}
-	if want := "Катя, 24\nлюблю тишину\nстатус: pending"; got.caption != want {
+	if want := "Катя, 24\nлюблю тишину\nстатус: первичная анкета"; got.caption != want {
 		t.Errorf("caption = %q, want %q", got.caption, want)
 	}
 
@@ -335,13 +356,26 @@ func TestUserPendingCarriesTheThreeVerdicts(t *testing.T) {
 		}
 	}
 
-	// Правка одобренной анкеты — вторая очередь, и модератор должен видеть,
-	// что смотрит не новичка.
-	edited := user
-	edited.Status = entity.StatusActive
-	s.UserPending(t.Context(), edited)
-	if want := "Катя, 24\nлюблю тишину\nстатус: правка"; bot.sent[1].caption != want {
-		t.Errorf("caption of an edit = %q, want %q", bot.sent[1].caption, want)
+	// Правка одобренной анкеты — вторая очередь: модератор должен видеть не
+	// только что перед ним не новичок, но и что именно перепроверяют (§5).
+	edits := []struct {
+		photo, about entity.ModerationStatus
+		want         string
+	}{
+		{entity.ModerationPending, entity.ModerationOK, "правка фото"},
+		{entity.ModerationOK, entity.ModerationPending, "правка «о себе»"},
+		{entity.ModerationPending, entity.ModerationPending, "правка фото и «о себе»"},
+	}
+	for i, e := range edits {
+		edited := user
+		edited.Status = entity.StatusActive
+		edited.PhotoStatus, edited.AboutStatus = e.photo, e.about
+		s.UserPending(t.Context(), edited)
+
+		want := "Катя, 24\nлюблю тишину\nстатус: " + e.want
+		if got := bot.sent[len(bot.sent)-1].caption; got != want {
+			t.Errorf("caption of edit %d = %q, want %q", i, got, want)
+		}
 	}
 }
 

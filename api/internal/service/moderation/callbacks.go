@@ -71,8 +71,7 @@ func (s *Service) userVerdict(ctx context.Context, op string, id uuid.UUID) (str
 
 	switch op {
 	case opOK:
-		if u.Status != entity.StatusPending &&
-			u.PhotoStatus != entity.ModerationPending && u.AboutStatus != entity.ModerationPending {
+		if !inQueue(u) {
 			return ackDone, nil
 		}
 		// После аппрува человек проявляется везде разом (§5).
@@ -120,6 +119,22 @@ func (s *Service) pointVerdict(ctx context.Context, op string, id uuid.UUID) (st
 		return ackDone, nil
 	}
 	return ackOK, nil
+}
+
+// inQueue repeats the predicate usersrepo.PendingModeration selects by: одобрять
+// можно ровно то, что очередь показала. Через «хоть одно поле pending» гейт
+// строить нельзя — после «фото не ок» анкета уходит в draft с pending-«о себе»,
+// и стухшая кнопка «ок» из соседнего сообщения воскресила бы отклонённое, хотя
+// дорога назад одна: «загрузи другое» (§5).
+func inQueue(u entity.User) bool {
+	switch u.Status {
+	case entity.StatusPending:
+		return true
+	case entity.StatusActive:
+		return u.PhotoStatus == entity.ModerationPending || u.AboutStatus == entity.ModerationPending
+	default:
+		return false
+	}
 }
 
 // backToDraft: реджект возвращает анкету в draft, потому что фото обязательно и

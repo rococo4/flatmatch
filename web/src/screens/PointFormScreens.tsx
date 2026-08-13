@@ -297,78 +297,126 @@ function ZoneField({
  * Отдельным вызовом, а не вместе с формой: скрин весит мегабайты, и переносить
  * его через каждую неудачную валидацию — терять минуту на каждую опечатку.
  */
+const MAX_POINT_PHOTOS = 10;
+
 function PhotoPicker({
   title,
   hint,
   invalid,
-  onUploaded,
+  onChange,
 }: {
   title: string;
   hint: string;
   invalid: boolean;
-  onUploaded: (key: string) => void;
+  onChange: (keys: string[]) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<{ key: string; preview: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const upload = async (file: File | undefined) => {
-    if (!file || busy) return;
+  const report = (next: { key: string; preview: string }[]) => {
+    setPhotos(next);
+    onChange(next.map((p) => p.key));
+  };
+
+  const upload = async (files: FileList | null) => {
+    if (!files?.length || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const { photo_key } = await uploadPointPhoto(file);
-      setPreview((old) => {
-        if (old) URL.revokeObjectURL(old);
-        return URL.createObjectURL(file);
-      });
-      onUploaded(photo_key);
+      const room = MAX_POINT_PHOTOS - photos.length;
+      const next = [...photos];
+      for (const file of Array.from(files).slice(0, room)) {
+        const { photo_key } = await uploadPointPhoto(file);
+        next.push({ key: photo_key, preview: URL.createObjectURL(file) });
+      }
+      report(next);
+      if (files.length > room) setError(`Больше ${MAX_POINT_PHOTOS} фото не выйдет`);
     } catch (e: unknown) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
+      if (input.current) input.current.value = '';
     }
+  };
+
+  const remove = (key: string) => {
+    const gone = photos.find((p) => p.key === key);
+    if (gone) URL.revokeObjectURL(gone.preview);
+    report(photos.filter((p) => p.key !== key));
   };
 
   return (
     <div style={F.field}>
       <span style={F.label}>{title}</span>
-      <div
-        onClick={() => input.current?.click()}
-        style={{
-          ...F.dropzone,
-          borderColor: invalid
-            ? 'var(--tg-theme-destructive-text-color)'
-            : 'color-mix(in srgb, var(--tg-theme-hint-color) 50%, transparent)',
-        }}
-      >
-        {preview ? (
-          <img
-            src={preview}
-            alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-        ) : (
-          <>
+      <div className="no-scrollbar" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        {photos.map((p) => (
+          <div key={p.key} style={{ position: 'relative', flex: '0 0 auto' }}>
+            <img
+              src={p.preview}
+              alt=""
+              style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 10, display: 'block' }}
+            />
+            <button
+              type="button"
+              aria-label="Убрать фото"
+              onClick={() => remove(p.key)}
+              style={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                width: 20,
+                height: 20,
+                border: 'none',
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)',
+                color: '#fff',
+                fontSize: 12,
+                lineHeight: 1,
+                cursor: 'pointer',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        {photos.length < MAX_POINT_PHOTOS && (
+          <div
+            onClick={() => input.current?.click()}
+            style={{
+              ...F.dropzone,
+              width: photos.length ? 96 : '100%',
+              height: photos.length ? 72 : undefined,
+              flex: '0 0 auto',
+              borderColor: invalid
+                ? 'var(--tg-theme-destructive-text-color)'
+                : 'color-mix(in srgb, var(--tg-theme-hint-color) 50%, transparent)',
+            }}
+          >
             <span style={{ fontSize: 20, color: 'var(--tg-theme-accent-text-color)', lineHeight: 1 }}>
               ＋
             </span>
-            <span
-              style={{ fontSize: 13, fontWeight: 510, color: 'var(--tg-theme-accent-text-color)' }}
-            >
-              {busy ? 'Загружаю…' : 'Добавить фото'}
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>{hint}</span>
-          </>
+            {!photos.length && (
+              <>
+                <span
+                  style={{ fontSize: 13, fontWeight: 510, color: 'var(--tg-theme-accent-text-color)' }}
+                >
+                  {busy ? 'Загружаю…' : 'Добавить фото'}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>{hint}</span>
+              </>
+            )}
+          </div>
         )}
       </div>
       <input
         ref={input}
         type="file"
         accept="image/*"
+        multiple
         style={{ display: 'none' }}
-        onChange={(e) => void upload(e.target.files?.[0])}
+        onChange={(e) => void upload(e.target.files)}
       />
       {error && <span style={{ ...F.error, textAlign: 'left' }}>{error}</span>}
     </div>
@@ -484,7 +532,7 @@ export function FlatLinkFormScreen({
   const [bathrooms, setBathrooms] = useState<Bathrooms | null>(null);
   const [utilities, setUtilities] = useState<Utilities | null>(null);
   const [restrictions, setRestrictions] = useState<Restriction[]>([]);
-  const [photoKey, setPhotoKey] = useState('');
+  const [photoKeys, setPhotoKeys] = useState<string[]>([]);
 
   const form = usePointForm(onCreated, onEnteredPool);
 
@@ -493,7 +541,7 @@ export function FlatLinkFormScreen({
   const priceTotal = Number(price) || 0;
   const perPerson = pricePerPerson(priceTotal || undefined, rooms ?? undefined);
   const bad = (field: string) => form.invalid.includes(field);
-  const ready = Boolean(url.trim() && zoneId && priceTotal > 0 && photoKey) && !form.busy;
+  const ready = Boolean(url.trim() && zoneId && priceTotal > 0 && photoKeys.length) && !form.busy;
 
   const send = () => {
     if (!ready) return;
@@ -507,7 +555,7 @@ export function FlatLinkFormScreen({
       bathrooms,
       utilities,
       restrictions,
-      photo_key: photoKey,
+      photo_keys: photoKeys,
     });
   };
 
@@ -684,8 +732,8 @@ export function FlatLinkFormScreen({
           <PhotoPicker
             title="Фото-скрин квартиры"
             hint="чтобы карточку не листали мимо"
-            invalid={bad('photo_key')}
-            onUploaded={setPhotoKey}
+            invalid={bad('photo_keys')}
+            onChange={setPhotoKeys}
           />
         </div>
 
@@ -800,7 +848,7 @@ export function HomePointFormScreen({
   const [isolated, setIsolated] = useState<boolean | null>(null);
   const [moveIn, setMoveIn] = useState('');
   const [restrictions, setRestrictions] = useState<Restriction[]>([]);
-  const [photoKey, setPhotoKey] = useState('');
+  const [photoKeys, setPhotoKeys] = useState<string[]>([]);
 
   const form = usePointForm(onCreated);
 
@@ -810,7 +858,7 @@ export function HomePointFormScreen({
   const renting = stage === 'renting';
   const ready =
     !renting &&
-    Boolean(zoneId && priceShare > 0 && photoKey && (stage === 'live' || moveIn)) &&
+    Boolean(zoneId && priceShare > 0 && photoKeys.length && (stage === 'live' || moveIn)) &&
     !form.busy;
 
   const send = () => {
@@ -823,7 +871,7 @@ export function HomePointFormScreen({
       price_share: priceShare,
       isolated,
       restrictions,
-      photo_key: photoKey,
+      photo_keys: photoKeys,
       move_in: moveIn || null,
       deposit: deposit ? Number(deposit) : null,
     });
@@ -1038,8 +1086,8 @@ export function HomePointFormScreen({
                   ? 'фото из квартиры, не скрин объявления'
                   : 'как комната выглядит сейчас'
               }
-              invalid={bad('photo_key')}
-              onUploaded={setPhotoKey}
+              invalid={bad('photo_keys')}
+              onChange={setPhotoKeys}
             />
 
             {/* Дил-брейкеры собственника — видны на карточке до дорогого лайка. */}

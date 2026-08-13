@@ -80,7 +80,7 @@ type CreateFlat struct {
 	Bathrooms    *entity.Bathrooms
 	Utilities    *entity.Utilities
 	Restrictions []entity.Restriction
-	PhotoKey     string
+	PhotoKeys    []string
 	Deposit      *int
 }
 
@@ -93,7 +93,7 @@ type CreateIntentHome struct {
 	Rooms        *int
 	Isolated     *bool
 	Restrictions []entity.Restriction
-	PhotoKey     string
+	PhotoKeys    []string
 	MoveIn       *time.Time
 	Deposit      *int
 }

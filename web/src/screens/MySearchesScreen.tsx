@@ -459,7 +459,7 @@ function FlatRow({
       </div>
       <div style={{ ...S.cardBody, gap: 10 }}>
         <div style={{ display: 'flex', gap: 10 }}>
-          <PointThumb url={point.photo_url} label="скрин" />
+          <PointThumb url={point.photo_urls[0] ?? ''} label="скрин" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
             <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(point)}</span>
             <span style={S.subtitle}>
@@ -500,7 +500,7 @@ function HomeRow({ point, onClose }: { point: PointDTO; onClose?: (id: string) =
       </div>
       <div style={{ ...S.cardBody, gap: 10 }}>
         <div style={{ display: 'flex', gap: 10 }}>
-          <PointThumb url={point.photo_url} label="фото" />
+          <PointThumb url={point.photo_urls[0] ?? ''} label="фото" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
             <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(point)}</span>
             <span style={S.subtitle}>{money(point.price_share ?? 0)} с человека</span>

@@ -384,13 +384,13 @@ func TestPointPendingCaptionsByType(t *testing.T) {
 	flat := entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Source: entity.SourceUserLink,
 		CreatedBy: &author, ZoneID: "st-sportivnaya", PriceTotal: pointer.To(90000),
-		Rooms: pointer.To(2), PhotoKey: "points/screen.jpg",
+		Rooms: pointer.To(2), PhotoKeys: []string{"points/screen.jpg"},
 		URLNorm: pointer.To("https://avito.ru/moskva/kvartiry/1"),
 	}
 	room := entity.Point{
 		ID: uuid.New(), Type: entity.PointIntentHome, Stage: pointer.To(entity.StageMovingIn),
 		Source: entity.SourceUserLink, CreatedBy: &author, ZoneID: "st-sportivnaya",
-		PriceShare: pointer.To(45000), PhotoKey: "points/room.jpg",
+		PriceShare: pointer.To(45000), PhotoKeys: []string{"points/room.jpg"},
 	}
 
 	bot := &fakeSender{}
@@ -426,7 +426,7 @@ func TestPointPendingCaptionsByType(t *testing.T) {
 func TestSendingIsBestEffort(t *testing.T) {
 	user := submitted()
 	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol",
-		PriceTotal: pointer.To(90000), PhotoKey: "points/screen.jpg"}
+		PriceTotal: pointer.To(90000), PhotoKeys: []string{"points/screen.jpg"}}
 
 	t.Run("no chat configured", func(t *testing.T) {
 		bot := &fakeSender{}
@@ -454,7 +454,7 @@ func TestSendingIsBestEffort(t *testing.T) {
 		broken.PhotoKey = "broken"
 		s.UserPending(t.Context(), broken)
 		noPhoto := point
-		noPhoto.PhotoKey = ""
+		noPhoto.PhotoKeys = nil
 		s.PointPending(t.Context(), noPhoto)
 		if len(bot.sent) != 0 {
 			t.Errorf("sent %d messages with no photo to show", len(bot.sent))
@@ -466,7 +466,7 @@ func TestSendQueueSendsBothQueues(t *testing.T) {
 	first, second := submitted(), submitted()
 	second.Status = entity.StatusActive
 	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol",
-		PriceTotal: pointer.To(90000), PhotoKey: "points/screen.jpg",
+		PriceTotal: pointer.To(90000), PhotoKeys: []string{"points/screen.jpg"},
 		URLNorm: pointer.To("https://cian.ru/rent/flat/1")}
 
 	bot := &fakeSender{}

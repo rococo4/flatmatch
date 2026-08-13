@@ -77,7 +77,7 @@ func flatPoint(createdBy *uuid.UUID, source entity.PointSource, urlNorm string, 
 		CreatedBy:  createdBy,
 		ZoneID:     testZone,
 		PriceTotal: pointer.To(90000),
-		PhotoKey:   "points/flat.jpg",
+		PhotoKeys:  []string{"points/flat.jpg"},
 	}
 	if urlNorm != "" {
 		p.URLNorm = pointer.To(urlNorm)
@@ -94,7 +94,7 @@ func intentHome(createdBy uuid.UUID, stage entity.PointStage) entity.Point {
 		CreatedBy:  &createdBy,
 		ZoneID:     testZone,
 		PriceShare: pointer.To(45000),
-		PhotoKey:   "points/room.jpg",
+		PhotoKeys:  []string{"points/room.jpg"},
 	}
 	if stage == entity.StageMovingIn {
 		p.MoveIn = pointer.To(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
@@ -151,7 +151,7 @@ func TestCreateRoundtrip(t *testing.T) {
 	}
 	if got.Type != entity.PointFlat || got.Source != entity.SourceUserLink ||
 		got.CreatedBy == nil || *got.CreatedBy != user || got.ZoneID != testZone ||
-		got.Stage != nil || got.PhotoKey != "points/flat.jpg" {
+		got.Stage != nil || got.PhotoKeys[0] != "points/flat.jpg" {
 		t.Errorf("point lost its identity: %+v", got)
 	}
 	if got.PriceTotal == nil || *got.PriceTotal != 90000 || got.Rooms == nil || *got.Rooms != 2 ||

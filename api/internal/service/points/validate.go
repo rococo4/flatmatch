@@ -30,7 +30,7 @@ func (s *Service) validFlat(in CreateFlat) (entity.Point, error) {
 		Isolated:   in.Isolated,
 		Bathrooms:  in.Bathrooms,
 		Utilities:  in.Utilities,
-		PhotoKey:   in.PhotoKey,
+		PhotoKeys:  in.PhotoKeys,
 		Deposit:    in.Deposit,
 	}
 
@@ -50,7 +50,7 @@ func (s *Service) validFlat(in CreateFlat) (entity.Point, error) {
 			!known(*in.Utilities, entity.UtilitiesUnknown, entity.ParseUtilities)},
 		{"restrictions", !restrictionsOK},
 	})
-	bad = append(bad, s.commonInvalid(in.ZoneID, in.PhotoKey, in.Rooms, in.Deposit)...)
+	bad = append(bad, s.commonInvalid(in.ZoneID, in.PhotoKeys, in.Rooms, in.Deposit)...)
 	if len(bad) > 0 {
 		return entity.Point{}, &entity.FieldsError{Err: ErrInvalidForm, Fields: bad}
 	}
@@ -66,7 +66,7 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 		PriceShare: pointer.To(in.PriceShare),
 		Rooms:      in.Rooms,
 		Isolated:   in.Isolated,
-		PhotoKey:   in.PhotoKey,
+		PhotoKeys:  in.PhotoKeys,
 		MoveIn:     in.MoveIn,
 		Deposit:    in.Deposit,
 	}
@@ -81,7 +81,7 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 		{"price_share", in.PriceShare < MinPrice || in.PriceShare > MaxPrice},
 		{"restrictions", !restrictionsOK},
 	})
-	bad = append(bad, s.commonInvalid(in.ZoneID, in.PhotoKey, in.Rooms, in.Deposit)...)
+	bad = append(bad, s.commonInvalid(in.ZoneID, in.PhotoKeys, in.Rooms, in.Deposit)...)
 	if len(bad) > 0 {
 		return entity.Point{}, &entity.FieldsError{Err: ErrInvalidForm, Fields: bad}
 	}
@@ -89,17 +89,29 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 }
 
 // commonInvalid — то, что обе формы спрашивают одинаково: метро из справочника
-// (§5) и фото, без которого карточку не показать.
-func (s *Service) commonInvalid(zoneID, photoKey string, rooms, deposit *int) []string {
+// (§5) и фото, без которых карточку не показать.
+func (s *Service) commonInvalid(zoneID string, photoKeys []string, rooms, deposit *int) []string {
 	zone, ok := s.dir.Get(zoneID)
 	return invalidFields([]check{
 		// Точка стоит на станции: зона выдачи — район или ветка — собирается из
 		// станций, и точка на «ветке» не пересеклась бы с районом (§8).
 		{"zone_id", !ok || zone.Kind != zones.KindStation},
-		{"photo_key", strings.TrimSpace(photoKey) == ""},
+		{"photo_keys", !validPhotoKeys(photoKeys)},
 		{"rooms", rooms != nil && (*rooms < 1 || *rooms > entity.RoomsCap)},
 		{"deposit", deposit != nil && (*deposit < 0 || *deposit > entity.PriceMaxCap)},
 	})
+}
+
+func validPhotoKeys(keys []string) bool {
+	if len(keys) < 1 || len(keys) > entity.MaxPointPhotos {
+		return false
+	}
+	for _, k := range keys {
+		if strings.TrimSpace(k) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 type check struct {

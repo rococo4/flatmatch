@@ -25,14 +25,14 @@ func (r *Repo) Create(ctx context.Context, p entity.Point) (entity.Point, error)
 		rows, err := tx.Query(ctx, `
 			INSERT INTO points (type, stage, status, source, created_by, zone_id,
 				price_total, price_share, rooms, isolated, bathrooms, utilities,
-				restrictions, photo_key, url_norm, move_in, deposit)
+				restrictions, photo_keys, url_norm, move_in, deposit)
 			VALUES ($1, $2, COALESCE(NULLIF($3, ''), 'pending'), $4, $5, $6,
-				$7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), NULLIF($15, ''), $16, $17)
+				$7, $8, $9, $10, $11, $12, $13, $14, NULLIF($15, ''), $16, $17)
 			RETURNING `+pointColumns,
 			string(p.Type), enumArg(p.Stage), string(p.Status), string(p.Source),
 			p.CreatedBy, p.ZoneID, p.PriceTotal, p.PriceShare, p.Rooms, p.Isolated,
 			enumArg(p.Bathrooms), enumArg(p.Utilities), restrictionsArg(p.Restrictions),
-			p.PhotoKey, p.URLNorm, p.MoveIn, p.Deposit)
+			p.PhotoKeys, p.URLNorm, p.MoveIn, p.Deposit)
 		if err != nil {
 			return err
 		}

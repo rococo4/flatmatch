@@ -39,7 +39,7 @@ func fullCard() pointsrepo.FeedPoint {
 			Bathrooms:    pointer.To(entity.BathroomsSeparate),
 			Utilities:    pointer.To(entity.UtilitiesMeters),
 			Restrictions: []entity.Restriction{entity.RestrictionNoPets, entity.RestrictionNoCouples},
-			PhotoKey:     "points/flat.jpg",
+			PhotoKeys:    []string{"points/flat.jpg"},
 			URLNorm:      pointer.To("https://avito.ru/1"),
 			Deposit:      pointer.To(45000),
 			CreatedAt:    time.Now().Add(-72 * time.Hour),
@@ -89,7 +89,7 @@ func TestCardKeepsDictionaryCodes(t *testing.T) {
 		t.Errorf("CreatedDaysAgo = %d, want 3", got.CreatedDaysAgo)
 	}
 	// Ссылка на оригинал — то, что хранит схема: исходной строки у точки нет.
-	if got.URL != "https://avito.ru/1" || got.PhotoURL != "/media/points/flat.jpg" {
+	if got.URL != "https://avito.ru/1" || got.PhotoURLs[0] != "/media/points/flat.jpg" {
 		t.Errorf("link or photo lost: %+v", got)
 	}
 }
@@ -143,7 +143,7 @@ func TestRequestParsesDictionaries(t *testing.T) {
 		Bathrooms:    pointer.To("two"),
 		Utilities:    pointer.To("included"),
 		Restrictions: []string{"no_smoking", "no_pets"},
-		PhotoKey:     "points/flat.jpg",
+		PhotoKeys:    []string{"points/flat.jpg"},
 	}
 
 	flat := body.toFlat()
@@ -174,7 +174,7 @@ func TestIntentHomeRequestReadsTheMoveInDay(t *testing.T) {
 		Stage:      "moving_in",
 		ZoneID:     "st-sokol",
 		PriceShare: 40000,
-		PhotoKey:   "points/room.jpg",
+		PhotoKeys:  []string{"points/room.jpg"},
 		MoveIn:     pointer.To("2026-09-15"),
 	}
 

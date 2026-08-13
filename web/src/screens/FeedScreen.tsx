@@ -263,7 +263,7 @@ function FlatPointCard({
             cursor: onOpenFlat ? 'pointer' : 'default',
           }}
         >
-          <PointPhoto url={point.photo_url} label="скрин объявления" />
+          <PointPhoto url={point.photo_urls[0] ?? ''} label="скрин объявления" />
           <span style={S.title}>{pointTitle(point)}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* Цена доли — только когда есть на что делить: комнатность
@@ -392,7 +392,7 @@ function HomePointCard({
           )}
         </div>
         <FactsBlock title={`Комната у ${author.name}`} facts={homeFacts(point)}>
-          <PointPhoto url={point.photo_url} label="фото комнаты" inCard />
+          <PointPhoto url={point.photo_urls[0] ?? ''} label="фото комнаты" inCard />
           <GreyChips items={restrictionLabels(point.restrictions, 'intent_home')} />
         </FactsBlock>
         <HabitsBlock items={habitChips(author)} />

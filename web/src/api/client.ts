@@ -316,7 +316,8 @@ export interface PointDTO {
   bathrooms?: Bathrooms;
   utilities?: Utilities;
   restrictions?: Restriction[];
-  photo_url: string;
+  /** Первое — обложка карточки; остальные листаются на экране точки. */
+  photo_urls: string[];
   /** Нормализованная ссылка на оригинал; есть только у квартир с рынка. */
   url?: string;
   /** День заезда, «2026-09-15». У точки это дата, а не месяц как у поиска. */
@@ -343,7 +344,8 @@ export interface CreateFlatPoint {
   bathrooms?: Bathrooms | null;
   utilities?: Utilities | null;
   restrictions?: Restriction[];
-  photo_key: string;
+  /** До 10; первый ключ — обложка. */
+  photo_keys: string[];
 }
 
 /** Тело формы «Зову соседа к себе» (§2.2). Заезд обязателен у `moving_in`. */
@@ -355,7 +357,8 @@ export interface CreateHomePoint {
   rooms?: number | null;
   isolated?: boolean | null;
   restrictions?: Restriction[];
-  photo_key: string;
+  /** До 10; первый ключ — обложка. */
+  photo_keys: string[];
   move_in?: string | null;
   deposit?: number | null;
 }

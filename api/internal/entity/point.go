@@ -12,6 +12,8 @@ const MaxIntentHome = 2
 
 const MaxIntentHomeLive = 1
 
+const MaxPointPhotos = 10
+
 type PointType string
 
 const (
@@ -100,7 +102,9 @@ type Point struct {
 	Bathrooms    *Bathrooms
 	Utilities    *Utilities
 	Restrictions []Restriction
-	PhotoKey     string
+	// PhotoKeys — до MaxPointPhotos; первый ключ — обложка карточки и кадр,
+	// который уходит модератору.
+	PhotoKeys []string
 
 	URLNorm     *string
 	MoveIn      *time.Time

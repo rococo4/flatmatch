@@ -29,8 +29,8 @@ func seedPoint(t *testing.T, pool *pgxpool.Pool, owner uuid.UUID, kind, status s
 	var id uuid.UUID
 	err := pool.QueryRow(context.Background(), `
 		INSERT INTO points (type, stage, status, close_reason, source, created_by,
-			zone_id, price_total, photo_key)
-		VALUES ($1, $2, $3, $4, 'user_link', $5, $6, 90000, 'points/test.jpg')
+			zone_id, price_total, photo_keys)
+		VALUES ($1, $2, $3, $4, 'user_link', $5, $6, 90000, ARRAY['points/test.jpg'])
 		RETURNING id`, kind, stage, status, reason, owner, testZone).Scan(&id)
 	if err != nil {
 		t.Fatalf("seed %s point: %v", kind, err)

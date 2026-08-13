@@ -45,7 +45,7 @@ type createRequest struct {
 	Bathrooms    *string  `json:"bathrooms"`
 	Utilities    *string  `json:"utilities"`
 	Restrictions []string `json:"restrictions"`
-	PhotoKey     string   `json:"photo_key"`
+	PhotoKeys    []string `json:"photo_keys"`
 	MoveIn       *string  `json:"move_in"` // «2026-09-15»
 	Deposit      *int     `json:"deposit"`
 }
@@ -71,12 +71,13 @@ type Card struct {
 	Bathrooms    string   `json:"bathrooms,omitempty"`
 	Utilities    string   `json:"utilities,omitempty"`
 	Restrictions []string `json:"restrictions,omitempty"`
-	// PhotoURL едет всегда: фото точки — скрин объявления или комната, и
-	// модерация одобряет его вместе с точкой, отдельного статуса у него нет.
-	PhotoURL string `json:"photo_url"`
-	URL      string `json:"url,omitempty"`
-	MoveIn   string `json:"move_in,omitempty"`
-	Deposit  *int   `json:"deposit,omitempty"`
+	// PhotoURLs едут всегда: фото точки — скрины объявления или комната, и
+	// модерация одобряет их вместе с точкой, отдельного статуса у них нет.
+	// Первое — обложка карточки, остальные листаются на экране точки.
+	PhotoURLs []string `json:"photo_urls"`
+	URL       string   `json:"url,omitempty"`
+	MoveIn    string   `json:"move_in,omitempty"`
+	Deposit   *int     `json:"deposit,omitempty"`
 
 	// CreatedDaysAgo backs «добавлена N дней назад» — точность до дня, «20
 	// минут назад» продукт не обещает (§8).
@@ -181,7 +182,7 @@ func (b createRequest) toFlat() points.CreateFlat {
 		Bathrooms:    parseEnum(b.Bathrooms, entity.ParseBathrooms),
 		Utilities:    parseEnum(b.Utilities, entity.ParseUtilities),
 		Restrictions: parseRestrictions(b.Restrictions),
-		PhotoKey:     b.PhotoKey,
+		PhotoKeys:    b.PhotoKeys,
 		Deposit:      b.Deposit,
 	}
 }
@@ -196,7 +197,7 @@ func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 		Rooms:        b.Rooms,
 		Isolated:     b.Isolated,
 		Restrictions: parseRestrictions(b.Restrictions),
-		PhotoKey:     b.PhotoKey,
+		PhotoKeys:    b.PhotoKeys,
 		Deposit:      b.Deposit,
 	}
 	if b.MoveIn != nil && *b.MoveIn != "" {
@@ -213,6 +214,14 @@ func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 // toCard serialises a point. The photo of the point goes through the store as
 // it is; the face of an author goes through the §5 rule, the same one every
 // other screen applies.
+func photoURLs(keys []string, photos Photos) []string {
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, photos.URL(k))
+	}
+	return out
+}
+
 func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
 	p := fp.Point
 	out := Card{
@@ -225,7 +234,7 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
 		Rooms:          p.Rooms,
 		Isolated:       p.Isolated,
 		Restrictions:   make([]string, 0, len(p.Restrictions)),
-		PhotoURL:       photos.URL(p.PhotoKey),
+		PhotoURLs:      photoURLs(p.PhotoKeys, photos),
 		CreatedDaysAgo: daysAgo(p.CreatedAt),
 		PoolCount:      fp.PoolCount,
 		Responses:      fp.Responses,

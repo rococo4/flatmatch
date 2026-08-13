@@ -60,7 +60,7 @@ func (s *Service) UserPending(ctx context.Context, u entity.User) {
 }
 
 func (s *Service) PointPending(ctx context.Context, p entity.Point) {
-	s.send(ctx, subjectPoint, p.ID, p.PhotoKey, s.pointCaption(p), [][2]string{
+	s.send(ctx, subjectPoint, p.ID, coverPhoto(p), s.pointCaption(p), [][2]string{
 		{"ок", callback(subjectPoint, opOK, p.ID)},
 		{"отклонить", callback(subjectPoint, opNo, p.ID)},
 	})
@@ -160,4 +160,13 @@ func stageLabel(stage *entity.PointStage) string {
 		return "заезжает · ищет со-съёмщика со старта"
 	}
 	return "живёт здесь"
+}
+
+// coverPhoto — кадр для модератора: обложка точки. Остальные фото он при
+// сомнении откроет в приложении, слать альбом в чат — шум.
+func coverPhoto(p entity.Point) string {
+	if len(p.PhotoKeys) == 0 {
+		return ""
+	}
+	return p.PhotoKeys[0]
 }

@@ -37,7 +37,8 @@ export type FlatPoolPerson = {
 /** Шапка-карточка: та же квартира, что в ленте, только развёрнутая. */
 export type FlatPoolCard = {
   title: string; // «2-комнатная · м. Фрунзенская»
-  photoUrl?: string;
+  /** Все фото точки; первое — обложка, остальные листаются свайпом. */
+  photoUrls: string[];
   /** «45 000 ₽ с человека» — или цена за квартиру, если делить не на что. */
   price: string;
   /** «90 000 ₽ / мес за квартиру». Пусто — цена доли не считалась. */
@@ -183,12 +184,34 @@ export function FlatPoolScreen({
             <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>{flat.addedAt}</span>
           </div>
           <div style={{ ...S.cardBody, gap: 12 }}>
-            {flat.photoUrl ? (
-              <img
-                src={flat.photoUrl}
-                alt=""
-                style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', borderRadius: 10, display: 'block' }}
-              />
+            {flat.photoUrls.length > 0 ? (
+              <div
+                className="no-scrollbar"
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  overflowX: 'auto',
+                  scrollSnapType: 'x mandatory',
+                  borderRadius: 10,
+                }}
+              >
+                {flat.photoUrls.map((url) => (
+                  <img
+                    key={url}
+                    src={url}
+                    alt=""
+                    style={{
+                      width: flat.photoUrls.length > 1 ? '88%' : '100%',
+                      flex: '0 0 auto',
+                      aspectRatio: '16/9',
+                      objectFit: 'cover',
+                      borderRadius: 10,
+                      display: 'block',
+                      scrollSnapAlign: 'start',
+                    }}
+                  />
+                ))}
+              </div>
             ) : (
               <PhotoPlaceholder label="скрин объявления" style={{ aspectRatio: '16/9', borderRadius: 10 }} />
             )}

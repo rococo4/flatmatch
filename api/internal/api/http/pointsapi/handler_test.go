@@ -27,10 +27,10 @@ import (
 const station = "st-sokol"
 
 const flatForm = `{"type":"flat","url":"https://avito.ru/1","zone_id":"st-sokol",
-	"price_total":90000,"photo_key":"points/flat.jpg"}`
+	"price_total":90000,"photo_keys":["points/flat.jpg"]}`
 
 const homeForm = `{"type":"intent_home","stage":"live","zone_id":"st-sokol",
-	"price_share":40000,"photo_key":"points/room.jpg"}`
+	"price_share":40000,"photo_keys":["points/room.jpg"]}`
 
 // fakePoints stands in for the service and keeps its gates: the card of a
 // point still on review is the creator's alone (§5), and here that rule is
@@ -62,7 +62,7 @@ func TestCreateAnswersWithTheCardOnReview(t *testing.T) {
 	service := &fakePoints{created: entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPending,
 		Source: entity.SourceUserLink, CreatedBy: &viewer, ZoneID: station,
-		PriceTotal: pointer.To(90000), PhotoKey: "points/flat.jpg",
+		PriceTotal: pointer.To(90000), PhotoKeys: []string{"points/flat.jpg"},
 		URLNorm: pointer.To("https://avito.ru/1"), CreatedAt: time.Now(),
 	}}
 

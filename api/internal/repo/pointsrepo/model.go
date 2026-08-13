@@ -11,12 +11,12 @@ import (
 
 const pointColumns = `id, type, stage, status, source, created_by, zone_id,
 	price_total, price_share, rooms, isolated, bathrooms, utilities,
-	restrictions, photo_key, url_norm, move_in, deposit, close_reason,
+	restrictions, photo_keys, url_norm, move_in, deposit, close_reason,
 	created_at, edited_at`
 
 const joinedPointColumns = `p.id, p.type, p.stage, p.status, p.source, p.created_by,
 	p.zone_id, p.price_total, p.price_share, p.rooms, p.isolated, p.bathrooms,
-	p.utilities, p.restrictions, p.photo_key, p.url_norm, p.move_in, p.deposit,
+	p.utilities, p.restrictions, p.photo_keys, p.url_norm, p.move_in, p.deposit,
 	p.close_reason, p.created_at, p.edited_at`
 
 const personColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
@@ -70,7 +70,7 @@ type pointRow struct {
 	Bathrooms    *string    `db:"bathrooms"`
 	Utilities    *string    `db:"utilities"`
 	Restrictions []string   `db:"restrictions"`
-	PhotoKey     *string    `db:"photo_key"`
+	PhotoKeys    []string   `db:"photo_keys"`
 	URLNorm      *string    `db:"url_norm"`
 	MoveIn       *time.Time `db:"move_in"`
 	Deposit      *int       `db:"deposit"`
@@ -142,7 +142,7 @@ func (r pointRow) toEntity() entity.Point {
 		PriceShare:  r.PriceShare,
 		Rooms:       r.Rooms,
 		Isolated:    r.Isolated,
-		PhotoKey:    pointer.Get(r.PhotoKey),
+		PhotoKeys:   r.PhotoKeys,
 		URLNorm:     r.URLNorm,
 		MoveIn:      r.MoveIn,
 		Deposit:     r.Deposit,

@@ -219,7 +219,7 @@ function toCard(p: PointDTO): FlatPoolCard {
   const total = `${money(p.price_total ?? 0)} / мес за квартиру`;
   return {
     title: pointTitle(p),
-    photoUrl: p.photo_url || undefined,
+    photoUrls: p.photo_urls.filter(Boolean),
     price: share !== null ? `${money(share)} с человека` : total,
     priceTotal: share !== null ? total : undefined,
     facts: flatFacts(p),

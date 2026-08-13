@@ -164,7 +164,7 @@ func validFlat() CreateFlat {
 		URL:        "https://www.avito.ru/moskva/kvartiry/2-k_kvartira_1234567/?context=abc",
 		ZoneID:     station,
 		PriceTotal: 90000,
-		PhotoKey:   "points/screen.jpg",
+		PhotoKeys:  []string{"points/screen.jpg"},
 	}
 }
 
@@ -173,7 +173,7 @@ func validHome() CreateIntentHome {
 		Stage:      entity.StageLive,
 		ZoneID:     station,
 		PriceShare: 45000,
-		PhotoKey:   "points/room.jpg",
+		PhotoKeys:  []string{"points/room.jpg"},
 	}
 }
 
@@ -258,7 +258,7 @@ func TestCreateFlatValidatesTheForm(t *testing.T) {
 		{"foreign link", func(f *CreateFlat) { f.URL = "https://realty.yandex.ru/1" }, []string{"url"}},
 		{"unknown zone", func(f *CreateFlat) { f.ZoneID = "st-nowhere" }, []string{"zone_id"}},
 		{"district instead of a station", func(f *CreateFlat) { f.ZoneID = district }, []string{"zone_id"}},
-		{"no photo", func(f *CreateFlat) { f.PhotoKey = "  " }, []string{"photo_key"}},
+		{"no photo", func(f *CreateFlat) { f.PhotoKeys[0] = "  " }, []string{"photo_keys"}},
 		{"zero rooms", func(f *CreateFlat) { f.Rooms = pointer.To(0) }, []string{"rooms"}},
 		{"garbage bathrooms", func(f *CreateFlat) {
 			f.Bathrooms = pointer.To(entity.ParseBathrooms("три"))
@@ -270,8 +270,8 @@ func TestCreateFlatValidatesTheForm(t *testing.T) {
 			f.Restrictions = []entity.Restriction{entity.ParseRestriction("no_children")}
 		}, []string{"restrictions"}},
 		{"everything at once", func(f *CreateFlat) {
-			f.URL, f.PriceTotal, f.PhotoKey = "", 0, ""
-		}, []string{"url", "price_total", "photo_key"}},
+			f.URL, f.PriceTotal, f.PhotoKeys = "", 0, nil
+		}, []string{"url", "price_total", "photo_keys"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -452,7 +452,7 @@ func TestCreateIntentHomeValidatesTheStage(t *testing.T) {
 			h.Stage = entity.StageMovingIn
 		}, []string{"move_in"}},
 		{"share out of range", func(h *CreateIntentHome) { h.PriceShare = 900000 }, []string{"price_share"}},
-		{"no room photo", func(h *CreateIntentHome) { h.PhotoKey = "" }, []string{"photo_key"}},
+		{"no room photo", func(h *CreateIntentHome) { h.PhotoKeys = nil }, []string{"photo_keys"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

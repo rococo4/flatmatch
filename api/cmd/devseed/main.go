@@ -438,13 +438,13 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 func seedFlats(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) (int, error) {
 	const query = `
 		INSERT INTO points (id, type, status, source, zone_id, price_total, rooms,
-			isolated, photo_key, created_at, edited_at)
-		VALUES ($1, 'flat', 'active', 'manual', $2, $3, $4, true, $5,
+			isolated, photo_keys, created_at, edited_at)
+		VALUES ($1, 'flat', 'active', 'manual', $2, $3, $4, true, ARRAY[$5],
 			now() - make_interval(days => $6::int), now() - make_interval(days => $6::int))
 		ON CONFLICT (id) DO UPDATE SET
 			status = 'active', close_reason = NULL, zone_id = EXCLUDED.zone_id,
 			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
-			isolated = EXCLUDED.isolated, photo_key = EXCLUDED.photo_key,
+			isolated = EXCLUDED.isolated, photo_keys = EXCLUDED.photo_keys,
 			created_at = EXCLUDED.created_at, edited_at = EXCLUDED.edited_at`
 
 	members := 0
@@ -487,16 +487,16 @@ func seedIntentHome(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID
 
 	const point = `
 		INSERT INTO points (id, type, stage, status, source, created_by, zone_id,
-			price_share, rooms, isolated, restrictions, photo_key, deposit,
+			price_share, rooms, isolated, restrictions, photo_keys, deposit,
 			created_at, edited_at)
 		VALUES ($1, 'intent_home', 'live', 'active', 'user_link', $2, $3,
-			45000, 2, true, ARRAY['no_smoking']::text[], $4, 45000,
+			45000, 2, true, ARRAY['no_smoking']::text[], ARRAY[$4], 45000,
 			now() - make_interval(days => 3), now() - make_interval(days => 3))
 		ON CONFLICT (id) DO UPDATE SET
 			status = 'active', close_reason = NULL, created_by = EXCLUDED.created_by,
 			zone_id = EXCLUDED.zone_id, price_share = EXCLUDED.price_share,
 			rooms = EXCLUDED.rooms, isolated = EXCLUDED.isolated,
-			restrictions = EXCLUDED.restrictions, photo_key = EXCLUDED.photo_key,
+			restrictions = EXCLUDED.restrictions, photo_keys = EXCLUDED.photo_keys,
 			deposit = EXCLUDED.deposit, created_at = EXCLUDED.created_at,
 			edited_at = EXCLUDED.edited_at`
 	if _, err := tx.Exec(ctx, point, homeOfKatya, katya, "st-sportivnaya", avatarKey); err != nil {
@@ -563,14 +563,14 @@ func likeDevUser(ctx context.Context, tx pgx.Tx, devID uuid.UUID) error {
 func seedDevFlat(ctx context.Context, tx pgx.Tx, devID uuid.UUID) error {
 	const query = `
 		INSERT INTO points (id, type, status, source, created_by, zone_id,
-			price_total, rooms, isolated, photo_key, url_norm, created_at, edited_at)
+			price_total, rooms, isolated, photo_keys, url_norm, created_at, edited_at)
 		VALUES ($1, 'flat', 'pending', 'user_link', $2, 'st-frunzenskaya',
-			150000, 2, true, $3, $4,
+			150000, 2, true, ARRAY[$3], $4,
 			now() - make_interval(hours => 2), now() - make_interval(hours => 2))
 		ON CONFLICT (id) DO UPDATE SET
 			created_by = EXCLUDED.created_by, zone_id = EXCLUDED.zone_id,
 			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
-			isolated = EXCLUDED.isolated, photo_key = EXCLUDED.photo_key,
+			isolated = EXCLUDED.isolated, photo_keys = EXCLUDED.photo_keys,
 			url_norm = EXCLUDED.url_norm, created_at = EXCLUDED.created_at,
 			edited_at = EXCLUDED.edited_at`
 	// Уже нормализованная ссылка: так её пишет форма (§6, валидация домена).

@@ -47,7 +47,7 @@ func tap(chatID int64, data string) Update {
 func TestVerdictIsAppliedAndTheCardStopsBeingTappable(t *testing.T) {
 	// Both acks mean the card is done with: the second tap on an old button is
 	// ordinary in a chat where the queue is scrolled top to bottom (§3 дизайна).
-	for _, ack := range []string{"✓", "уже обработано"} {
+	for _, ack := range []string{"✓ Одобрено", "уже обработано"} {
 		t.Run(ack, func(t *testing.T) {
 			api := newBotAPI(t)
 			mod := &fakeModeration{ack: ack}
@@ -100,7 +100,7 @@ func TestFailedVerdictKeepsTheButtons(t *testing.T) {
 func TestTapsFromOtherChatsAreIgnored(t *testing.T) {
 	// A verdict from anywhere else would be a stranger moderating the product.
 	api := newBotAPI(t)
-	mod := &fakeModeration{ack: "✓"}
+	mod := &fakeModeration{ack: "✓ Одобрено"}
 
 	newTestBot(api, mod, moderationChat).handle(t.Context(), tap(777001, "mod:u:ok:42"))
 
@@ -114,7 +114,7 @@ func TestTapsFromOtherChatsAreIgnored(t *testing.T) {
 
 func TestTapsAreIgnoredWithoutAModerationChat(t *testing.T) {
 	api := newBotAPI(t)
-	mod := &fakeModeration{ack: "✓"}
+	mod := &fakeModeration{ack: "✓ Одобрено"}
 
 	newTestBot(api, mod, 0).handle(t.Context(), tap(moderationChat, "mod:u:ok:42"))
 

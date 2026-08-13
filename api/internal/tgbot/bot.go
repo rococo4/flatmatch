@@ -34,6 +34,8 @@ const queueCommand = "/queue"
 
 // ackFailed answers a tap whose verdict did not apply. The buttons stay under
 // the message, so the moderator can simply tap again.
+const verdictSeen = "mod:seen"
+
 const ackFailed = "не вышло — попробуй ещё раз"
 
 // Moderation is the moderation chat's brain: the bot only routes taps to it and
@@ -195,6 +197,13 @@ func (b *Bot) handleCallback(ctx context.Context, query *CallbackQuery, updateID
 	}
 	log := b.log.With("chat_id", query.Message.Chat.ID, "update_id", updateID, "data", query.Data)
 
+	if query.Data == verdictSeen {
+		if err := b.client.AnswerCallback(ctx, query.ID, "уже обработано"); err != nil && !isCancelled(err) {
+			log.Error("could not answer the callback", "error", err)
+		}
+		return
+	}
+
 	ack, verdictErr := b.moderation.HandleCallback(ctx, query.Data)
 	if verdictErr != nil {
 		if isCancelled(verdictErr) {
@@ -212,11 +221,14 @@ func (b *Bot) handleCallback(ctx context.Context, query *CallbackQuery, updateID
 		return
 	}
 
-	// The card is done with — whether the verdict landed now or had landed
-	// before ("уже обработано"), there is nothing left to tap.
-	err := b.client.EditReplyMarkup(ctx, query.Message.Chat.ID, query.Message.MessageID, nil)
-	if err != nil && !isCancelled(err) {
-		log.Error("could not clear the moderation buttons", "error", err)
+	// The card is done with: the buttons give way to a single verdict mark —
+	// a toast is easy to miss, a labelled card is not. Tapping the mark answers
+	// «уже обработано». «Message is not modified» means another tap already
+	// drew the same mark — not an error.
+	mark := &InlineKeyboard{Rows: [][]InlineKeyboardButton{{{Text: ack, Data: verdictSeen}}}}
+	err := b.client.EditReplyMarkup(ctx, query.Message.Chat.ID, query.Message.MessageID, mark)
+	if err != nil && !isCancelled(err) && !strings.Contains(err.Error(), "message is not modified") {
+		log.Error("could not mark the moderation card", "error", err)
 	}
 }
 

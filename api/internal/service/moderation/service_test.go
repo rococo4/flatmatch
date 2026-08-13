@@ -126,7 +126,7 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 		{
 			name: "fresh questionnaire approved",
 			user: func(u entity.User) entity.User { return u },
-			op:   opOK, ack: ackOK,
+			op:   opOK, ack: ackApproved,
 			// «Проявляется везде разом» (§5).
 			want: &setCall{
 				status: pointer.To(entity.StatusActive),
@@ -140,7 +140,7 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 				u.PhotoStatus = entity.ModerationPending
 				return u
 			},
-			op: opOK, ack: ackOK,
+			op: opOK, ack: ackApproved,
 			want: &setCall{
 				status: pointer.To(entity.StatusActive),
 				photo:  pointer.To(entity.ModerationOK),
@@ -151,7 +151,7 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 			// возврат в draft, дорога назад одна: «загрузи другое» (§5).
 			name: "photo rejected before approval",
 			user: func(u entity.User) entity.User { return u },
-			op:   opPhoto, ack: ackOK,
+			op:   opPhoto, ack: ackPhotoRejected,
 			want: &setCall{
 				status: pointer.To(entity.StatusDraft),
 				photo:  pointer.To(entity.ModerationRejected)},
@@ -165,13 +165,13 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 				u.PhotoStatus = entity.ModerationPending
 				return u
 			},
-			op: opPhoto, ack: ackOK,
+			op: opPhoto, ack: ackPhotoRejected,
 			want: &setCall{photo: pointer.To(entity.ModerationRejected)},
 		},
 		{
 			name: "text rejected before approval",
 			user: func(u entity.User) entity.User { return u },
-			op:   opAbout, ack: ackOK,
+			op:   opAbout, ack: ackAboutRejected,
 			want: &setCall{
 				status: pointer.To(entity.StatusDraft),
 				about:  pointer.To(entity.ModerationRejected)},
@@ -183,7 +183,7 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 				u.AboutStatus = entity.ModerationPending
 				return u
 			},
-			op: opAbout, ack: ackOK,
+			op: opAbout, ack: ackAboutRejected,
 			want: &setCall{about: pointer.To(entity.ModerationRejected)},
 		},
 		{
@@ -275,8 +275,8 @@ func TestPointVerdicts(t *testing.T) {
 		status  entity.PointStatus
 		reason  *string
 	}{
-		{"approved", opOK, true, ackOK, entity.PointActive, nil},
-		{"rejected", opNo, true, ackOK, entity.PointClosed, pointer.To(rejectedReason)},
+		{"approved", opOK, true, ackApproved, entity.PointActive, nil},
+		{"rejected", opNo, true, ackRejected, entity.PointClosed, pointer.To(rejectedReason)},
 		{"second tap", opOK, false, ackDone, entity.PointActive, nil},
 	}
 	for _, tt := range tests {

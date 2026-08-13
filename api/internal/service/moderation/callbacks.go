@@ -28,8 +28,11 @@ const (
 // Тап по кнопке из старого сообщения — обычное дело в чате, где очередь
 // пролистывают сверху вниз.
 const (
-	ackOK   = "✓"
-	ackDone = "уже обработано"
+	ackApproved      = "✓ Одобрено"
+	ackPhotoRejected = "✕ Фото отклонено"
+	ackAboutRejected = "✕ Текст отклонён"
+	ackRejected      = "✕ Отклонено"
+	ackDone          = "уже обработано"
 )
 
 // rejectedReason marks a point closed by the moderator rather than by its
@@ -70,6 +73,7 @@ func (s *Service) userVerdict(ctx context.Context, op string, id uuid.UUID) (str
 		return ackDone, nil
 	}
 
+	var ack string
 	switch op {
 	case opOK:
 		if !inQueue(u) {
@@ -78,23 +82,26 @@ func (s *Service) userVerdict(ctx context.Context, op string, id uuid.UUID) (str
 		// После аппрува человек проявляется везде разом (§5).
 		_, err = s.users.SetModeration(ctx, id, pointer.To(entity.StatusActive),
 			pointer.To(entity.ModerationOK), pointer.To(entity.ModerationOK))
+		ack = ackApproved
 	case opPhoto:
 		if u.PhotoStatus != entity.ModerationPending {
 			return ackDone, nil
 		}
 		_, err = s.users.SetModeration(ctx, id, backToDraft(u), pointer.To(entity.ModerationRejected), nil)
+		ack = ackPhotoRejected
 	case opAbout:
 		if u.AboutStatus != entity.ModerationPending {
 			return ackDone, nil
 		}
 		_, err = s.users.SetModeration(ctx, id, backToDraft(u), nil, pointer.To(entity.ModerationRejected))
+		ack = ackAboutRejected
 	default:
 		return "", fmt.Errorf("moderation callback for user %s: unknown verdict %q", id, op)
 	}
 	if err != nil {
 		return "", err
 	}
-	return ackOK, nil
+	return ack, nil
 }
 
 func (s *Service) pointVerdict(ctx context.Context, op string, id uuid.UUID) (string, error) {
@@ -119,7 +126,10 @@ func (s *Service) pointVerdict(ctx context.Context, op string, id uuid.UUID) (st
 	if !changed {
 		return ackDone, nil
 	}
-	return ackOK, nil
+	if op == opNo {
+		return ackRejected, nil
+	}
+	return ackApproved, nil
 }
 
 // inQueue repeats the predicate usersrepo.PendingModeration selects by: одобрять

@@ -892,14 +892,15 @@ const BOT_USERNAME_FALLBACK = 'flatmatch_finder_bot';
 
 let botUsername = '';
 
-/** Short name Mini App из BotFather. Env под него нет, ручки — тоже. */
-const BOT_APP_SHORT_NAME = 'app';
-
 /** Префикс диплинка точки: `startapp=point_<uuid>` (§6, вирусная петля). */
 const POINT_START_PARAM = 'point_';
 
 /**
  * Ссылка «Позвать в пул — поделиться в чат»: открывает у гостя карточку точки.
+ *
+ * Форма `t.me/{бот}?startapp=` — главный Mini App бота (Configure Mini App в
+ * BotFather): ему, в отличие от `t.me/{бот}/{short_name}`, не нужно имя
+ * приложения, которого у нас нигде нет.
  *
  * Два уровня кодирования не случайны: внутренний адрес целиком становится
  * значением параметра `url` шеринга, и без encodeURIComponent его `?startapp=`
@@ -908,7 +909,7 @@ const POINT_START_PARAM = 'point_';
 export function pointShareUrl(pointId: string): string {
   const bot = botUsername || BOT_USERNAME_FALLBACK;
   const start = `${POINT_START_PARAM}${pointId}`;
-  const app = `https://t.me/${bot}/${BOT_APP_SHORT_NAME}?startapp=${start}`;
+  const app = `https://t.me/${bot}?startapp=${start}`;
   return `https://t.me/share/url?url=${encodeURIComponent(app)}`;
 }
 

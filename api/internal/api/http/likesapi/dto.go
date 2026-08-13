@@ -25,6 +25,10 @@ type likeRequest struct {
 	// ZoneID is the pool the like was placed from; empty is legal — a reply has
 	// no pool to name (§2.3).
 	ZoneID string `json:"zone_id"`
+	// PointID is the other context: пул квартиры или «Хочу эту комнату» с
+	// карточки «к себе». Взаимоисключим с зоной — лайк несёт один контекст, и
+	// два сразу сервис отбивает по имени полей.
+	PointID string `json:"point_id"`
 }
 
 type likeResponse struct {
@@ -40,6 +44,15 @@ type budgetDTO struct {
 	NextFreeAt *time.Time `json:"next_free_at,omitempty"`
 }
 
+// pointDTO is the mini-card of a point context: the label is ready to print,
+// the kind colours the card's header and tells «отклик на твою комнату» from a
+// shared pool (§2.2).
+type pointDTO struct {
+	ID    uuid.UUID `json:"id"`
+	Kind  string    `json:"kind"`
+	Label string    `json:"label"`
+}
+
 // incomingDTO is one card of «Тебя лайкнули» (§6): a name right away, the
 // context to tap into, and the grey «сейчас не в поиске» mark. No contacts —
 // they exist on the match screen and nowhere else (§3), which dto_test pins.
@@ -53,6 +66,7 @@ type incomingDTO struct {
 	PetsOwn  string    `json:"pets_own"`
 
 	Zone         *zoneDTO  `json:"zone,omitempty"`
+	Point        *pointDTO `json:"point,omitempty"`
 	NotSearching bool      `json:"not_searching"`
 	At           time.Time `json:"at"`
 }
@@ -69,7 +83,7 @@ func toLikeResponse(res entity.LikeResult) likeResponse {
 	return out
 }
 
-func toIncoming(like likesrepo.IncomingLike, photoURL string, zone *zoneDTO) incomingDTO {
+func toIncoming(like likesrepo.IncomingLike, photoURL string, zone *zoneDTO, point *pointDTO) incomingDTO {
 	return incomingDTO{
 		UserID:   like.From.ID,
 		Name:     like.From.Name,
@@ -80,9 +94,27 @@ func toIncoming(like likesrepo.IncomingLike, photoURL string, zone *zoneDTO) inc
 		PetsOwn:  string(like.From.Profile.PetsOwn),
 
 		Zone:         zone,
+		Point:        point,
 		NotSearching: like.NotSearching,
 		At:           like.CreatedAt,
 	}
+}
+
+// pointLabel: адресат intent_home-контекста и есть автор комнаты — отклик
+// пришёл именно на неё (§2.2). Станция может не приехать, если зона ушла из
+// справочника, — строка тогда просто короче.
+func pointLabel(kind entity.PointType, station string) string {
+	label := "квартира"
+	if kind == entity.PointIntentHome {
+		label = "на твою комнату"
+	}
+	if station == "" {
+		return label
+	}
+	if kind == entity.PointIntentHome {
+		return label + " · м. " + station
+	}
+	return label + " у м. " + station
 }
 
 func toZoneDTO(z zones.Zone) zoneDTO {

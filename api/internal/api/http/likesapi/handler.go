@@ -37,6 +37,13 @@ type Photos interface {
 	PhotoURL(u entity.User) string
 }
 
+// Points names the point half of a like's context. Статус не проверяется:
+// лайк не сгорает ни от чего (§2.3), и его контекст переживает и закрытие
+// точки — карточка «Тебя лайкнули» обязана остаться читаемой.
+type Points interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 }
@@ -44,6 +51,7 @@ type ZoneDir interface {
 type Handler struct {
 	likes  Likes
 	photos Photos
+	points Points
 	dir    ZoneDir
 }
 
@@ -52,8 +60,8 @@ var (
 	errSelfLike        = errors.New("a like to oneself")
 )
 
-func New(likes Likes, photos Photos, dir ZoneDir) *Handler {
-	return &Handler{likes: likes, photos: photos, dir: dir}
+func New(likes Likes, photos Photos, points Points, dir ZoneDir) *Handler {
+	return &Handler{likes: likes, photos: photos, points: points, dir: dir}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -87,8 +95,19 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Точечный контекст тело научится принимать вместе с pointsapi.
-	result, err := h.likes.Like(r.Context(), user.ID, toID, body.ZoneID, nil)
+	var pointID *uuid.UUID
+	if body.PointID != "" {
+		id, err := uuid.Parse(body.PointID)
+		if err != nil {
+			httpx.BadRequest(w, r, httpx.CodeInvalidField, "point_id is not a uuid", []string{"point_id"}, err)
+			return
+		}
+		pointID = &id
+	}
+
+	// Два контекста разом — ошибка запроса, и называет её сервис: там же, где
+	// живёт правило «лайк несёт один контекст» (§2.3).
+	result, err := h.likes.Like(r.Context(), user.ID, toID, body.ZoneID, pointID)
 	if err != nil {
 		h.handleError(w, r, user.ID, err)
 		return
@@ -111,9 +130,32 @@ func (h *Handler) incoming(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]incomingDTO, 0, len(likes))
 	for _, like := range likes {
-		out = append(out, toIncoming(like, h.photos.PhotoURL(like.From), h.zone(like.ZoneID)))
+		point, err := h.point(r.Context(), like.PointID)
+		if err != nil {
+			h.handleError(w, r, user.ID, err)
+			return
+		}
+		out = append(out, toIncoming(like, h.photos.PhotoURL(like.From), h.zone(like.ZoneID), point))
 	}
 	httpx.JSON(w, r, http.StatusOK, out)
+}
+
+// point names the point a like came from. Точка, которой больше нет, отнимает
+// у карточки мини-карту контекста, а не саму карточку: лайк переживает всё
+// (§2.3).
+func (h *Handler) point(ctx context.Context, id *uuid.UUID) (*pointDTO, error) {
+	if id == nil {
+		return nil, nil
+	}
+	p, err := h.points.ByID(ctx, *id)
+	switch {
+	case errors.Is(err, entity.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, err
+	}
+	station, _ := h.dir.Get(p.ZoneID)
+	return &pointDTO{ID: p.ID, Kind: string(p.Type), Label: pointLabel(p.Type, station.Name)}, nil
 }
 
 // zone names the pool a like came from. An id the directory no longer knows is

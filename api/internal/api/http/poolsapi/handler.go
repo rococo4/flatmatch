@@ -20,8 +20,10 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/api/http/authmw"
+	"flatmatch/api/internal/api/http/pointsapi"
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/httpx"
+	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
 )
@@ -37,6 +39,13 @@ type Searches interface {
 	List(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
 }
 
+// Points is the other half of the feed: квартиры с рынка и «к себе» в зоне
+// формы. Режет выдачу только зона — цена и комнатность не участвуют ни в
+// фильтре, ни в сортировке (§8: score ~ pool/(age+c)^k).
+type Points interface {
+	Feed(ctx context.Context, viewerID uuid.UUID, zoneID string) ([]pointsrepo.FeedPoint, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 }
@@ -44,6 +53,8 @@ type ZoneDir interface {
 type Handler struct {
 	pools    Pools
 	searches Searches
+	points   Points
+	photos   pointsapi.Photos
 	dir      ZoneDir
 }
 
@@ -52,8 +63,8 @@ var (
 	errBadFilters      = errors.New("feed filters are invalid")
 )
 
-func New(pools Pools, searches Searches, dir ZoneDir) *Handler {
-	return &Handler{pools: pools, searches: searches, dir: dir}
+func New(pools Pools, searches Searches, points Points, photos pointsapi.Photos, dir ZoneDir) *Handler {
+	return &Handler{pools: pools, searches: searches, points: points, photos: photos, dir: dir}
 }
 
 // Feed answers the third step of the search-first feed (§6): the filters come
@@ -97,6 +108,12 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	points, err := h.points.Feed(r.Context(), user.ID, params.ZoneID)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
 	httpx.JSON(w, r, http.StatusOK, feedResponse{
 		Promo: promoDTO{
 			Zone:       toZoneDTO(zone),
@@ -107,7 +124,7 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 			SlotsUsed:  used,
 			SlotsTotal: entity.MaxActiveSearches,
 		},
-		Points: []any{},
+		Points: pointsapi.Cards(points, h.photos, h.dir),
 	})
 }
 

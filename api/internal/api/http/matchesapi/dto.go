@@ -54,9 +54,23 @@ type matchDetailResponse struct {
 	Peer    peerContactDTO `json:"peer"`
 	At      time.Time      `json:"at"`
 
-	Where   *zoneDTO          `json:"where,omitempty"`
-	Params  []paramOverlapDTO `json:"params"`
-	Profile []sharedDTO       `json:"profile"`
+	// Where and WherePoint are the same ГДЕ block in two shapes: зона пула или
+	// точка. Контексты взаимоисключимы — лайк несёт один (§2.3), — поэтому
+	// приезжает ровно одно из полей, а то и ни одного: точку могли закрыть, и
+	// саммари переживает это молча (мэтч необратим).
+	Where      *zoneDTO          `json:"where,omitempty"`
+	WherePoint *pointDTO         `json:"where_point,omitempty"`
+	Params     []paramOverlapDTO `json:"params"`
+	Profile    []sharedDTO       `json:"profile"`
+}
+
+// pointDTO is the mini-card of «пересеклись на комнате Кати · м. Сокол»: the
+// label is ready to print, the kind colours the header (§6). Its twin lives in
+// the profile screen — the same phrase in the two places the context is retold.
+type pointDTO struct {
+	ID    uuid.UUID `json:"id"`
+	Kind  string    `json:"kind"`
+	Label string    `json:"label"`
 }
 
 // paramOverlapDTO is one line of the «по параметрам» block: a range («у обоих
@@ -97,6 +111,13 @@ func toMatchDetail(m matchesrepo.MatchWithPeer, summary matches.Summary, photoUR
 	}
 	if summary.Zone != nil {
 		out.Where = pointer.To(toZoneDTO(*summary.Zone))
+	}
+	if summary.Point != nil {
+		out.WherePoint = &pointDTO{
+			ID:    summary.Point.ID,
+			Kind:  string(summary.Point.Kind),
+			Label: summary.Point.Label,
+		}
 	}
 	for _, o := range summary.ParamsOverlap {
 		out.Params = append(out.Params, toParamOverlap(o))

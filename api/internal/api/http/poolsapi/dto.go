@@ -4,6 +4,7 @@ import (
 	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
 
+	"flatmatch/api/internal/api/http/pointsapi"
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
@@ -37,9 +38,13 @@ type promoDTO struct {
 	SlotsTotal int        `json:"slots_total"`
 }
 
+// feedResponse is the third step of the feed (§6): промо-блок людей первым,
+// ниже — единый список карточек точек обоих типов. Карточка приезжает из
+// pointsapi, а не копией: одна и та же квартира открывается тапом из этого же
+// списка, и разъехаться этим двум описаниям нельзя.
 type feedResponse struct {
-	Promo  promoDTO `json:"promo"`
-	Points []any    `json:"points"` // always [] until §12 step 5
+	Promo  promoDTO         `json:"promo"`
+	Points []pointsapi.Card `json:"points"`
 }
 
 type chipDTO struct {

@@ -34,10 +34,12 @@ type fakePhotos struct{}
 type fakeDir struct{}
 
 // fakePoints holds one point and the membership of its pool: the two facts the
-// point half of «мы увиделись» is made of.
+// point half of «мы увиделись» is made of. Calls are counted for the same
+// reason Between's are — про невидимого человека нельзя спрашивать ничего.
 type fakePoints struct {
 	point entity.Point
 	pool  map[uuid.UUID]bool
+	calls *int
 }
 
 // fakeSearches answers the pool half of «мы увиделись»: met=true means the
@@ -56,10 +58,11 @@ type fakeAccounts struct{ user entity.User }
 // something only the addressee may learn.
 func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 	likes := &fakeLikes{}
+	pointCalls := 0
 	router := newRouter(New(&fakePeople{err: entity.ErrNotFound}, likes, fakePhotos{},
-		fakeSearches{}, fakePoints{}, fakeDir{}), uuid.New())
+		fakeSearches{}, fakePoints{calls: &pointCalls}, fakeDir{}), uuid.New())
 
-	rec := get(router, "/people/"+uuid.NewString())
+	rec := get(router, "/people/"+uuid.NewString()+"?point="+uuid.NewString())
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -67,6 +70,11 @@ func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 	if likes.betweenCalls != 0 {
 		t.Errorf("Between was called %d time(s) for an invisible person — like existence leaks",
 			likes.betweenCalls)
+	}
+	// Точку в query спрашивать тоже не о чем: невидимый человек не существует
+	// нигде (§4), и контекст его профиля — тем более.
+	if pointCalls != 0 {
+		t.Errorf("Points was asked %d time(s) about an invisible person", pointCalls)
 	}
 }
 
@@ -232,6 +240,9 @@ func (f *fakeLikes) Budget(context.Context, uuid.UUID) (entity.LikeBudget, error
 func (fakePhotos) PhotoURL(entity.User) string { return "" }
 
 func (f fakePoints) ByID(_ context.Context, id uuid.UUID) (entity.Point, error) {
+	if f.calls != nil {
+		*f.calls++
+	}
 	if f.point.ID != id {
 		return entity.Point{}, entity.ErrNotFound
 	}

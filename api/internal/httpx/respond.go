@@ -27,6 +27,10 @@ const (
 	CodeLikeLimit   Code = "like_limit"
 	CodeNeedSearch  Code = "need_search"
 	CodeNotApproved Code = "not_approved"
+
+	CodePointLimit   Code = "point_limit"
+	CodeDuplicateURL Code = "duplicate_url"
+	CodeNeedEnter    Code = "need_enter"
 )
 
 type ErrorBody struct {

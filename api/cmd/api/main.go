@@ -18,6 +18,7 @@ import (
 	"flatmatch/api/internal/api/http/likesapi"
 	"flatmatch/api/internal/api/http/matchesapi"
 	"flatmatch/api/internal/api/http/peopleapi"
+	"flatmatch/api/internal/api/http/pointsapi"
 	"flatmatch/api/internal/api/http/poolsapi"
 	"flatmatch/api/internal/api/http/searchesapi"
 	"flatmatch/api/internal/api/http/usersapi"
@@ -34,6 +35,7 @@ import (
 	"flatmatch/api/internal/service/likes"
 	"flatmatch/api/internal/service/matches"
 	"flatmatch/api/internal/service/moderation"
+	"flatmatch/api/internal/service/points"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/searches"
 	"flatmatch/api/internal/service/users"
@@ -58,6 +60,7 @@ type deps struct {
 	pools    *pools.Service
 	likes    *likes.Service
 	matches  *matches.Service
+	points   *points.Service
 
 	// people, pairLikes and pairSearches are storage read directly: the profile
 	// screen only asks for facts — is this person visible to the viewer, what
@@ -130,11 +133,14 @@ func run() error {
 		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir)
 
 	wired := deps{
-		accounts:     users.New(usersRepo, photos, moderator),
-		searches:     searches.New(searchesRepo, dir),
-		pools:        pools.New(searchesRepo, dir, photos),
-		likes:        likes.New(likesRepo, dir),
-		matches:      matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, pointsRepo, dir),
+		accounts: users.New(usersRepo, photos, moderator),
+		searches: searches.New(searchesRepo, dir),
+		pools:    pools.New(searchesRepo, dir, photos),
+		likes:    likes.New(likesRepo, dir),
+		matches:  matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, pointsRepo, dir),
+		// Модератор обязателен: точка создаётся в pending и без сообщения в чат
+		// осталась бы ждать вечно (§5).
+		points:       points.New(pointsRepo, searchesRepo, dir, moderator),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,
@@ -224,13 +230,14 @@ func router(
 		r.Use(authmw.New(validator, d.accounts))
 		r.Mount("/", usersapi.New(d.accounts).Routes())
 		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
-		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.dir).Routes())
-		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.dir).Routes())
+		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.points, d.dir).Routes())
+		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.pairPoints, d.dir).Routes())
 		r.Mount("/matches", matchesapi.New(d.matches, d.accounts, d.dir).Routes())
+		r.Mount("/points", pointsapi.New(d.points, d.photos, d.dir).Routes())
 
 		// chi allows only one Mount per pattern, so the routes that would need a
 		// second Mount("/", …) are registered directly.
-		poolsHandler := poolsapi.New(d.pools, d.searches, d.dir)
+		poolsHandler := poolsapi.New(d.pools, d.searches, d.points, d.photos, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
 		r.Get("/people/{id}", peopleapi.New(

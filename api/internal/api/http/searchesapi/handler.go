@@ -36,6 +36,12 @@ type Pools interface {
 	Counts(ctx context.Context, viewerID uuid.UUID, params entity.SearchParams, newSince *time.Time) (pools.Counts, error)
 }
 
+// Points backs the tappable line «M квартир под эти параметры» (§6) — мостик с
+// карточки поиска в выдачу.
+type Points interface {
+	CountIn(ctx context.Context, zoneID string) (int, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 }
@@ -43,13 +49,14 @@ type ZoneDir interface {
 type Handler struct {
 	searches Searches
 	pools    Pools
+	points   Points
 	dir      ZoneDir
 }
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-func New(searches Searches, pools Pools, dir ZoneDir) *Handler {
-	return &Handler{searches: searches, pools: pools, dir: dir}
+func New(searches Searches, pools Pools, points Points, dir ZoneDir) *Handler {
+	return &Handler{searches: searches, pools: pools, points: points, dir: dir}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -94,6 +101,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 				item.FullMatch = counts.FullMatch
 				item.NewCount = counts.NewCount
 			}
+
+			points, err := h.points.CountIn(r.Context(), s.ZoneID)
+			if err != nil {
+				handleError(w, r, err)
+				return
+			}
+			item.PointsCount = points
 		}
 		out = append(out, item)
 	}

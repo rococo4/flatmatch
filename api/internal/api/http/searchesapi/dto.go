@@ -56,10 +56,12 @@ type searchResponse struct {
 	// Pool counters are filled in by the list handler only. In the answers to
 	// mutations the zeroes do not lie, they are simply not counted: the
 	// front-end refetches the list after every mutation.
-	People      int `json:"people"`
-	FullMatch   int `json:"full_match"`
-	NewCount    int `json:"new_count"`
-	PointsCount int `json:"points_count"` // always 0 until §12 step 5
+	People    int `json:"people"`
+	FullMatch int `json:"full_match"`
+	NewCount  int `json:"new_count"`
+	// PointsCount is «M квартир под эти параметры»: считает то же, что показала
+	// бы лента этой зоны — точки режет только зона (§8).
+	PointsCount int `json:"points_count"`
 }
 
 func toSearchResponse(s entity.Search, zone zoneDTO) searchResponse {

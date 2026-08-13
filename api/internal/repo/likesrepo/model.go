@@ -13,7 +13,7 @@ const likeColumns = `from_id, to_id, zone_id, point_id, spent, created_at`
 
 const matchColumns = `id, a_id, b_id, context_zone_id, context_point_id, created_at`
 
-const incomingColumns = `l.zone_id, l.created_at,
+const incomingColumns = `l.zone_id, l.point_id, l.created_at,
 	NOT EXISTS (SELECT 1 FROM searches s
 	            WHERE s.user_id = l.from_id AND s.status = 'active') AS not_searching,
 	u.id AS u_id, u.name AS u_name, u.age AS u_age, u.gender AS u_gender,
@@ -39,8 +39,11 @@ type LikeContext struct {
 }
 
 type IncomingLike struct {
-	From         entity.User // partial, like entity.PoolCandidate.User
-	ZoneID       string
+	From   entity.User // partial, like entity.PoolCandidate.User
+	ZoneID string
+	// PointID is the other half of the context: у «к себе» это отклик на твою
+	// комнату (§2.2), у квартиры с рынка — общий пул.
+	PointID      *uuid.UUID
 	NotSearching bool // no active searches — the grey «сейчас не в поиске» mark (§2.3)
 	CreatedAt    time.Time
 }
@@ -71,9 +74,10 @@ type matchRow struct {
 }
 
 type incomingRow struct {
-	ZoneID       *string   `db:"zone_id"`
-	NotSearching bool      `db:"not_searching"`
-	CreatedAt    time.Time `db:"created_at"`
+	ZoneID       *string    `db:"zone_id"`
+	PointID      *uuid.UUID `db:"point_id"`
+	NotSearching bool       `db:"not_searching"`
+	CreatedAt    time.Time  `db:"created_at"`
 
 	UID          uuid.UUID `db:"u_id"`
 	UName        string    `db:"u_name"`
@@ -131,6 +135,7 @@ func (r incomingRow) toEntity() IncomingLike {
 			Status: entity.StatusActive,
 		},
 		ZoneID:       pointer.Get(r.ZoneID),
+		PointID:      r.PointID,
 		NotSearching: r.NotSearching,
 		CreatedAt:    r.CreatedAt,
 	}

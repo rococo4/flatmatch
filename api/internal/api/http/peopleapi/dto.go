@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/ru"
 	"flatmatch/api/internal/service/zones"
 )
 
@@ -129,7 +130,7 @@ func pointLabel(kind entity.PointType, author, station string) string {
 	if kind == entity.PointIntentHome {
 		room := "на комнату"
 		if author != "" {
-			room += " " + author
+			room += " " + ru.GenitiveFirstName(author)
 		}
 		if station == "" {
 			return room

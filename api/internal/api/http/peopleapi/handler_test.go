@@ -136,7 +136,7 @@ func TestProfileOpensToThePointRelation(t *testing.T) {
 		"автор «к себе» открыт откликнувшемуся": {
 			points: fakePoints{point: room},
 			want:   http.StatusOK,
-			label:  "на комнату Катя · м. Сокол",
+			label:  "на комнату Кати · м. Сокол",
 		},
 		// Комната открывает профиль СВОЕГО автора: соседа по отклику она не
 		// сводит ни с кем — пула у «к себе» нет (§2.2).

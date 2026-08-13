@@ -211,3 +211,38 @@ func TestBudgetIsSharedAcrossContexts(t *testing.T) {
 		t.Errorf("database holds %d spent likes, want %d", n, entity.MaxDailyLikes)
 	}
 }
+
+// «На твою комнату» (§2.2) начинается здесь: без point_id входящий отклик не
+// отличить от зонного лайка, и пометка на карточке взяться неоткуда.
+func TestIncomingCarriesThePointContext(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	responder := seedUser(t, pool, 1, "active", "male", "any")
+	author := seedUser(t, pool, 2, "active", "male", "any")
+	zoneLiker := seedUser(t, pool, 3, "active", "male", "any")
+	seedSearch(t, pool, zoneLiker, "active")
+	room := seedPoint(t, pool, author, "intent_home", "active")
+
+	if _, err := repo.Create(t.Context(), responder, author, pointCtx(room)); err != nil {
+		t.Fatalf("Create() of the response failed: %v", err)
+	}
+	if _, err := repo.Create(t.Context(), zoneLiker, author, zoneCtx(testZone)); err != nil {
+		t.Fatalf("Create() of the zone like failed: %v", err)
+	}
+
+	byUser := map[uuid.UUID]IncomingLike{}
+	for _, like := range mustIncoming(t, repo, author) {
+		byUser[like.From.ID] = like
+	}
+	got := byUser[responder]
+	if got.PointID == nil || *got.PointID != room {
+		t.Errorf("PointID of the response = %v, want %s", got.PointID, room)
+	}
+	if got.ZoneID != "" {
+		t.Errorf("response carries zone %q, want none", got.ZoneID)
+	}
+	if zoned := byUser[zoneLiker]; zoned.PointID != nil || zoned.ZoneID != testZone {
+		t.Errorf("zone like = %+v, want a zone context only", zoned)
+	}
+}

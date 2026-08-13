@@ -37,7 +37,10 @@ func (r *Repo) Create(ctx context.Context, p entity.Point) (entity.Point, error)
 			return err
 		}
 		out, err = collectPoint(rows)
-		return err
+		if err != nil {
+			return err
+		}
+		return enterOwnPool(ctx, tx, out)
 	})
 	if err != nil {
 		return entity.Point{}, fmt.Errorf("create %s point: %w", p.Type, urlTaken(err))
@@ -284,6 +287,21 @@ func notMatchedWith(userColumn string) string {
 	return `NOT EXISTS (SELECT 1 FROM matches m
 			      WHERE m.a_id = least($1::uuid, ` + userColumn + `)
 			        AND m.b_id = greatest($1::uuid, ` + userColumn + `))`
+}
+
+// enterOwnPool makes «ты первый в пуле» (§6) true: тот, кто принёс квартиру,
+// в её пуле уже стоит — и видит каждого входящего, не тапая «Интересно» по
+// собственной находке. Той же транзакцией, иначе финал формы обещал бы пул, в
+// котором создателя нет. У «к себе» пула не бывает (§2.2), у парсера и досыпки
+// нет создателя (§8).
+func enterOwnPool(ctx context.Context, tx pgx.Tx, p entity.Point) error {
+	if p.Type != entity.PointFlat || p.CreatedBy == nil {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `
+		INSERT INTO likes_points (user_id, point_id) VALUES ($1, $2)
+		ON CONFLICT DO NOTHING`, *p.CreatedBy, p.ID)
+	return err
 }
 
 func lockAndCheckLimits(ctx context.Context, tx pgx.Tx, p entity.Point) error {

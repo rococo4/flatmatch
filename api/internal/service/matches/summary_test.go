@@ -201,7 +201,7 @@ func TestSummaryPointContext(t *testing.T) {
 				ZoneID:    "st-sokol",
 				CreatedBy: pointer.To(uuid.Nil), // подменяется на автора в тесте
 			},
-			want: "на комнату Катя · м. Сокол",
+			want: "на комнату Кати · м. Сокол",
 		},
 		"квартира с рынка обезличена": {
 			point: entity.Point{Type: entity.PointFlat, Status: entity.PointActive, ZoneID: "st-sokol"},

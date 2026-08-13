@@ -359,6 +359,42 @@ func TestByURLNormIgnoresClosed(t *testing.T) {
 	}
 }
 
+// «Ты первый в пуле» (§6) — обещание финала формы: создатель квартиры стоит в
+// её пуле с момента вставки, ещё до аппрува. У «к себе» пула нет (§2.2), у
+// точки без создателя — некому входить (§8).
+func TestCreateEntersTheCreatorIntoOwnPool(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	author := seedUser(t, pool, 1)
+
+	flat, err := repo.Create(t.Context(),
+		flatPoint(&author, entity.SourceUserLink, "https://avito.ru/1", entity.PointPending))
+	if err != nil {
+		t.Fatalf("Create(flat) failed: %v", err)
+	}
+	if in, err := repo.InPool(t.Context(), author, flat.ID); err != nil || !in {
+		t.Errorf("InPool() of the creator = %v, %v, want true, nil", in, err)
+	}
+
+	home, err := repo.Create(t.Context(), intentHome(author, entity.StageLive))
+	if err != nil {
+		t.Fatalf("Create(intent_home) failed: %v", err)
+	}
+	if in, err := repo.InPool(t.Context(), author, home.ID); err != nil || in {
+		t.Errorf("InPool() of the «к себе» author = %v, %v, want false, nil", in, err)
+	}
+
+	market, err := repo.Create(t.Context(),
+		flatPoint(nil, entity.SourceManual, "https://cian.ru/1", entity.PointActive))
+	if err != nil {
+		t.Fatalf("Create(manual flat) failed: %v", err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM likes_points WHERE point_id = $1`, market.ID); n != 0 {
+		t.Errorf("pool of a point without a creator holds %d rows, want 0", n)
+	}
+}
+
 // Пул принадлежит точке, а не пользователю: вход в одну квартиру не должен
 // делать человека участником соседней.
 func TestPoolMembershipIsPerPoint(t *testing.T) {

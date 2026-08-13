@@ -49,6 +49,11 @@ export interface Profile extends Questionnaire {
   /** Закладка «на каком шаге бросил», 0..11. Порядком экранов владеет фронт. */
   onboarding_step: number;
   created_at: string;
+  /**
+   * Бот, в котором открыт Mini App, — из getMe. Пусто, если поллинг выключен
+   * или Telegram ещё не ответил: тогда шеринг падает на свою константу.
+   */
+  bot_username?: string;
 }
 
 /* ── Зоны, поиски, пулы (§2.1, §6) ──────────────────────────────────────────
@@ -664,9 +669,11 @@ async function readError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, 'unknown', `HTTP ${response.status} ${response.statusText}`);
 }
 
-/** Профиль вызывающего. */
-export function fetchMe(): Promise<Profile> {
-  return request<Profile>('/api/v1/me');
+/** Профиль вызывающего. Заодно — единственное место, где узнаётся имя бота. */
+export async function fetchMe(): Promise<Profile> {
+  const me = await request<Profile>('/api/v1/me');
+  if (me.bot_username) botUsername = me.bot_username;
+  return me;
 }
 
 /**
@@ -873,10 +880,17 @@ export function leavePointPool(id: string): Promise<void> {
 /**
  * Бот, в котором живёт Mini App.
  *
- * Захардкожен: переменной окружения под него нет, а ссылка «Позвать в пул»
- * обязана вести в тот же бот, из которого приложение и открыли.
+ * Имя приезжает с сервера (`bot_username` в /me — оно же getMe у бота): ссылка
+ * «Позвать в пул» обязана вести в тот же бот, из которого приложение открыли,
+ * а бот на стенде и на бою разный. Константа — запас на случай, когда сервер
+ * имени не знает: при выключенном поллинге спрашивать его не у кого.
  */
-const BOT_USERNAME = 'flatmatch_finder_bot';
+const BOT_USERNAME_FALLBACK = 'flatmatch_finder_bot';
+
+let botUsername = '';
+
+/** Short name Mini App из BotFather. Env под него нет, ручки — тоже. */
+const BOT_APP_SHORT_NAME = 'app';
 
 /** Префикс диплинка точки: `startapp=point_<uuid>` (§6, вирусная петля). */
 const POINT_START_PARAM = 'point_';
@@ -889,7 +903,9 @@ const POINT_START_PARAM = 'point_';
  * оторвался бы от ссылки.
  */
 export function pointShareUrl(pointId: string): string {
-  const app = `https://t.me/${BOT_USERNAME}/app?startapp=${POINT_START_PARAM}${pointId}`;
+  const bot = botUsername || BOT_USERNAME_FALLBACK;
+  const start = `${POINT_START_PARAM}${pointId}`;
+  const app = `https://t.me/${bot}/${BOT_APP_SHORT_NAME}?startapp=${start}`;
   return `https://t.me/share/url?url=${encodeURIComponent(app)}`;
 }
 

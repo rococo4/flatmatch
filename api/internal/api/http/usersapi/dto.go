@@ -36,6 +36,10 @@ type ownProfile struct {
 	Status         entity.Status `json:"status"`
 	OnboardingStep int           `json:"onboarding_step"`
 	CreatedAt      time.Time     `json:"created_at"`
+
+	// BotUsername is where the share links point. Absent while getMe has not
+	// answered (and forever with polling off) — the client has a fallback.
+	BotUsername string `json:"bot_username,omitempty"`
 }
 
 type patchRequest struct {
@@ -57,7 +61,7 @@ type patchRequest struct {
 	OnboardingStep *int `json:"onboarding_step"`
 }
 
-func toOwnProfile(u entity.User, photoURL string) ownProfile {
+func toOwnProfile(u entity.User, photoURL, botUsername string) ownProfile {
 	return ownProfile{
 		ID:         u.ID.String(),
 		TelegramID: u.TelegramID,
@@ -86,6 +90,8 @@ func toOwnProfile(u entity.User, photoURL string) ownProfile {
 		Status:         u.Status,
 		OnboardingStep: u.OnboardingStep,
 		CreatedAt:      u.CreatedAt,
+
+		BotUsername: botUsername,
 	}
 }
 

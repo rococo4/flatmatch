@@ -113,19 +113,6 @@ const L = {
     justifyContent: 'center',
     boxSizing: 'border-box',
   } as CSSProperties,
-  smallButton: {
-    marginLeft: 'auto',
-    flex: '0 0 auto',
-    padding: '9px 13px',
-    border: 'none',
-    borderRadius: 9,
-    background: 'var(--chip-bg)',
-    font: 'inherit',
-    fontSize: 14,
-    fontWeight: 590,
-    color: 'var(--tg-theme-accent-text-color)',
-    cursor: 'pointer',
-  } as CSSProperties,
   okChip: {
     marginLeft: 'auto',
     flex: '0 0 auto',
@@ -149,7 +136,6 @@ export function MyProfileScreen({
   onEdit,
   onOpenIncomingLikes,
   onOpenMatch,
-  onVerifyEmail,
 }: {
   name: string;
   age: number;
@@ -162,7 +148,6 @@ export function MyProfileScreen({
   onEdit?: () => void;
   onOpenIncomingLikes?: () => void;
   onOpenMatch?: (id: string) => void;
-  onVerifyEmail?: () => void;
 }) {
   const st = STATUS_TEXT[status];
 
@@ -218,9 +203,18 @@ export function MyProfileScreen({
                 бейдж вуза в карточках и пулах
               </span>
             </div>
-            <button type="button" style={L.smallButton} onClick={onVerifyEmail}>
-              Подтвердить
-            </button>
+            {/* Ручки верификации ещё нет: кнопка появится вместе с ней, мёртвой
+                висеть не должна. */}
+            <span
+              style={{
+                marginLeft: 'auto',
+                flex: '0 0 auto',
+                fontSize: 13,
+                color: 'var(--tg-theme-hint-color)',
+              }}
+            >
+              скоро
+            </span>
           </div>
 
           <div style={{ height: 1, background: 'var(--sep)' }} />

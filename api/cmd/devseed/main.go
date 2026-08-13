@@ -5,8 +5,8 @@
 // block counts nobody.
 //
 // The crowd is deterministic: fixed Telegram ids from seedTGBase up, upserted
-// by tg_id, searches wiped and re-inserted; points carry fixed ids with the
-// seedPointPrefix. Reruns converge to the same state instead of piling up
+// by tg_id, searches wiped and re-inserted; points carry fixed ids that all
+// start with «5eed». Reruns converge to the same state instead of piling up
 // copies, and the same two markers remove everything — in reference order,
 // and likes and matches name a seed person on either side (the other one is
 // usually the dev account of cmd/devinitdata):
@@ -87,11 +87,6 @@ const (
 	// Хамовники for both, including Ира — her search is on line-1, and line-1
 	// reaches the Хамовники pool through its stations (§2.1).
 	devLikeZone = "d-khamovniki"
-
-	// seedPointPrefix is to points what seedTGBase is to people: a point has no
-	// natural key to upsert by, so the ids are fixed here, and one LIKE finds
-	// the whole crop again.
-	seedPointPrefix = "5eed"
 )
 
 // seedPerson is one row of the table: the questionnaire a pool card renders,

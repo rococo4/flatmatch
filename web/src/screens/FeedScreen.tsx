@@ -145,7 +145,7 @@ export function FeedScreen({
           </span>
         </div>
         <button type="button" style={L.edit} onClick={onEditParams}>
-          Изменить параметры
+          Изменить
         </button>
       </div>
 
@@ -296,10 +296,18 @@ function FlatPointCard({
         <FactsBlock title="Квартира" facts={flatFacts(point)}>
           <GreyChips items={restrictionLabels(point.restrictions, 'flat')} />
         </FactsBlock>
+        {/* Счётчик считает других: вошедшего в своём пуле в нём нет, и «0»
+            без подписи выглядел бы поломкой рядом с «✓ Ты в пуле». */}
         <PoolCount
           n={point.pool_count}
           kind="flat"
-          hint={point.in_pool ? undefined : 'увидишь после входа'}
+          hint={
+            point.in_pool
+              ? point.pool_count === 0
+                ? 'пока только ты'
+                : undefined
+              : 'увидишь после входа'
+          }
         />
         {point.in_pool ? (
           <InPoolRow onOpenPool={onOpenFlat ? () => onOpenFlat(point) : undefined} />

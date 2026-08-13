@@ -76,6 +76,9 @@ type deps struct {
 
 	photos *photostore.Dir
 	dir    *zones.Directory
+	// bot is asked for one thing only: its own @name, which the Mini App needs
+	// to build share links back into the same bot.
+	bot *tgbot.Bot
 }
 
 func main() {
@@ -132,6 +135,10 @@ func run() error {
 	moderator := moderation.New(tgbot.NewModerationSender(botClient),
 		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir)
 
+	// The bot is built even with polling off: /me hands its @name to the Mini
+	// App for share links, and without a poll that name is simply empty.
+	bot := tgbot.NewBot(botClient, cfg.AppURL, log, moderator, cfg.ModerationChatID)
+
 	wired := deps{
 		accounts: users.New(usersRepo, photos, moderator),
 		searches: searches.New(searchesRepo, dir),
@@ -147,6 +154,7 @@ func run() error {
 		pairPoints:   pointsRepo,
 		photos:       photos,
 		dir:          dir,
+		bot:          bot,
 	}
 	validator := tma.NewValidator(cfg.BotToken, cfg.InitDataTTL)
 
@@ -171,7 +179,6 @@ func run() error {
 	}()
 
 	if cfg.BotPollingEnabled {
-		bot := tgbot.NewBot(botClient, cfg.AppURL, log, moderator, cfg.ModerationChatID)
 		go func() {
 			if err := bot.Run(ctx); err != nil {
 				failed <- fmt.Errorf("telegram bot: %w", err)
@@ -228,7 +235,7 @@ func router(
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authmw.New(validator, d.accounts))
-		r.Mount("/", usersapi.New(d.accounts).Routes())
+		r.Mount("/", usersapi.New(d.accounts, d.bot).Routes())
 		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
 		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.points, d.dir).Routes())
 		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.pairPoints, d.dir).Routes())

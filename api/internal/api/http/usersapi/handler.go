@@ -24,14 +24,21 @@ type Accounts interface {
 	OwnPhotoURL(u entity.User) string
 }
 
+// Bot is the Mini App's host: share links have to lead back into the same bot
+// the app was opened from, and only Telegram knows its name.
+type Bot interface {
+	Username() string
+}
+
 type Handler struct {
 	accounts Accounts
+	bot      Bot
 }
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-func New(accounts Accounts) *Handler {
-	return &Handler{accounts: accounts}
+func New(accounts Accounts, bot Bot) *Handler {
+	return &Handler{accounts: accounts, bot: bot}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -121,5 +128,5 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) respondSelf(w http.ResponseWriter, r *http.Request, u entity.User) {
-	httpx.JSON(w, r, http.StatusOK, toOwnProfile(u, h.accounts.OwnPhotoURL(u)))
+	httpx.JSON(w, r, http.StatusOK, toOwnProfile(u, h.accounts.OwnPhotoURL(u), h.bot.Username()))
 }

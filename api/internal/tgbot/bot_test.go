@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 )
 
 const moderationChat = int64(-100500)
@@ -137,6 +138,44 @@ func TestQueueCommandResendsTheQueue(t *testing.T) {
 	// The moderation chat gets the queue, not the Mini App button.
 	if api.got("sendMessage") != nil {
 		t.Error("the moderation chat was answered with the start message")
+	}
+}
+
+func TestUsernameIsEmptyUntilTelegramAnswers(t *testing.T) {
+	// The Mini App asks /me for this name to build share links, and /me may be
+	// answered before the first poll ever happens.
+	api := newBotAPI(t)
+	api.replies["getMe"] = `{"ok":true,"result":{"username":"flatmatch_finder_bot"}}`
+	api.replies["getUpdates"] = `{"ok":true,"result":[]}`
+	bot := newTestBot(api, &fakeModeration{}, moderationChat)
+
+	if got := bot.Username(); got != "" {
+		t.Fatalf("Username() = %q before the poll, want empty", got)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- bot.Run(ctx) }()
+
+	deadline := time.After(5 * time.Second)
+	for bot.Username() == "" {
+		select {
+		case err := <-done:
+			t.Fatalf("Run() stopped before the name arrived: %v", err)
+		case <-deadline:
+			t.Fatal("the username never arrived")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if got := bot.Username(); got != "flatmatch_finder_bot" {
+		t.Errorf("Username() = %q, want flatmatch_finder_bot", got)
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("Run() failed: %v", err)
 	}
 }
 

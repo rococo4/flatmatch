@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -52,6 +53,11 @@ type Bot struct {
 	// moderationChatID is the only chat whose button taps mean anything: a
 	// verdict from anywhere else would be a stranger moderating the product.
 	moderationChatID int64
+
+	// username is what getMe answered, and Telegram is the only one who knows
+	// it. Run fills it in while requests are already being served, so it is
+	// read through an atomic — and it is empty until the answer arrives.
+	username atomic.Pointer[string]
 }
 
 // NewBot builds the bot. appURL is the HTTPS address the Mini App opens at;
@@ -67,6 +73,15 @@ func NewBot(client *Client, appURL string, log *slog.Logger, moderation Moderati
 	}
 }
 
+// Username is the bot's @name, without the @. Empty until getMe answers — the
+// Mini App then falls back to the name it was built with.
+func (b *Bot) Username() string {
+	if name := b.username.Load(); name != nil {
+		return *name
+	}
+	return ""
+}
+
 // Run polls for updates until ctx is cancelled.
 //
 // Errors are logged and retried rather than returned: a Telegram hiccup must
@@ -77,6 +92,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	b.username.Store(&info.Username)
 	b.log.Info("bot polling started", "username", "@"+info.Username, "app_url", b.appURL)
 	if !b.moderationEnabled() {
 		b.log.Warn("moderation chat is not connected, verdict buttons will not arrive anywhere")

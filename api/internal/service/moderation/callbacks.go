@@ -32,8 +32,9 @@ const (
 	ackDone = "уже обработано"
 )
 
-// rejectedReason marks a point closed by the moderator, so «Присмотренные»
-// могут отличить отклонённую квартиру от закрытой самим человеком (§6).
+// rejectedReason marks a point closed by the moderator rather than by its
+// author. «Присмотренные» этой разницы пока не показывают — список отдаёт
+// только незакрытые, — но причина остаётся в базе для разбора (§5).
 const rejectedReason = "rejected"
 
 // HandleCallback applies one inline-button tap. Ack — это текст всплывающего

@@ -425,7 +425,7 @@ export function App() {
   /**
    * «Интересно — войти в пул» (§2.2): вход бесплатный и в один тап, поэтому
    * карточка меняется сразу — держать её мёртвой на время запроса не за что.
-   * Отказ откатывает счётчик и говорит словами сервера.
+   * Отказ снимает отметку и говорит словами сервера.
    */
   const enterFlatPool = async (id: string) => {
     setFeed((f) => ({ ...f, data: withPoolMark(f.data, id, true), error: null }));
@@ -441,7 +441,7 @@ export function App() {
     }
   };
 
-  /** Форма параметров просмотра: «Найти» с входа и «Изменить параметры» с выдачи. */
+  /** Форма параметров просмотра: «Найти» с входа и «Изменить» с выдачи. */
   const openLookForm = (draft: SearchDraft) => {
     setFeed((f) => ({
       ...f,
@@ -831,7 +831,7 @@ export function App() {
             age={profile.age ?? 0}
             occupation={occupationLabel(profile.occupation)}
             status={profile.status === 'active' ? 'active' : 'pending'}
-            emailKind={profile.occupation === 'study' ? 'edu' : 'work'}
+            emailKind={profile.occupation === 'study' ? 'Учебная почта' : 'Рабочая почта'}
             incomingLikes={unreadLikes}
             matches={matches.map(toMyMatch)}
             onEdit={() => setView('editProfile')}
@@ -1147,16 +1147,17 @@ function buildPromo(p: FeedPromo, active: SearchResponse[], slotsFull: boolean):
   };
 }
 
-/** Отмечает вход в пул точки в уже показанной выдаче — до ответа сервера. */
+/**
+ * Отмечает вход в пул точки в уже показанной выдаче — до ответа сервера.
+ *
+ * Счётчик при этом не трогаем: он персональный и смотрящего не считает
+ * (visible_people его не возвращает), так что «+1» врал бы до следующей выдачи.
+ */
 function withPoolMark(data: FeedResponse | null, id: string, entered: boolean): FeedResponse | null {
   if (!data) return data;
   return {
     ...data,
-    points: data.points.map((p) =>
-      p.id === id
-        ? { ...p, in_pool: entered, pool_count: Math.max(0, p.pool_count + (entered ? 1 : -1)) }
-        : p,
-    ),
+    points: data.points.map((p) => (p.id === id ? { ...p, in_pool: entered } : p)),
   };
 }
 

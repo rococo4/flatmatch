@@ -1,67 +1,13 @@
 /* Пограничные состояния — §6 / §2.3.
-   1) пустая зона в ленте + живые зоны рядом
-   2) слоты поисков заняты
-   3) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
+   1) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
+   2) шторка закрытия поиска с причиной
+   3) свежесть точки (спит до шага 7)
    4) гейт второго «живу» в форме «к себе» */
 import type { CSSProperties, ReactNode } from 'react';
 import type { CloseReason } from '../api/client';
-import { plural } from '../api/format';
 import { S } from '../ui/primitives';
 
 const E = {
-  promoCard: {
-    borderRadius: 14,
-    padding: '14px 12px 12px',
-    background: 'var(--search-card-bg)',
-    border: '1px solid var(--search-card-border)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  } as CSSProperties,
-  kicker: {
-    padding: '3px 8px',
-    borderRadius: 7,
-    background: 'var(--type-search-bg)',
-    color: 'var(--type-search-fg)',
-    fontSize: 11,
-    fontWeight: 640,
-    letterSpacing: '.05em',
-    textTransform: 'uppercase',
-  } as CSSProperties,
-  zoneMeta: {
-    fontSize: 12,
-    fontWeight: 510,
-    color: 'var(--type-search-fg)',
-    opacity: 0.85,
-  } as CSSProperties,
-  headline: {
-    fontSize: 19,
-    fontWeight: 640,
-    letterSpacing: '-0.4px',
-    textWrap: 'pretty',
-  } as CSSProperties,
-  nearbyButton: {
-    flex: '1 1 0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    padding: '11px 12px',
-    border: 'none',
-    borderRadius: 10,
-    background: 'var(--card-bg)',
-    font: 'inherit',
-    cursor: 'pointer',
-  } as CSSProperties,
-  warnRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    padding: '10px 11px',
-    borderRadius: 10,
-    background: 'var(--warning-bg)',
-    color: 'var(--warning-fg)',
-  } as CSSProperties,
   scrim: {
     // Шторка обязана лежать поверх всего, включая таб-бар: иначе кнопка,
     // которая её открыла, выглядит мёртвой — шторка уезжает в конец потока
@@ -134,122 +80,6 @@ const E = {
     cursor: 'pointer',
   } as CSSProperties,
 };
-
-/** Пустая зона: единственный способ появиться — войти первым. */
-export function EmptyZonePromo({
-  zone,
-  zoneGen,
-  nearby,
-  onJoin,
-  onOpenZone,
-}: {
-  zone: string; // «Бутово»
-  zoneGen: string; // «Бутово» в родительном
-  nearby: { zone: string; count: number }[];
-  onJoin?: () => void;
-  onOpenZone?: (zone: string) => void;
-}) {
-  return (
-    <article style={E.promoCard}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={E.kicker}>Люди</span>
-        <span style={E.zoneMeta}>{zone}</span>
-      </div>
-      <span style={E.headline}>
-        В {zone} пока никто не ищет — войди в пул первым, пришлём пуш
-      </span>
-      <button type="button" style={S.filledButton} onClick={onJoin}>
-        Войти в пул {zoneGen} — сохранить поиск
-      </button>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 2 }}>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 590,
-            letterSpacing: '.04em',
-            textTransform: 'uppercase',
-            color: 'var(--tg-theme-hint-color)',
-          }}
-        >
-          Рядом ищут
-        </span>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {nearby.map((n) => (
-            <button key={n.zone} type="button" style={E.nearbyButton} onClick={() => onOpenZone?.(n.zone)}>
-              <span style={{ fontSize: 14, fontWeight: 510, color: 'var(--tg-theme-text-color)' }}>
-                {n.zone}
-              </span>
-              <span style={{ fontSize: 14, fontWeight: 640, color: 'var(--type-search-fg)' }}>
-                {n.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/** Слоты заняты: вход недоступен, зовём закрыть один поиск. */
-export function SlotsFullPromo({
-  zone,
-  zoneIn,
-  zoneGen,
-  peopleCount,
-  fullMatchCount,
-  slotsTotal,
-  onOpenSearches,
-}: {
-  zone: string;
-  /** Уже с предлогом: «в Хамовниках» / «на красной ветке» / «у метро Сокол». */
-  zoneIn: string;
-  zoneGen: string;
-  peopleCount: number;
-  fullMatchCount: number;
-  slotsTotal: number;
-  onOpenSearches?: () => void;
-}) {
-  return (
-    <article style={E.promoCard}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={E.kicker}>Люди</span>
-        <span style={E.zoneMeta}>{zone}</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={E.headline}>
-          {peopleCount} {plural(peopleCount, 'человек', 'человека', 'человек')} ищут {zoneIn}
-        </span>
-        <span style={S.subtitle}>с {fullMatchCount} полное совпадение по твоим параметрам</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button
-          type="button"
-          disabled
-          style={{
-            width: '100%',
-            padding: 13,
-            border: 'none',
-            borderRadius: 10,
-            background: 'var(--chip-bg)',
-            font: 'inherit',
-            fontSize: 16,
-            fontWeight: 590,
-            color: 'var(--tg-theme-hint-color)',
-            cursor: 'not-allowed',
-          }}
-        >
-          Войти в пул {zoneGen} — сохранить поиск
-        </button>
-        <div style={E.warnRow} onClick={onOpenSearches}>
-          <span style={{ flex: '1 1 auto', fontSize: 13, fontWeight: 590, lineHeight: 1.35 }}>
-            Поиски заняты · {slotsTotal} из {slotsTotal} — закрой один из трёх в «Моих поисках»
-          </span>
-          <span style={{ flex: '0 0 auto', fontSize: 17, lineHeight: 1, opacity: 0.8 }}>›</span>
-        </div>
-      </div>
-    </article>
-  );
-}
 
 /**
  * Общая оболочка шторок: затемнение на весь экран и панель снизу.
@@ -479,7 +309,14 @@ export function LikelyRentedCard({
 }
 
 /** Гейт стадии в форме «к себе»: вторая точка «живу здесь» невозможна. */
-export function HomeStageGate({ onPickMoving }: { onPickMoving?: () => void }) {
+export function HomeStageGate({
+  moving,
+  onPickMoving,
+}: {
+  /** Выбрано «заезжаю»: рядом есть третий ответ гейта, и выбор может уйти к нему. */
+  moving: boolean;
+  onPickMoving?: () => void;
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div
@@ -522,7 +359,7 @@ export function HomeStageGate({ onPickMoving }: { onPickMoving?: () => void }) {
           padding: '13px 12px',
           borderRadius: 12,
           background: 'var(--card-bg)',
-          border: '1.5px solid var(--type-home-fg)',
+          border: moving ? '1.5px solid var(--type-home-fg)' : '1px solid var(--sep)',
           cursor: 'pointer',
         }}
       >
@@ -533,8 +370,10 @@ export function HomeStageGate({ onPickMoving }: { onPickMoving?: () => void }) {
             height: 20,
             borderRadius: '50%',
             boxSizing: 'border-box',
-            border: '6px solid var(--type-home-fg)',
-            background: 'var(--card-bg)',
+            border: moving
+              ? '6px solid var(--type-home-fg)'
+              : '1.5px solid color-mix(in srgb, var(--tg-theme-hint-color) 70%, transparent)',
+            background: moving ? 'var(--card-bg)' : 'transparent',
             marginTop: 1,
           }}
         />
@@ -562,8 +401,3 @@ export function HomeStageGate({ onPickMoving }: { onPickMoving?: () => void }) {
     </div>
   );
 }
-
-export const DEMO_NEARBY = [
-  { zone: 'Тёплый Стан', count: 6 },
-  { zone: 'Ясенево', count: 4 },
-];

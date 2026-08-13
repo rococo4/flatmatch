@@ -49,11 +49,10 @@ repo/*      →              →  entity
 стороне потребителя»), поэтому `service` не импортирует `repo`, а `repo` не
 импортирует `service`. Связывает их единственное место — `cmd/api/main.go`.
 
-В `internal/service/` рядом с `users` лежат заготовки — `searches`, `points`,
-`pools`, `likes`, `matches`, `notifications`, `moderation`, `zones`. Кода в них
+Из заготовок в `internal/service/` остался один `notifications`: кода в нём
 нет, только `doc.go` с зафиксированной зоной ответственности и ссылкой на
-параграф спеки; хранилище каждый получит в `internal/repo/<домен>repo/`, когда
-дойдёт очередь.
+параграф спеки; хранилище он получит в `internal/repo/notificationsrepo/`,
+когда дойдёт очередь (§7, шаг 6 порядка сборки).
 
 ## Что уже работает
 

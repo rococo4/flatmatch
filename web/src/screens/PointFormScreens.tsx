@@ -38,6 +38,12 @@ import { ZonePicker } from './SearchParamsScreen';
 const STATION_ONLY: ZoneKind[] = ['station'];
 
 /**
+ * Ответ гейта «к себе» (§2.2). Третий — не стадия точки, а тупик: сдающему
+ * квартиру мы не продукт, и узнать он это должен до полей, а не после отправки.
+ */
+type StageChoice = PointStage | 'renting';
+
+/**
  * Сервер отвечает на невалидные поля по-английски и списком имён — человеку
  * нужнее подсветка, а строка только зовёт на неё посмотреть.
  */
@@ -786,7 +792,7 @@ export function HomePointFormScreen({
   onBack?: () => void;
   onCreated: (point: PointDTO) => void;
 }) {
-  const [stage, setStage] = useState<PointStage>(hasLivePoint ? 'moving_in' : 'live');
+  const [stage, setStage] = useState<StageChoice>(hasLivePoint ? 'moving_in' : 'live');
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [price, setPrice] = useState('');
@@ -801,10 +807,14 @@ export function HomePointFormScreen({
   const zone = zoneId ? ((zones ?? []).find((z) => z.id === zoneId) ?? null) : null;
   const priceShare = Number(price) || 0;
   const bad = (field: string) => form.invalid.includes(field);
+  const renting = stage === 'renting';
   const ready =
-    Boolean(zoneId && priceShare > 0 && photoKey && (stage === 'live' || moveIn)) && !form.busy;
+    !renting &&
+    Boolean(zoneId && priceShare > 0 && photoKey && (stage === 'live' || moveIn)) &&
+    !form.busy;
 
   const send = () => {
+    // ready несёт в себе !renting, поэтому дальше stage — настоящая стадия.
     if (!ready) return;
     void form.submit({
       type: 'intent_home',
@@ -819,7 +829,7 @@ export function HomePointFormScreen({
     });
   };
 
-  const option = (value: PointStage, title: string, sub: string, badge: string) => {
+  const option = (value: StageChoice, title: string, sub: string, badge?: string) => {
     const active = stage === value;
     return (
       <div
@@ -905,9 +915,12 @@ export function HomePointFormScreen({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={S.sectionTitle}>НА КАКОЙ ТЫ СТАДИИ</span>
           {hasLivePoint ? (
-            <HomeStageGate onPickMoving={() => setStage('moving_in')} />
+            <HomeStageGate
+              moving={stage === 'moving_in'}
+              onPickMoving={() => setStage('moving_in')}
+            />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <>
               {option('live', 'Уже живу здесь', 'комната освободилась, ищу к себе', 'живёт здесь')}
               {option(
                 'moving_in',
@@ -915,137 +928,163 @@ export function HomePointFormScreen({
                 'квартира есть, ищу соседа со старта',
                 'заезжает · ищет со-съёмщика со старта',
               )}
-            </div>
+            </>
           )}
+          {/* Третий ответ гейта §2.2: сдача — не наш кейс, и сказать это надо
+              до полей, а не отказом сервера. */}
+          {option('renting', 'Сдаю квартиру', 'ищу, кому сдать, а не с кем жить')}
         </div>
 
-        <div style={F.group}>
-          <span style={S.blockTitle}>Квартира и комната</span>
-
-          <Field label="Метро">
-            <ZoneField zone={zone} invalid={bad('zone_id')} onOpen={() => setPickerOpen(true)} />
-          </Field>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: '1 1 0', minWidth: 0 }}>
-              <Field label="Цена доли">
-                <input
-                  style={{
-                    ...F.input,
-                    fontWeight: 590,
-                    outline: bad('price_share')
-                      ? '1.5px solid var(--tg-theme-destructive-text-color)'
-                      : 'none',
-                  }}
-                  inputMode="numeric"
-                  placeholder="28 000 ₽"
-                  value={price ? `${Number(price).toLocaleString('ru-RU')} ₽` : ''}
-                  onChange={(e) => setPrice(digits(e.target.value))}
-                />
-              </Field>
-            </div>
-            <div style={{ flex: '1 1 0', minWidth: 0 }}>
-              <Field label="Депозит">
-                <input
-                  style={{
-                    ...F.input,
-                    fontWeight: 590,
-                    outline: bad('deposit')
-                      ? '1.5px solid var(--tg-theme-destructive-text-color)'
-                      : 'none',
-                  }}
-                  inputMode="numeric"
-                  placeholder="необязательно"
-                  value={deposit ? `${Number(deposit).toLocaleString('ru-RU')} ₽` : ''}
-                  onChange={(e) => setDeposit(digits(e.target.value))}
-                />
-              </Field>
-            </div>
-          </div>
-
-          <Field label="Комната">
-            <div style={{ display: 'flex', gap: 5 }}>
-              <SegChip active={isolated === true} onClick={() => setIsolated(true)}>
-                изолированная
-              </SegChip>
-              <SegChip active={isolated === false} onClick={() => setIsolated(false)}>
-                проходная
-              </SegChip>
-            </div>
-          </Field>
-
-          <Field
-            label={
-              <>
-                Дата заезда{' '}
-                {stage === 'moving_in' && (
-                  <span style={{ color: 'var(--tg-theme-destructive-text-color)' }}>· обязательно</span>
-                )}
-              </>
-            }
-          >
-            <input
-              type="date"
-              value={moveIn}
-              onChange={(e) => setMoveIn(e.target.value)}
-              style={{
-                ...F.input,
-                outline: bad('move_in')
-                  ? '1.5px solid var(--tg-theme-destructive-text-color)'
-                  : 'none',
-              }}
-            />
-          </Field>
-
-          <PhotoPicker
-            title="Фото комнаты"
-            hint={
-              stage === 'moving_in'
-                ? 'фото из квартиры, не скрин объявления'
-                : 'как комната выглядит сейчас'
-            }
-            invalid={bad('photo_key')}
-            onUploaded={setPhotoKey}
-          />
-
-          {/* Дил-брейкеры собственника — видны на карточке до дорогого лайка. */}
-          <Field
-            label={
-              <span
-                style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}
-              >
-                Ограничения квартиры
-                <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>необязательно</span>
-              </span>
-            }
-          >
-            <RestrictionChips
-              options={restrictionOptions('intent_home')}
-              value={restrictions}
-              onToggle={(code) => setRestrictions(toggle(restrictions, code))}
-            />
-            <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--tg-theme-hint-color)' }}>
-              Покажем на карточке до лайка — чтобы никто не тратил его зря
+        {renting && (
+          <div style={F.group}>
+            <span style={{ fontSize: 17, fontWeight: 640, letterSpacing: '-0.3px' }}>
+              Это не наш кейс
             </span>
-          </Field>
-        </div>
-      </div>
+            <span
+              style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--tg-theme-subtitle-text-color)' }}
+            >
+              Мы ищем со-съёмщика — того, с кем делят квартиру и счета. Для сдачи есть
+              классифайды: Авито и Циан.
+            </span>
+            <span style={{ fontSize: 13, lineHeight: 1.4, color: 'var(--tg-theme-hint-color)' }}>
+              Живёшь в квартире сам или заезжаешь — выбери стадию выше.
+            </span>
+          </div>
+        )}
 
-      <div style={F.fixed}>
-        <button
-          type="button"
-          style={{ ...F.submit, opacity: ready ? 1 : 0.4 }}
-          disabled={!ready}
-          onClick={send}
-        >
-          Создать точку
-        </button>
-        {form.error ? (
-          <span style={F.error}>{form.error}</span>
-        ) : (
-          <span style={F.footnote}>Появится в ленте после быстрой проверки — тебе доступна сразу</span>
+        {!renting && (
+          <div style={F.group}>
+            <span style={S.blockTitle}>Квартира и комната</span>
+
+            <Field label="Метро">
+              <ZoneField zone={zone} invalid={bad('zone_id')} onOpen={() => setPickerOpen(true)} />
+            </Field>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <Field label="Цена доли">
+                  <input
+                    style={{
+                      ...F.input,
+                      fontWeight: 590,
+                      outline: bad('price_share')
+                        ? '1.5px solid var(--tg-theme-destructive-text-color)'
+                        : 'none',
+                    }}
+                    inputMode="numeric"
+                    placeholder="28 000 ₽"
+                    value={price ? `${Number(price).toLocaleString('ru-RU')} ₽` : ''}
+                    onChange={(e) => setPrice(digits(e.target.value))}
+                  />
+                </Field>
+              </div>
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <Field label="Депозит">
+                  <input
+                    style={{
+                      ...F.input,
+                      fontWeight: 590,
+                      outline: bad('deposit')
+                        ? '1.5px solid var(--tg-theme-destructive-text-color)'
+                        : 'none',
+                    }}
+                    inputMode="numeric"
+                    placeholder="необязательно"
+                    value={deposit ? `${Number(deposit).toLocaleString('ru-RU')} ₽` : ''}
+                    onChange={(e) => setDeposit(digits(e.target.value))}
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <Field label="Комната">
+              <div style={{ display: 'flex', gap: 5 }}>
+                <SegChip active={isolated === true} onClick={() => setIsolated(true)}>
+                  изолированная
+                </SegChip>
+                <SegChip active={isolated === false} onClick={() => setIsolated(false)}>
+                  проходная
+                </SegChip>
+              </div>
+            </Field>
+
+            <Field
+              label={
+                <>
+                  Дата заезда{' '}
+                  {stage === 'moving_in' && (
+                    <span style={{ color: 'var(--tg-theme-destructive-text-color)' }}>· обязательно</span>
+                  )}
+                </>
+              }
+            >
+              <input
+                type="date"
+                value={moveIn}
+                onChange={(e) => setMoveIn(e.target.value)}
+                style={{
+                  ...F.input,
+                  outline: bad('move_in')
+                    ? '1.5px solid var(--tg-theme-destructive-text-color)'
+                    : 'none',
+                }}
+              />
+            </Field>
+
+            <PhotoPicker
+              title="Фото комнаты"
+              hint={
+                stage === 'moving_in'
+                  ? 'фото из квартиры, не скрин объявления'
+                  : 'как комната выглядит сейчас'
+              }
+              invalid={bad('photo_key')}
+              onUploaded={setPhotoKey}
+            />
+
+            {/* Дил-брейкеры собственника — видны на карточке до дорогого лайка. */}
+            <Field
+              label={
+                <span
+                  style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}
+                >
+                  Ограничения квартиры
+                  <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>необязательно</span>
+                </span>
+              }
+            >
+              <RestrictionChips
+                options={restrictionOptions('intent_home')}
+                value={restrictions}
+                onToggle={(code) => setRestrictions(toggle(restrictions, code))}
+              />
+              <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--tg-theme-hint-color)' }}>
+                Покажем на карточке до лайка — чтобы никто не тратил его зря
+              </span>
+            </Field>
+          </div>
         )}
       </div>
+
+      {!renting && (
+        <div style={F.fixed}>
+          <button
+            type="button"
+            style={{ ...F.submit, opacity: ready ? 1 : 0.4 }}
+            disabled={!ready}
+            onClick={send}
+          >
+            Создать точку
+          </button>
+          {form.error ? (
+            <span style={F.error}>{form.error}</span>
+          ) : (
+            <span style={F.footnote}>
+              Появится в ленте после быстрой проверки — тебе доступна сразу
+            </span>
+          )}
+        </div>
+      )}
 
       {pickerOpen && (
         <ZonePicker

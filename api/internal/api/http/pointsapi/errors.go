@@ -56,19 +56,18 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 // зовёт войти в свой пул, точка на проверке — ещё ничья, входить некуда: до
 // аппрува её видит только тот, кто подал (§5).
 func duplicateFound(w http.ResponseWriter, r *http.Request, dup *points.ErrDuplicateURL) {
-	message := fmt.Sprintf(duplicateActiveTemplate, dup.PoolCount)
-	if dup.Existing.Status != entity.PointActive {
-		message = duplicatePendingMessage
+	message := duplicatePendingMessage
+	body := duplicateResponse{Status: string(dup.Existing.Status)}
+	if dup.Existing.Status == entity.PointActive {
+		message = fmt.Sprintf(duplicateActiveTemplate, dup.PoolCount)
+		body.PointID = &dup.Existing.ID
+		body.PoolCount = dup.PoolCount
 	}
+	body.Error = httpx.ErrorDetail{Code: httpx.CodeDuplicateURL, Message: message}
 
 	logctx.From(r.Context()).Info(message,
 		"code", httpx.CodeDuplicateURL, "status", http.StatusConflict, "error", dup)
-	httpx.JSON(w, r, http.StatusConflict, duplicateResponse{
-		Error:     httpx.ErrorDetail{Code: httpx.CodeDuplicateURL, Message: message},
-		PointID:   dup.Existing.ID,
-		PoolCount: dup.PoolCount,
-		Status:    string(dup.Existing.Status),
-	})
+	httpx.JSON(w, r, http.StatusConflict, body)
 }
 
 func limitMessage(kind entity.PointType) string {

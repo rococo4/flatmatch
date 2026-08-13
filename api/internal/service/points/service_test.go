@@ -32,8 +32,9 @@ type fakeRepo struct {
 	createCalls int
 	createErr   error
 
-	card    pointsrepo.FeedPoint
-	cardErr error
+	card      pointsrepo.FeedPoint
+	cardErr   error
+	cardCalls int
 
 	feedZones  []string
 	countZones []string
@@ -76,6 +77,7 @@ func (f *fakeRepo) ByURLNorm(_ context.Context, urlNorm string) (*entity.Point, 
 }
 
 func (f *fakeRepo) CardByID(context.Context, uuid.UUID, uuid.UUID) (pointsrepo.FeedPoint, error) {
+	f.cardCalls++
 	return f.card, f.cardErr
 }
 
@@ -345,11 +347,13 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 	})
 
 	// Точка на проверке пула ещё не имеет: войти некуда, и предлагать нечего.
+	// Счётчик у неё не читают вовсе — он персонален (§4) и на чужой ссылке
+	// стал бы оракулом видимости её создателя.
 	t.Run("still on review", func(t *testing.T) {
 		pending := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPending}
 		repo := &fakeRepo{
-			byURL:   []*entity.Point{&pending},
-			cardErr: entity.ErrNotFound,
+			byURL: []*entity.Point{&pending},
+			card:  pointsrepo.FeedPoint{Point: pending, PoolCount: 1},
 		}
 		s := newService(t, repo, &fakeSearches{}, nil)
 
@@ -361,6 +365,9 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 		if dup.Existing.ID != pending.ID || dup.PoolCount != 0 {
 			t.Errorf("duplicate = %s / pool %d, want the pending point with an empty pool",
 				dup.Existing.ID, dup.PoolCount)
+		}
+		if repo.cardCalls != 0 {
+			t.Errorf("the pool of a point on review was read %d time(s)", repo.cardCalls)
 		}
 	})
 

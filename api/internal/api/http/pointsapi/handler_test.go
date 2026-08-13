@@ -102,9 +102,13 @@ func TestDuplicateURLBranchesByStatus(t *testing.T) {
 		status entity.PointStatus
 		pool   int
 		want   string
+		// offersToEnter: точку можно назвать и предложить войти. У точки на
+		// проверке ни того, ни другого: до аппрува её видит только подавший
+		// (§5), и «в пуле N» на чужой ссылке стало бы оракулом видимости (§4).
+		offersToEnter bool
 	}{
 		"активная зовёт в пул": {
-			status: entity.PointActive, pool: 3,
+			status: entity.PointActive, pool: 3, offersToEnter: true,
 			want: "Эта квартира уже есть, в пуле 3 — войти?",
 		},
 		"на проверке — только сообщение": {
@@ -125,11 +129,16 @@ func TestDuplicateURLBranchesByStatus(t *testing.T) {
 				t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusConflict, rec.Body)
 			}
 			body := rec.Body.String()
-			for _, want := range []string{`"duplicate_url"`, tc.want, existing.ID.String(),
-				`"status":"` + string(tc.status) + `"`} {
+			for _, want := range []string{`"duplicate_url"`, tc.want, `"status":"` + string(tc.status) + `"`} {
 				if !strings.Contains(body, want) {
 					t.Errorf("409 body %s does not carry %s", body, want)
 				}
+			}
+			if got := strings.Contains(body, existing.ID.String()); got != tc.offersToEnter {
+				t.Errorf("409 body names the point = %v, want %v: %s", got, tc.offersToEnter, body)
+			}
+			if !tc.offersToEnter && !strings.Contains(body, `"pool_count":0`) {
+				t.Errorf("409 body %s carries a pool count of a point on review", body)
 			}
 		})
 	}

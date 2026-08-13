@@ -1,0 +1,139 @@
+package poolsapi
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
+	"flatmatch/api/internal/api/http/authmw"
+	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/repo/pointsrepo"
+	"flatmatch/api/internal/service/pools"
+	"flatmatch/api/internal/service/zones"
+	"flatmatch/api/internal/tma"
+)
+
+const zoneID = "d-khamovniki"
+
+const station = "st-sportivnaya"
+
+type fakePools struct{}
+
+type fakeSearches struct{}
+
+// fakePoints records the zone the feed asked about: выдачу точек режет только
+// зона (§8), и спросить она обязана про ту, что в фильтрах.
+type fakePoints struct {
+	list  []pointsrepo.FeedPoint
+	zones []string
+}
+
+type fakePhotos struct{}
+
+type fakeDir struct{}
+
+type fakeValidator struct{}
+
+type fakeAccounts struct{ user entity.User }
+
+// Лента — промо-блок людей и ниже единый список точек (§6). Пустой массив
+// вместо карточек означал бы, что квартир в зоне нет.
+func TestFeedCarriesThePointsOfTheZone(t *testing.T) {
+	flat := pointsrepo.FeedPoint{
+		Point: entity.Point{
+			ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive,
+			ZoneID: station, CreatedAt: time.Now(),
+		},
+		PoolCount: 4,
+	}
+	points := &fakePoints{list: []pointsrepo.FeedPoint{flat}}
+
+	rec := feed(t, points, "/feed?zone_id="+zoneID+"&price_max=45000")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`"promo"`, flat.Point.ID.String(), `"pool_count":4`, `"Спортивная"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("feed %s does not carry %s", body, want)
+		}
+	}
+	if len(points.zones) != 1 || points.zones[0] != zoneID {
+		t.Errorf("points were asked about %v, want only %s", points.zones, zoneID)
+	}
+}
+
+// Кривые фильтры до точек не доходят: считать по ним нечего, и ответ про поле.
+func TestFeedRefusesBrokenFiltersBeforeCounting(t *testing.T) {
+	points := &fakePoints{}
+
+	rec := feed(t, points, "/feed?zone_id=d-nowhere&price_max=45000")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusBadRequest, rec.Body)
+	}
+	if len(points.zones) != 0 {
+		t.Errorf("points were asked about %v for a zone that does not exist", points.zones)
+	}
+}
+
+func feed(t *testing.T, points *fakePoints, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := chi.NewRouter()
+	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
+		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
+	}))
+	r.Get("/feed", New(fakePools{}, fakeSearches{}, points, fakePhotos{}, fakeDir{}).Feed)
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", "tma stub")
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	return rec
+}
+
+func (fakePools) Counts(context.Context, uuid.UUID, entity.SearchParams, *time.Time) (pools.Counts, error) {
+	return pools.Counts{People: 17, FullMatch: 15}, nil
+}
+
+func (fakePools) ZonePool(context.Context, entity.User, string) (pools.Pool, error) {
+	return pools.Pool{}, nil
+}
+
+func (fakeSearches) List(context.Context, uuid.UUID) ([]entity.Search, error) { return nil, nil }
+
+func (f *fakePoints) Feed(_ context.Context, _ uuid.UUID, zone string) ([]pointsrepo.FeedPoint, error) {
+	f.zones = append(f.zones, zone)
+	return f.list, nil
+}
+
+func (fakePhotos) URL(key string) string { return "/media/" + key }
+
+func (fakeDir) Get(id string) (zones.Zone, bool) {
+	switch id {
+	case zoneID:
+		return zones.Zone{ID: zoneID, Kind: zones.KindDistrict, Name: "Хамовники",
+			NameIn: "в Хамовниках", NameGen: "Хамовников"}, true
+	case station:
+		return zones.Zone{ID: station, Kind: zones.KindStation, Name: "Спортивная",
+			NameIn: "у метро Спортивная", NameGen: "метро Спортивная"}, true
+	default:
+		return zones.Zone{}, false
+	}
+}
+
+func (fakeValidator) Validate(string) (tma.InitData, error) {
+	return tma.InitData{User: tma.User{ID: 777000001, FirstName: "Дев"}}, nil
+}
+
+func (f fakeAccounts) EnsureFromTelegram(context.Context, entity.TelegramIdentity) (entity.User, error) {
+	return f.user, nil
+}

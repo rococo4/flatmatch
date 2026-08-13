@@ -134,8 +134,15 @@ func TestCardByIDMatchesTheFeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(pending) failed: %v", err)
 	}
-	if _, err := repo.CardByID(t.Context(), viewer, pending.ID); err != nil {
-		t.Errorf("CardByID() of a pending point = %v, want the card — гейт §5 в сервисе", err)
+	// Чужая точка на проверке приезжает отсюда как есть: статус репозиторий не
+	// фильтрует. ЭТО ПИН, А НЕ ПОЗВОЛЕНИЕ — «на проверке только создателю» (§5)
+	// стоит в points.Point(), и любой новый вызывающий CardByID обязан привезти
+	// этот гейт с собой, иначе чужая pending-квартира откроется по прямой
+	// ссылке.
+	stranger, err := repo.CardByID(t.Context(), viewer, pending.ID)
+	if err != nil || stranger.Point.ID != pending.ID || stranger.Point.Status != entity.PointPending {
+		t.Errorf("CardByID() of a pending point = %+v, %v; want the row itself — гейт §5 в сервисе",
+			stranger.Point, err)
 	}
 
 	if _, err := repo.CardByID(t.Context(), viewer, uuid.New()); !errors.Is(err, entity.ErrNotFound) {

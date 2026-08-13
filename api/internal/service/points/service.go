@@ -248,8 +248,16 @@ func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, err
 
 // duplicate дособирает «в пуле N» к предложению войти. Счётчик — украшение
 // отказа: не прочитался — 409 всё равно уходит, с нулём.
+//
+// У точки, которая ещё на проверке, счётчик не спрашивают вовсе: войти в неё
+// некуда (до аппрува её видит только подавший, §5), а пул персонален (§4) —
+// «в пуле 1» против «в пуле 0» на чужой ссылке рассказывало бы, видим ли
+// спрашивающему её создатель.
 func (s *Service) duplicate(ctx context.Context, mine entity.Point, existing entity.Point) error {
 	dup := &ErrDuplicateURL{Existing: existing}
+	if existing.Status != entity.PointActive {
+		return dup
+	}
 	if card, err := s.repo.CardByID(ctx, pointer.Get(mine.CreatedBy), existing.ID); err == nil {
 		dup.PoolCount = card.PoolCount
 	}

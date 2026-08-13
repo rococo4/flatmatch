@@ -66,6 +66,7 @@ const V = {
 export function PersonProfileView({
   userId,
   zoneId,
+  pointId,
   onBack,
   onLiked,
   onMatched,
@@ -74,12 +75,21 @@ export function PersonProfileView({
   userId: string;
   /** Пул, из которого открыт профиль: и строка «пересеклись», и контекст лайка. */
   zoneId?: string;
+  /**
+   * Точка, из которой открыт профиль: пул квартиры или карточка «к себе».
+   *
+   * Не только контекст лайка, но и пропуск к самому профилю: отношение по
+   * точке сервер проверяет ТОЛЬКО по этому параметру, без него профиль
+   * со-участника пула отвечает 404 (§2.3 «мы увиделись»).
+   */
+  pointId?: string;
   onBack?: () => void;
   /**
    * Лайк ушёл. Списки входящих и мэтчей держит оболочка: ответ на входящий
-   * убирает его из «Тебя лайкнули», а взаимный — добавляет мэтч.
+   * убирает его из «Тебя лайкнули», а взаимный — добавляет мэтч. Остаток
+   * бюджета едет вместе с ним: на ленте своего запроса за ним нет.
    */
-  onLiked?: () => void;
+  onLiked?: (remaining: number) => void;
   /** Взаимный лайк: экран мэтча забирает пара, лайк уже необратим (§2.3). */
   onMatched?: (matchId: string) => void;
   /** Лайк без активного поиска: продукт просит мини-форму поиска, не отказ. */
@@ -97,7 +107,7 @@ export function PersonProfileView({
     setPerson(null);
     setError(null);
     setRefusal(null);
-    fetchPerson(userId, zoneId)
+    fetchPerson(userId, { zoneId, pointId })
       .then((data) => {
         if (!cancelled) setPerson(data);
       })
@@ -107,7 +117,7 @@ export function PersonProfileView({
     return () => {
       cancelled = true;
     };
-  }, [userId, zoneId]);
+  }, [userId, zoneId, pointId]);
 
   const like = async () => {
     // Кнопка гаснет не мгновенно (MainButton отвечает на setParams), а второй
@@ -116,8 +126,8 @@ export function PersonProfileView({
     setBusy(true);
     setRefusal(null);
     try {
-      const res = await postLike(person.user_id, zoneId);
-      onLiked?.();
+      const res = await postLike(person.user_id, { zoneId, pointId });
+      onLiked?.(res.budget.remaining);
       // matched приходит и на повторный тап по уже сматченному человеку —
       // ветвимся по нему, а не по already.
       if (res.matched && res.match_id) {
@@ -206,6 +216,7 @@ export function PersonProfileView({
       occupation={occupationLabel(person.occupation)}
       photoUrl={person.photo_url || undefined}
       zone={person.context_zone?.name}
+      point={person.context_point?.label}
       matches={toRows(person)}
       matchesTotal={HABIT_FIELDS}
       about={person.about}

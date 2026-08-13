@@ -1,9 +1,8 @@
 /* Оболочка приложения: тема, табы §6 и переходы между экранами.
 
    Живыми данными питаются анкета (§12 шаг 2), зоны, поиски, лента и зонный
-   пул (§12 шаг 3), профиль человека, лайки и мэтчи (§12 шаг 4), точки и их
-   формы (§12 шаг 5). На DEMO-данных остался только пул квартиры — он приедет
-   вместе с откликами следующей задачей.
+   пул (§12 шаг 3), профиль человека, лайки и мэтчи (§12 шаг 4), точки, их
+   формы, квартирные пулы и отклики (§12 шаг 5). DEMO-экранов не осталось.
 
    Здесь же живёт состояние ленты — намеренно выше экранов: переключение табов
    не должно ронять выдачу и перезапрашивать её. И здесь единственный владелец
@@ -13,10 +12,16 @@
    считается по одному списку, который перечитывается после каждого лайка,
    откуда бы его ни поставили. */
 import { useCallback, useEffect, useState } from 'react';
-import { isMiniAppDark, useSignal } from '@telegram-apps/sdk-react';
+import {
+  isMiniAppDark,
+  openTelegramLink,
+  retrieveLaunchParams,
+  useSignal,
+} from '@telegram-apps/sdk-react';
 
 import {
   ApiError,
+  closePoint,
   closeSearch,
   createSearch,
   enterPointPool,
@@ -24,11 +29,14 @@ import {
   fetchIncoming,
   fetchMatches,
   fetchMe,
+  fetchPoint,
   fetchPointsMine,
   fetchSearches,
   fetchZones,
+  pointShareUrl,
   postLike,
   reactivateSearch,
+  startParamPoint,
   updateSearch,
   type CloseReason,
   type FeedPromo,
@@ -53,6 +61,7 @@ import {
   pricePerPerson,
   relativeDay,
 } from './api/format';
+import { launchedByTelegram } from './telegram/mockEnv';
 import { TabBar, type Tab } from './ui/TabBar';
 import type { PromoState } from './ui/PoolPromoBlock';
 import { OnboardingFlow } from './screens/OnboardingFlow';
@@ -69,13 +78,13 @@ import {
 import { ZonePoolView } from './screens/ZonePoolView';
 import { PersonProfileView } from './screens/PersonProfileView';
 import { MatchView } from './screens/MatchView';
-import { DEMO_FLAT_POOL, FlatPoolScreen } from './screens/FlatPoolScreen';
+import { FlatPoolView } from './screens/FlatPoolView';
 import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
 import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
 import { MyProfileScreen, type MyMatch } from './screens/MyProfileScreen';
 import { FlatLinkFormScreen, HomePointFormScreen } from './screens/PointFormScreens';
 import { PointCreatedScreen } from './screens/PointCreatedScreen';
-import { CloseSearchSheet, LeavePoolSheet, StillLiveSheet } from './screens/EdgeStates';
+import { CloseSearchSheet } from './screens/EdgeStates';
 
 type View =
   | 'tab'
@@ -98,11 +107,12 @@ type Loading =
 /**
  * Открытый профиль человека.
  *
- * `zoneId` — пул, из которого пришли: он и строка «пересеклись», и контекст
- * лайка. `back` — куда возвращает стрелка: из пула уходят обратно в пул, а не
- * «в никуда».
+ * `zoneId` и `pointId` — откуда пришли: контекст и строки «пересеклись», и
+ * лайка, и самого доступа к профилю (по точке сервер проверяет отношение
+ * только по параметру запроса, §2.3). Взаимоисключимы. `back` — куда
+ * возвращает стрелка: из пула уходят обратно в пул, а не «в никуда».
  */
-type PersonTarget = { userId: string; zoneId?: string; back: View };
+type PersonTarget = { userId: string; zoneId?: string; pointId?: string; back: View };
 
 /**
  * Состояние ленты.
@@ -170,7 +180,6 @@ export function App() {
   const [state, setState] = useState<Loading>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('feed');
   const [view, setView] = useState<View>('tab');
-  const [sheet, setSheet] = useState<'leavePool' | 'stillLive' | null>(null);
   // Держит финальную развилку §4 на экране после отправки: статус к этому
   // моменту уже не draft, и без флага оболочка увела бы в ленту сразу.
   const [finishing, setFinishing] = useState(false);
@@ -189,6 +198,24 @@ export function App() {
   const [feed, setFeed] = useState<FeedState>(EMPTY_FEED);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [poolZone, setPoolZone] = useState<string | null>(null);
+  /** Открытая квартира: её карточка и пул грузит FlatPoolView. */
+  const [flatPoint, setFlatPoint] = useState<string | null>(null);
+  /**
+   * Остаток дорогих лайков для подписи на карточке «к себе».
+   *
+   * Своей ручки у бюджета нет: он приезжает ответом на лайк и с профилем
+   * человека, поэтому до первого лайка в сессии на ленте остаток не пишем —
+   * выдуманная цифра хуже её отсутствия.
+   */
+  const [likesRemaining, setLikesRemaining] = useState<number | null>(null);
+  /**
+   * Точки, на которые отклик уже улетел.
+   *
+   * Локально, а не с сервера: карточка точки не несёт «я откликался», а
+   * повторный тап сервер бы простил (already), но человеку кнопка должна
+   * отвечать сразу.
+   */
+  const [respondedPoints, setRespondedPoints] = useState<string[]>([]);
   const [person, setPerson] = useState<PersonTarget | null>(null);
   /** Открытый мэтч: саммари по нему грузит MatchView. */
   const [matchId, setMatchId] = useState<string | null>(null);
@@ -289,6 +316,22 @@ export function App() {
         // лайке узнают только те, кто сам зашёл в раздел.
         reloadLikes();
         reloadPoints();
+
+        // Диплинк «Позвать в пул»: startapp=point_<id> (§6). Тип решает, куда
+        // вести — у квартиры есть свой экран, а карточка «к себе» живёт в
+        // ленте, отдельного экрана у неё нет (§2.2). Отказ переживаем молча:
+        // точку могли закрыть или она ещё на проверке — приложение всё равно
+        // открывается, просто с обычного входа.
+        const shared = sharedPointId();
+        if (shared) {
+          void fetchPoint(shared)
+            .then((point) => {
+              if (cancelled || point.type !== 'flat') return;
+              setFlatPoint(point.id);
+              setView('flatPool');
+            })
+            .catch(() => undefined);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -475,7 +518,11 @@ export function App() {
         const target = likeReturn;
         setLikeReturn(null);
         try {
-          const res = await postLike(target.userId, target.zoneId);
+          const res = await postLike(target.userId, {
+            zoneId: target.zoneId,
+            pointId: target.pointId,
+          });
+          setLikesRemaining(res.budget.remaining);
           reloadLikes();
           if (res.matched && res.match_id) {
             openMatch(res.match_id);
@@ -520,6 +567,56 @@ export function App() {
     setView('zonePool');
   };
 
+  const openFlatPool = (pointId: string) => {
+    setFlatPoint(pointId);
+    setView('flatPool');
+  };
+
+  /** «Позвать в пул — поделиться в чат»: диплинк на точку уходит в чат (§6). */
+  const sharePoint = (pointId: string) => openShare(pointShareUrl(pointId));
+
+  /**
+   * «Хочу эту комнату» (§2.2): дорогой лайк автору прямо с карточки.
+   *
+   * Поиска этот лайк не требует — отношение несёт сама карточка-витрина, —
+   * поэтому ветки need_search тут нет: отказать могут только лимит и
+   * неодобренная анкета, и обоим отвечаем словами сервера.
+   */
+  const wantRoom = async (point: PointDTO) => {
+    const author = point.author;
+    if (!author || respondedPoints.includes(point.id)) return;
+    // Кнопка отвечает до сервера, и она же держит второй тап: повторный лайк
+    // сервер бы простил, но человеку в ленте нужен ответ сразу.
+    setRespondedPoints((list) => [...list, point.id]);
+    setFeed((f) => ({ ...f, error: null }));
+    try {
+      const res = await postLike(author.user_id, { pointId: point.id });
+      setLikesRemaining(res.budget.remaining);
+      reloadLikes();
+      if (res.matched && res.match_id) {
+        openMatch(res.match_id);
+        return;
+      }
+      // Счётчик откликов считает сервер — перечитываем выдачу целиком.
+      void refreshFeed();
+    } catch (e: unknown) {
+      setRespondedPoints((list) => list.filter((id) => id !== point.id));
+      setFeed((f) => ({ ...f, error: asApiError(e).message }));
+    }
+  };
+
+  /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
+  const closeMyPoint = async (pointId: string) => {
+    setSearchesError(null);
+    try {
+      await closePoint(pointId);
+      reloadPoints();
+      void refreshFeed();
+    } catch (e: unknown) {
+      setSearchesError(asApiError(e).message);
+    }
+  };
+
   const openMatch = (id: string) => {
     setMatchId(id);
     setView('match');
@@ -543,7 +640,9 @@ export function App() {
     setReplying(userId);
     setIncomingError(null);
     try {
-      const res = await postLike(userId, incoming.find((l) => l.user_id === userId)?.zone?.id);
+      const like = incoming.find((l) => l.user_id === userId);
+      const res = await postLike(userId, { zoneId: like?.zone?.id, pointId: like?.point?.id });
+      setLikesRemaining(res.budget.remaining);
       reloadLikes();
       if (res.matched && res.match_id) openMatch(res.match_id);
     } catch (e: unknown) {
@@ -678,13 +777,22 @@ export function App() {
             promo={buildPromo(promo, active, feed.slotsFull)}
             points={feed.data.points}
             error={feed.error}
+            likesRemaining={likesRemaining ?? undefined}
+            myUserId={profile.id}
+            respondedPoints={respondedPoints}
             onEditParams={() => openLookForm(feed.draft)}
             onJoinPool={() => void joinPool()}
             onOpenPool={() => openZonePool(promo.zone.id)}
             onFreeSlot={() => toTab('searches')}
             onEnterFlatPool={(id) => void enterFlatPool(id)}
-            // «Хочу эту комнату» и профиль автора с точкой-контекстом — там же,
-            // где отклики: следующей задачей шага 5.
+            onOpenFlat={(point) => openFlatPool(point.id)}
+            onWantRoom={(point) => void wantRoom(point)}
+            // Профиль автора «к себе» открывается только с точкой: отношение
+            // по ней сервер проверяет по этому параметру, без него — 404.
+            onOpenProfile={(point) =>
+              point.author &&
+              openPerson({ userId: point.author.user_id, pointId: point.id, back: 'tab' })
+            }
           />
         );
       }
@@ -709,7 +817,9 @@ export function App() {
             onCloseSearch={setClosing}
             onAddSearch={() => openLookForm(EMPTY_DRAFT)}
             onReactivate={(id) => void reactivate(id)}
-            onOpenFlatPool={() => setView('flatPool')}
+            onOpenFlatPool={openFlatPool}
+            onSharePoint={sharePoint}
+            onClosePoint={(id) => void closeMyPoint(id)}
             onCreateFlatPoint={() => setView('flatForm')}
             onCreateHomePoint={() => setView('homeForm')}
           />
@@ -797,8 +907,16 @@ export function App() {
           <PersonProfileView
             userId={target.userId}
             zoneId={target.zoneId}
+            pointId={target.pointId}
             onBack={() => setView(target.back)}
-            onLiked={reloadLikes}
+            onLiked={(remaining) => {
+              setLikesRemaining(remaining);
+              // Лайк с точки-контекста — тот же отклик: карточка в ленте
+              // обязана про него знать.
+              const responded = target.pointId;
+              if (responded) setRespondedPoints((list) => [...list, responded]);
+              reloadLikes();
+            }}
             onMatched={openMatch}
             onNeedSearch={(serverMessage) => askSearchForLike(target, serverMessage)}
           />
@@ -816,27 +934,24 @@ export function App() {
             onToFeed={() => toTab('feed')}
           />
         );
-      case 'flatPool':
+      case 'flatPool': {
+        if (!flatPoint) return tabScreen();
+        const pointId = flatPoint;
         return (
-          <FlatPoolScreen
-            flat={{
-              title: '2-комнатная · Хамовники',
-              pricePerPerson: '45 000 ₽',
-              metro: 'Фрунзенская · 12 мин пешком',
-              source: 'Авито',
-              postedAt: '27 июля',
-              addedAt: 'добавлено 20 июля',
-            }}
-            people={DEMO_FLAT_POOL}
-            poolCount={6}
-            shownCount={3}
+          <FlatPoolView
+            key={pointId}
+            pointId={pointId}
+            mine={myPoints.created.some((p) => p.id === pointId)}
             onBack={back}
-            onOpenSource={() => setSheet('stillLive')}
-            // Люди в этом пуле — из макета: их id ненастоящие, и живой профиль
-            // по ним не открыть. Переход появится вместе с точками (§12 шаг 5).
-            onLeave={() => setSheet('leavePool')}
+            onOpenPerson={(userId) => openPerson({ userId, pointId, back: 'flatPool' })}
+            onChanged={() => {
+              reloadPoints();
+              void refreshFeed();
+            }}
+            onLeft={back}
           />
         );
+      }
       case 'incoming':
         return (
           <IncomingLikesScreen
@@ -844,24 +959,33 @@ export function App() {
             replyingId={replying}
             error={incomingError}
             onBack={back}
-            // Контекст лайка тапабелен, но пул открывается только со своим
-            // поиском этой зоны — чужой пул сервер больше не отдаёт (§2.3
-            // «мы увиделись»). Иначе тап ведёт сразу в профиль лайкнувшего.
+            // Контекст лайка тапабелен, но зонный пул открывается только со
+            // своим поиском этой зоны — чужой пул сервер больше не отдаёт
+            // (§2.3 «мы увиделись»). Иначе тап ведёт сразу в профиль
+            // лайкнувшего. У квартиры такого условия нет: её карточку видят
+            // все, а список — только вошедшие, и это состояние экрана.
             onOpenContext={(id) => {
-              const zone = incoming.find((l) => l.user_id === id)?.zone;
+              const like = incoming.find((l) => l.user_id === id);
+              if (like?.point?.kind === 'flat') {
+                openFlatPool(like.point.id);
+                return;
+              }
+              const zone = like?.zone;
               if (zone && active.some((s) => s.zone.id === zone.id)) {
                 openZonePool(zone.id);
               } else {
                 openPerson({ userId: id, zoneId: zone?.id, back: 'incoming' });
               }
             }}
-            onOpenProfile={(id) =>
+            onOpenProfile={(id) => {
+              const like = incoming.find((l) => l.user_id === id);
               openPerson({
                 userId: id,
-                zoneId: incoming.find((l) => l.user_id === id)?.zone?.id,
+                zoneId: like?.point ? undefined : like?.zone?.id,
+                pointId: like?.point?.id,
                 back: 'incoming',
-              })
-            }
+              });
+            }}
             onReply={(id) => void replyLike(id)}
             onToFeed={() => toTab('feed')}
           />
@@ -910,6 +1034,7 @@ export function App() {
                 ? `${money(share)} с человека`
                 : money(createdPoint.price_total ?? 0)
             }
+            onShare={() => sharePoint(createdPoint.id)}
             onToSearches={() => toTab('searches')}
           />
         );
@@ -937,22 +1062,38 @@ export function App() {
       {closing && (
         <CloseSearchSheet onPick={(r) => void confirmClose(r)} onCancel={() => setClosing(null)} />
       )}
-      {sheet === 'leavePool' && (
-        <LeavePoolSheet
-          pointTitle="Двушки на Соколе"
-          onStay={() => setSheet(null)}
-          onLeave={() => setSheet(null)}
-        />
-      )}
-      {sheet === 'stillLive' && (
-        <StillLiveSheet
-          onYes={() => setSheet(null)}
-          onRented={() => setSheet(null)}
-          onDismiss={() => setSheet(null)}
-        />
-      )}
     </div>
   );
+}
+
+/**
+ * Точка из диплинка: `startapp=point_<uuid>` (§6).
+ *
+ * Параметры запуска у настоящего клиента есть всегда, но retrieveLaunchParams
+ * умеет бросить — в браузере без мока их просто нет, и приложение обязано
+ * открыться обычным входом, а не упасть.
+ */
+function sharedPointId(): string | null {
+  try {
+    return startParamPoint(retrieveLaunchParams().tgWebAppStartParam);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Открывает шеринг в чат.
+ *
+ * Родным вызовом — но только в настоящем клиенте: под моком разработки
+ * isAvailable() отвечает «да», вызов уходит в перехваченный postMessage, и по
+ * кнопке не происходило бы ничего (то же правило, что у контакта мэтча).
+ */
+function openShare(url: string): void {
+  if (launchedByTelegram() && openTelegramLink.isAvailable()) {
+    openTelegramLink(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener');
 }
 
 /**
@@ -1025,8 +1166,17 @@ function withPoolMark(data: FeedResponse | null, id: string, entered: boolean): 
  * Контекста может не быть: зона выпала из справочника или лайк пришёл ответом,
  * у которого пула нет. Тогда мини-карточки просто нет — выдумывать ей место
  * пересечения нельзя.
+ *
+ * Метка точки приезжает готовой и уже от лица адресата: отклик на «к себе»
+ * сервер подписывает «на твою комнату» (§2.2), и переписывать её здесь нечем.
+ * Тапабельна она только у квартиры — у «к себе» пула нет, вести некуда.
  */
 function toIncomingRow(l: IncomingLikeDTO): IncomingLike {
+  const context = l.point
+    ? { label: l.point.label, tappable: l.point.kind === 'flat' }
+    : l.zone
+      ? { label: `из пула ${l.zone.name_gen}`, tappable: true }
+      : undefined;
   return {
     id: l.user_id,
     name: l.name,
@@ -1035,7 +1185,7 @@ function toIncomingRow(l: IncomingLikeDTO): IncomingLike {
     habits: habitsLine(l),
     when: relativeDay(l.at),
     notSearching: l.not_searching,
-    contextZone: l.zone ? `из пула ${l.zone.name_gen}` : undefined,
+    context,
   };
 }
 

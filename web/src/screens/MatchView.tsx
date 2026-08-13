@@ -109,9 +109,15 @@ export function MatchView({
       name={match.peer.name}
       age={match.peer.age}
       photoUrl={match.peer.photo_url || undefined}
-      // Контекст исторический: зона, в пуле которой пересеклись, даже если
-      // поиска там давно нет (§2.3). Ответному лайку называть нечего.
-      where={match.where ? `пересеклись в пуле ${match.where.name_gen}` : undefined}
+      // Контекст исторический: зона или точка, на которой пересеклись, даже
+      // если ни поиска, ни самой точки давно нет (§2.3). Взаимоисключимы —
+      // лайк несёт один контекст; у ответного нет и его. Метка точки приезжает
+      // готовой («на комнату Кати · м. Сокол»), зоне же нужен предлог.
+      where={
+        match.where
+          ? `пересеклись в пуле ${match.where.name_gen}`
+          : match.where_point?.label
+      }
       params={match.params.flatMap((o) => overlapRow(o) ?? [])}
       // Метки анкеты — строчные, как все чипы продукта: «сова», «не курю».
       profileMatches={match.profile.map((s) => fieldLabel(s.field, s.value))}

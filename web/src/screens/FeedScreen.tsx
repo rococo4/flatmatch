@@ -6,19 +6,20 @@ import type { CSSProperties } from 'react';
 import type { PointDTO } from '../api/client';
 import {
   addedLabel,
-  bathroomsLabel,
   dayMonth,
+  flatFacts,
   habitChips,
   lastSeenLabel,
   money,
+  occupationLabel,
   plural,
   pointTitle,
   pricePerPerson,
   restrictionLabels,
-  utilitiesLabel,
 } from '../api/format';
 import {
   FactsBlock,
+  GreyChips,
   HabitsBlock,
   LimitChip,
   PerPerson,
@@ -98,11 +99,14 @@ export function FeedScreen({
   points,
   error,
   likesRemaining,
+  myUserId,
+  respondedPoints,
   onEditParams,
   onJoinPool,
   onOpenPool,
   onFreeSlot,
   onEnterFlatPool,
+  onOpenFlat,
   onWantRoom,
   onOpenProfile,
 }: {
@@ -110,16 +114,22 @@ export function FeedScreen({
   params: string[]; // текущие фильтры просмотра, только чтение
   promo: PromoState;
   points: PointDTO[];
-  /** Отказ сохранения поиска — строкой над промо-блоком, а не молчанием. */
+  /** Отказ сохранения поиска или отклика — строкой над списком, а не молчанием. */
   error?: string | null;
   /** Остаток дорогих лайков для подписи «N из 5» под «Хочу эту комнату». */
   likesRemaining?: number;
+  /** Своё «к себе» в своей же ленте: откликаться самому себе не на что. */
+  myUserId?: string;
+  /** Точки, на которые отклик уже улетел в этой сессии: кнопка отработала. */
+  respondedPoints?: string[];
   onEditParams?: () => void;
   onJoinPool?: () => void;
   onOpenPool?: () => void;
   /** «Освободить слот» из состояния full — в «Мои поиски». */
   onFreeSlot?: () => void;
   onEnterFlatPool?: (id: string) => void;
+  /** Тап по карточке квартиры → её карточка целиком и пул. */
+  onOpenFlat?: (point: PointDTO) => void;
   /** «Хочу эту комнату» — дорогой лайк автору «к себе» прямо с карточки. */
   onWantRoom?: (point: PointDTO) => void;
   /** Тап по строке автора → полный профиль с анкетой и «о себе». */
@@ -179,12 +189,19 @@ export function FeedScreen({
           ) : (
             points.map((p) =>
               p.type === 'flat' ? (
-                <FlatPointCard key={p.id} point={p} onEnterPool={onEnterFlatPool} />
+                <FlatPointCard
+                  key={p.id}
+                  point={p}
+                  onEnterPool={onEnterFlatPool}
+                  onOpenFlat={onOpenFlat}
+                />
               ) : (
                 <HomePointCard
                   key={p.id}
                   point={p}
                   likesRemaining={likesRemaining}
+                  mine={p.author?.user_id != null && p.author.user_id === myUserId}
+                  responded={respondedPoints?.includes(p.id)}
                   onWantRoom={onWantRoom}
                   onOpenProfile={onOpenProfile}
                 />
@@ -219,9 +236,11 @@ export function PointsSoon() {
 function FlatPointCard({
   point,
   onEnterPool,
+  onOpenFlat,
 }: {
   point: PointDTO;
   onEnterPool?: (id: string) => void;
+  onOpenFlat?: (point: PointDTO) => void;
 }) {
   const share = pricePerPerson(point.price_total, point.rooms);
   return (
@@ -233,7 +252,17 @@ function FlatPointCard({
         </span>
       </div>
       <div style={S.cardBody}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Фото и цены — вход в карточку целиком: там и параметры, и ссылка на
+            оригинал, и сам пул. Кнопка входа остаётся отдельным жестом. */}
+        <div
+          onClick={onOpenFlat ? () => onOpenFlat(point) : undefined}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            cursor: onOpenFlat ? 'pointer' : 'default',
+          }}
+        >
           <PointPhoto url={point.photo_url} label="скрин объявления" />
           <span style={S.title}>{pointTitle(point)}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -273,7 +302,7 @@ function FlatPointCard({
           hint={point.in_pool ? undefined : 'увидишь после входа'}
         />
         {point.in_pool ? (
-          <InPoolRow />
+          <InPoolRow onOpenPool={onOpenFlat ? () => onOpenFlat(point) : undefined} />
         ) : (
           <PoolEntryButton
             label="Интересно — войти в пул"
@@ -291,11 +320,16 @@ function FlatPointCard({
 function HomePointCard({
   point,
   likesRemaining,
+  mine,
+  responded,
   onWantRoom,
   onOpenProfile,
 }: {
   point: PointDTO;
   likesRemaining?: number;
+  /** Своя точка: откликаться самому себе не на что, кнопки нет. */
+  mine?: boolean;
+  responded?: boolean;
   onWantRoom?: (point: PointDTO) => void;
   onOpenProfile?: (point: PointDTO) => void;
 }) {
@@ -329,7 +363,7 @@ function HomePointCard({
           <PersonRow
             name={author.name}
             age={author.age}
-            occupation=""
+            occupation={occupationLabel(author.occupation)}
             photoUrl={author.photo_url || undefined}
           />
           {onOpenProfile && (
@@ -376,14 +410,20 @@ function HomePointCard({
             {point.responses} {plural(point.responses, 'отклик', 'отклика', 'откликов')}
           </span>
         </div>
-        {/* Кнопка появляется вместе с обработчиком: дорогой лайк с карточки —
-            это §12 шаг 5 в части точек, и рисовать её мёртвой незачем. */}
-        {onWantRoom && (
+        {/* Своя точка кнопки не несёт: отклик самому себе бессмыслен, и сервер
+            его всё равно отобьёт. Остаток показываем, только когда он известен:
+            своего запроса за бюджетом у ленты нет. */}
+        {onWantRoom && !mine && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <button type="button" style={S.filledButton} onClick={() => onWantRoom(point)}>
-              Хочу эту комнату
+            <button
+              type="button"
+              style={responded ? S.secondaryButton : S.filledButton}
+              disabled={responded}
+              onClick={() => onWantRoom(point)}
+            >
+              {responded ? 'Отклик отправлен' : 'Хочу эту комнату'}
             </button>
-            {likesRemaining != null && (
+            {!responded && likesRemaining != null && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <LimitChip small>{likesRemaining} из 5</LimitChip>
               </div>
@@ -408,33 +448,11 @@ function PointPhoto({ url, label, inCard }: { url: string; label: string; inCard
   );
 }
 
-/** Ограничения — серые чипы: их читают до лайка, а не после мэтча (§2.2). */
-function GreyChips({ items }: { items: string[] }) {
-  if (items.length === 0) return null;
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
-      {items.map((l) => (
-        <span
-          key={l}
-          style={{
-            padding: '4px 8px',
-            borderRadius: 7,
-            background: 'var(--chip-bg)',
-            color: 'var(--tg-theme-subtitle-text-color)',
-            fontSize: 12,
-          }}
-        >
-          {l}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /** Вошёл — кнопки больше нет: вход одноразовый, выход живёт в самом пуле (§6). */
-function InPoolRow() {
+function InPoolRow({ onOpenPool }: { onOpenPool?: () => void }) {
   return (
     <div
+      onClick={onOpenPool}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -446,26 +464,12 @@ function InPoolRow() {
         color: 'var(--verdict-ok-fg)',
         fontSize: 15,
         fontWeight: 590,
+        cursor: onOpenPool ? 'pointer' : 'default',
       }}
     >
       ✓ Ты в пуле
     </div>
   );
-}
-
-function flatFacts(p: PointDTO): Fact[] {
-  const facts: Fact[] = [];
-  if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
-  if (p.rooms) {
-    facts.push({
-      label: 'Комнаты',
-      value: p.isolated == null ? String(p.rooms) : `${p.rooms}, ${p.isolated ? 'изолированные' : 'проходные'}`,
-    });
-  }
-  if (p.bathrooms) facts.push({ label: 'Санузлы', value: bathroomsLabel(p.bathrooms) });
-  if (p.utilities) facts.push({ label: 'Коммуналка', value: utilitiesLabel(p.utilities) });
-  if (p.deposit) facts.push({ label: 'Депозит', value: money(p.deposit) });
-  return facts;
 }
 
 function homeFacts(p: PointDTO): Fact[] {

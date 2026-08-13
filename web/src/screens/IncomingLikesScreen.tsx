@@ -1,10 +1,8 @@
 /* «Тебя лайкнули» — §2.3 / §6.
    Имя сразу, тапабельная мини-карточка контекста, «Ответить» → мэтч.
    Ответный лайк не тратит лимит — строка сверху, не на карточке.
-   Отдельного авторского экрана откликов нет by design.
-
-   Контекст пока только зонный: отклики на точку «к себе» придут вместе с
-   точками (§12 шаг 5), до тех пор рисовать их нечем. */
+   Отдельного авторского экрана откликов нет by design: отклик на «к себе»
+   приходит сюда же, с пометкой «на твою комнату» в контексте. */
 import type { CSSProperties } from 'react';
 import { Avatar, Badge, S } from '../ui/primitives';
 
@@ -20,8 +18,15 @@ export type IncomingLike = {
   when: string; // «вчера», «сегодня», «26 июля»
   /** §2.3: лайк жив, а человек сейчас не ищет — пометка, а не причина прятать. */
   notSearching?: boolean;
-  /** «из пула Хамовников». Нет — зона не пережила лайк или его поставили в ответ. */
-  contextZone?: string;
+  /**
+   * Где пересеклись: «из пула Хамовников» или готовая метка точки — «на твою
+   * комнату · м. Сокол». Контекста может не быть вовсе: зона не пережила лайк
+   * или его поставили в ответ.
+   *
+   * `tappable` разное у типов: в зонный пул и в пул квартиры ведёт экран, а у
+   * «к себе» пула нет вовсе (§2.2) — вести некуда, и строка тогда не кнопка.
+   */
+  context?: { label: string; tappable?: boolean };
 };
 
 const L = {
@@ -203,15 +208,20 @@ export function IncomingLikesScreen({
                 </div>
               </div>
 
-              {l.contextZone && (
-                <div style={L.contextRow} onClick={() => onOpenContext?.(l.id)}>
+              {l.context && (
+                <div
+                  style={{ ...L.contextRow, cursor: l.context.tappable ? 'pointer' : 'default' }}
+                  onClick={l.context.tappable ? () => onOpenContext?.(l.id) : undefined}
+                >
                   <span style={L.dot} />
                   <span style={{ flex: '1 1 auto', fontSize: 13, lineHeight: 1.35, minWidth: 0 }}>
-                    {l.contextZone}
+                    {l.context.label}
                   </span>
-                  <span style={{ flex: '0 0 auto', fontSize: 17, color: 'var(--tg-theme-hint-color)', lineHeight: 1 }}>
-                    ›
-                  </span>
+                  {l.context.tappable && (
+                    <span style={{ flex: '0 0 auto', fontSize: 17, color: 'var(--tg-theme-hint-color)', lineHeight: 1 }}>
+                      ›
+                    </span>
+                  )}
                 </div>
               )}
 

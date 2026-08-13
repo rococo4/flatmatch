@@ -1,18 +1,54 @@
-/* Пул квартиры — §6 «Карточка квартиры».
-   Список лайкнувших с совпадениями анкеты и вердикт-чипами (если у смотрящего
-   есть поиск) + красный выход из пула с подтверждением (см. EdgeStates). */
+/* Квартира с рынка — §6 «Карточка квартиры».
+
+   Один экран на два состояния членства, потому что это одна и та же квартира:
+   не вошедший видит карточку с «в пуле N — увидишь после входа» и кнопкой
+   входа, вошедший — тот же список лайкнувших с совпадениями анкеты и
+   вердикт-чипами (если у смотрящего есть поиск) и красный выход с
+   подтверждением (шторка живёт в EdgeStates).
+
+   Данные приезжают из FlatPoolView: здесь только вёрстка. */
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Avatar, Badge, S, VerdictChip, type Verdict } from '../ui/primitives';
+import {
+  Avatar,
+  FactsBlock,
+  GreyChips,
+  LimitChip,
+  PhotoPlaceholder,
+  PoolCount,
+  PoolEntryButton,
+  S,
+  VerdictChip,
+  type Fact,
+  type Verdict,
+} from '../ui/primitives';
 
 export type FlatPoolPerson = {
   id: string;
   name: string;
   age: number;
-  verifiedBadge?: string;
+  /** Пусто = фото не одобрено: у аватара заглушка с инициалами (§5). */
+  photoUrl?: string;
   habits: string;
   matches: number;
   verdicts: { verdict: Verdict; label: string }[];
+};
+
+/** Шапка-карточка: та же квартира, что в ленте, только развёрнутая. */
+export type FlatPoolCard = {
+  title: string; // «2-комнатная · м. Фрунзенская»
+  photoUrl?: string;
+  /** «45 000 ₽ с человека» — или цена за квартиру, если делить не на что. */
+  price: string;
+  /** «90 000 ₽ / мес за квартиру». Пусто — цена доли не считалась. */
+  priceTotal?: string;
+  facts: Fact[];
+  restrictions: string[];
+  addedAt: string; // «добавлена вчера»
+  /** «на проверке» у своей ещё не одобренной точки; у чужих пусто. */
+  status?: string;
+  /** «Открыть на Авито». Пусто — ссылки на оригинал у точки нет. */
+  sourceLabel?: string;
 };
 
 const L = {
@@ -75,37 +111,50 @@ const L = {
     color: 'var(--tg-theme-destructive-text-color)',
     cursor: 'pointer',
   } as CSSProperties,
+  sourceLink: {
+    border: 'none',
+    background: 'none',
+    font: 'inherit',
+    fontSize: 13,
+    fontWeight: 510,
+    color: 'var(--tg-theme-accent-text-color)',
+    cursor: 'pointer',
+    padding: 0,
+  } as CSSProperties,
 };
 
 export function FlatPoolScreen({
   flat,
-  people,
+  members,
   poolCount,
+  mine,
+  busy,
+  error,
   shownCount = 3,
   onBack,
   onOpenSource,
   onOpenPerson,
+  onEnter,
   onLeave,
 }: {
-  flat: {
-    title: string;
-    pricePerPerson: string;
-    metro: string;
-    source: string; // «Авито»
-    postedAt: string; // «27 июля»
-    addedAt: string; // «добавлено 20 июля»
-  };
-  people: FlatPoolPerson[];
+  flat: FlatPoolCard;
+  /** null = смотрящий не в пуле: список ему закрыт, карточка — нет (§6). */
+  members: FlatPoolPerson[] | null;
   poolCount: number;
+  /** Своя точка: выхода из собственного пула нет — вернуться было бы некуда. */
+  mine?: boolean;
+  busy?: boolean;
+  error?: string | null;
   shownCount?: number;
   onBack?: () => void;
   onOpenSource?: () => void;
   onOpenPerson?: (id: string) => void;
+  onEnter?: () => void;
   onLeave?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? people : people.slice(0, shownCount);
-  const rest = poolCount - shown.length;
+  const shown = expanded ? (members ?? []) : (members ?? []).slice(0, shownCount);
+  const rest = (members?.length ?? 0) - shown.length;
 
   return (
     <div style={L.screen}>
@@ -116,134 +165,120 @@ export function FlatPoolScreen({
         >
           ‹
         </span>
-        <span style={{ fontSize: 17, fontWeight: 590, letterSpacing: '-0.2px' }}>Пул квартиры</span>
+        <span style={{ fontSize: 17, fontWeight: 590, letterSpacing: '-0.2px' }}>
+          {members ? 'Пул квартиры' : 'Квартира'}
+        </span>
       </div>
 
       <div style={L.body}>
+        {error && (
+          <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>
+            {error}
+          </span>
+        )}
+
         <article style={S.card}>
           <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>
             <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>Квартира с рынка</span>
-            <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>
-              {flat.source} · {flat.postedAt}
-            </span>
+            <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>{flat.addedAt}</span>
           </div>
-          <div style={{ ...S.cardBody, gap: 10 }}>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div
-                className="ph-photo"
-                style={{ flex: '0 0 84px', height: 63, borderRadius: 8 }}
-              >
-                <span>скрин</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>{flat.title}</span>
-                <span style={{ fontSize: 15, fontWeight: 590 }}>{flat.pricePerPerson}</span>
-                <span style={S.subtitle}>{flat.metro}</span>
-              </div>
+          <div style={{ ...S.cardBody, gap: 12 }}>
+            {flat.photoUrl ? (
+              <img
+                src={flat.photoUrl}
+                alt=""
+                style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', borderRadius: 10, display: 'block' }}
+              />
+            ) : (
+              <PhotoPlaceholder label="скрин объявления" style={{ aspectRatio: '16/9', borderRadius: 10 }} />
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={S.title}>{flat.title}</span>
+              <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>{flat.price}</span>
+              {flat.priceTotal && <span style={S.subtitle}>{flat.priceTotal}</span>}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <button
-                type="button"
-                onClick={onOpenSource}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  font: 'inherit',
-                  fontSize: 13,
-                  fontWeight: 510,
-                  color: 'var(--tg-theme-accent-text-color)',
-                  cursor: 'pointer',
-                }}
-              >
-                Открыть на {flat.source} ↗
+            <FactsBlock title="Квартира" facts={flat.facts}>
+              <GreyChips items={flat.restrictions} />
+            </FactsBlock>
+            {flat.status && (
+              <div>
+                <LimitChip>{flat.status}</LimitChip>
+              </div>
+            )}
+            {flat.sourceLabel && (
+              <button type="button" style={L.sourceLink} onClick={onOpenSource}>
+                {flat.sourceLabel} ↗
               </button>
-              <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{flat.addedAt}</span>
-            </div>
+            )}
           </div>
         </article>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={S.sectionTitle}>В ПУЛЕ · {poolCount} · ХОТЯТ СНЯТЬ ЭТУ КВАРТИРУ</span>
+        {members === null ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <PoolCount n={poolCount} kind="flat" hint="увидишь после входа" />
+            <PoolEntryButton
+              label="Интересно — войти в пул"
+              caption="Вход бесплатный и безлимитный"
+              onClick={busy ? undefined : onEnter}
+            />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={S.sectionTitle}>
+              В ПУЛЕ · {members.length} · ХОТЯТ СНЯТЬ ЭТУ КВАРТИРУ
+            </span>
 
-          {shown.map((p) => (
-            <div key={p.id} style={L.personCard} onClick={() => onOpenPerson?.(p.id)}>
-              <Avatar name={p.name} size={48} />
-              <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {members.length === 0 && (
+              <span style={{ fontSize: 14, color: 'var(--tg-theme-subtitle-text-color)', textWrap: 'pretty' }}>
+                Пока ты один в пуле — пришлём пуш, когда войдёт кто-то ещё
+              </span>
+            )}
+
+            {shown.map((p) => (
+              <div key={p.id} style={L.personCard} onClick={() => onOpenPerson?.(p.id)}>
+                <Avatar name={p.name} size={48} src={p.photoUrl} />
+                <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                   <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>
                     {p.name}, {p.age}
                   </span>
-                  {p.verifiedBadge && <Badge tone="accent">{p.verifiedBadge}</Badge>}
+                  <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{p.habits}</span>
+                  <span style={{ fontSize: 13, fontWeight: 510 }}>{p.matches} совпадений анкеты</span>
+                  {p.verdicts.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+                      {p.verdicts.map((v) => (
+                        <VerdictChip key={v.label} verdict={v.verdict}>
+                          {v.label}
+                        </VerdictChip>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{p.habits}</span>
-                <span style={{ fontSize: 13, fontWeight: 510 }}>{p.matches} совпадений анкеты</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
-                  {p.verdicts.map((v) => (
-                    <VerdictChip key={v.label} verdict={v.verdict}>
-                      {v.label}
-                    </VerdictChip>
-                  ))}
-                </div>
+                <span
+                  style={{ flex: '0 0 auto', alignSelf: 'center', fontSize: 20, color: 'var(--tg-theme-hint-color)' }}
+                >
+                  ›
+                </span>
               </div>
-              <span
-                style={{ flex: '0 0 auto', alignSelf: 'center', fontSize: 20, color: 'var(--tg-theme-hint-color)' }}
-              >
-                ›
-              </span>
-            </div>
-          ))}
+            ))}
 
-          {rest > 0 && (
-            <button type="button" style={L.moreButton} onClick={() => setExpanded(true)}>
-              ещё {rest}
+            {rest > 0 && (
+              <button type="button" style={L.moreButton} onClick={() => setExpanded(true)}>
+                ещё {rest}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Из своего пула выхода нет: вход обратно требует активной точки, и
+            создатель точки на проверке вернуться бы уже не смог. */}
+        {members !== null && !mine && (
+          <div style={{ paddingTop: 4 }}>
+            <button type="button" style={L.leaveButton} disabled={busy} onClick={onLeave}>
+              Выйти из пула
             </button>
-          )}
-        </div>
-
-        <div style={{ paddingTop: 4 }}>
-          <button type="button" style={L.leaveButton} onClick={onLeave}>
-            Выйти из пула
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export const DEMO_FLAT_POOL: FlatPoolPerson[] = [
-  {
-    id: 'u1',
-    name: 'Аня',
-    age: 22,
-    verifiedBadge: 'Студент ВШЭ',
-    habits: 'сова · не курю · без животных',
-    matches: 6,
-    verdicts: [
-      { verdict: 'ok', label: '40–45к' },
-      { verdict: 'ok', label: 'сентябрь' },
-    ],
-  },
-  {
-    id: 'u3',
-    name: 'Иван',
-    age: 25,
-    habits: 'жаворонок · балкон · без животных',
-    matches: 3,
-    verdicts: [
-      { verdict: 'edge', label: 'от 45к — краем' },
-      { verdict: 'no', label: 'октябрь' },
-    ],
-  },
-  {
-    // Цена не указана — параметр «неважно», совпадает со всем (§2.1).
-    id: 'u4',
-    name: 'Настя',
-    age: 29,
-    habits: 'сова · дома · собака',
-    matches: 2,
-    verdicts: [
-      { verdict: 'no', label: 'цена не указана' },
-      { verdict: 'ok', label: 'сентябрь' },
-    ],
-  },
-];

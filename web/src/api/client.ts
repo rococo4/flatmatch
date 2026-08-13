@@ -267,10 +267,25 @@ export interface PointAuthorDTO {
   name: string;
   age: number;
   photo_url: string;
+  occupation?: NonNullable<Questionnaire['occupation']>;
   schedule: NonNullable<Questionnaire['schedule']>;
   smoking: NonNullable<Questionnaire['smoking']>;
   pets_own: NonNullable<Questionnaire['pets_own']>;
   last_seen: string;
+}
+
+/**
+ * Мини-карточка точки-контекста: «пересеклись: {точка}» в профиле, контекст
+ * входящего лайка, блок ГДЕ на мэтче.
+ *
+ * `label` приходит готовым к печати и разным у трёх потребителей: адресату
+ * отклика сервер пишет «на твою комнату · м. Сокол», смотрящему профиль —
+ * «на комнату Кати · м. Сокол». Собирать эту строку на клиенте нельзя.
+ */
+export interface PointRef {
+  id: string;
+  kind: PointType;
+  label: string;
 }
 
 /**
@@ -349,6 +364,49 @@ export interface MyPointsResponse {
   entered: PointDTO[];
 }
 
+/**
+ * Участник пула квартиры (§6): совпадения анкеты и вердикт-чипы.
+ *
+ * Поиска у него может не быть вовсе — вход в пул его не требует (§2.2), — и
+ * тогда не приезжают ни `params`, ни `chips`, ни `zone`. Чипов нет и когда
+ * поиска нет у СМОТРЯЩЕГО: сравнивать не с чем.
+ */
+export interface PointPoolMemberDTO {
+  user_id: string;
+  name: string;
+  age: number;
+  /** Пустая строка = фото не одобрено: вместо него заглушка с инициалами (§5). */
+  photo_url: string;
+  schedule: NonNullable<Questionnaire['schedule']>;
+  smoking: NonNullable<Questionnaire['smoking']>;
+  pets_own: NonNullable<Questionnaire['pets_own']>;
+  shared_answers: number;
+  chips?: PoolChip[];
+  params?: SearchParamsNoZone;
+  /** Зона его поиска — «ищет на красной ветке». */
+  zone?: ZoneRef;
+  entered_at: string;
+}
+
+/**
+ * Пул квартиры — только список вошедших.
+ *
+ * Шапка-карточка сюда не едет: её отдаёт `GET /points/{id}`, и дублировать
+ * двадцать полей во втором ответе незачем.
+ */
+export interface PointPoolResponse {
+  members: PointPoolMemberDTO[];
+}
+
+/**
+ * Где пересеклись: зона пула или точка. Взаимоисключимы — лайк несёт один
+ * контекст (§2.3), и оба разом сервер отбивает 400 `invalid_field`.
+ */
+export interface MeetingContext {
+  zoneId?: string;
+  pointId?: string;
+}
+
 /* ── Профиль, дорогой лайк, мэтчи (§2.3, §6) ────────────────────────────────
    Те же правила, что и выше: snake_case как на проводе, русских строк нет. */
 
@@ -398,6 +456,8 @@ export interface PersonProfileDTO {
   shared: SharedAnswer[];
   /** Пул, из которого открыт профиль: «пересеклись: {зона}». Может не быть. */
   context_zone?: ZoneRef;
+  /** То же для точки: пул квартиры или карточка «к себе». Взаимоисключим с зоной. */
+  context_point?: PointRef;
 
   liked_me: boolean;
   my_like: boolean;
@@ -429,6 +489,12 @@ export interface IncomingLikeDTO {
   pets_own: NonNullable<Questionnaire['pets_own']>;
 
   zone?: ZoneRef;
+  /**
+   * Контекст-точка лайка. У «к себе» сервер уже написал метку от лица
+   * адресата — «на твою комнату · м. Сокол»: автор точки и есть тот, кто
+   * читает этот список (§2.2).
+   */
+  point?: PointRef;
   /** «сейчас не в поиске» — серая пометка, а не причина спрятать лайк (§2.3). */
   not_searching: boolean;
   at: string;
@@ -474,6 +540,8 @@ export interface MatchDetail {
   peer: MatchPeerContact;
   at: string;
   where?: ZoneRef;
+  /** Тот же блок ГДЕ, когда пересеклись на точке. С `where` взаимоисключим. */
+  where_point?: PointRef;
   params: ParamOverlap[];
   profile: SharedAnswer[];
 }
@@ -774,6 +842,24 @@ export function fetchPointsMine(): Promise<MyPointsResponse> {
   return request<MyPointsResponse>('/api/v1/points/mine');
 }
 
+/**
+ * Список вошедших в пул квартиры.
+ *
+ * Не вошедшему отвечает 403 `need_enter` — это не поломка, а состояние экрана:
+ * карточка видна всем, список — только тем, кто в пуле (§6).
+ */
+export function fetchPointPool(id: string): Promise<PointPoolResponse> {
+  return request<PointPoolResponse>(`/api/v1/points/${encodeURIComponent(id)}/pool`);
+}
+
+/**
+ * Закрывает свою точку. Причин у точки нет — в отличие от поиска, где
+ * «нашёл здесь» и есть метрика продукта (§3).
+ */
+export function closePoint(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/close`, { method: 'POST' });
+}
+
 /** «Интересно — войти в пул»: бесплатно, безлимитно, повторный тап не ошибка. */
 export function enterPointPool(id: string): Promise<void> {
   return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/enter`, { method: 'POST' });
@@ -785,6 +871,35 @@ export function leavePointPool(id: string): Promise<void> {
 }
 
 /**
+ * Бот, в котором живёт Mini App.
+ *
+ * Захардкожен: переменной окружения под него нет, а ссылка «Позвать в пул»
+ * обязана вести в тот же бот, из которого приложение и открыли.
+ */
+const BOT_USERNAME = 'flatmatch_finder_bot';
+
+/** Префикс диплинка точки: `startapp=point_<uuid>` (§6, вирусная петля). */
+const POINT_START_PARAM = 'point_';
+
+/**
+ * Ссылка «Позвать в пул — поделиться в чат»: открывает у гостя карточку точки.
+ *
+ * Два уровня кодирования не случайны: внутренний адрес целиком становится
+ * значением параметра `url` шеринга, и без encodeURIComponent его `?startapp=`
+ * оторвался бы от ссылки.
+ */
+export function pointShareUrl(pointId: string): string {
+  const app = `https://t.me/${BOT_USERNAME}/app?startapp=${POINT_START_PARAM}${pointId}`;
+  return `https://t.me/share/url?url=${encodeURIComponent(app)}`;
+}
+
+/** Обратная сторона диплинка: `point_<uuid>` из start_param, иначе null. */
+export function startParamPoint(raw?: string): string | null {
+  if (!raw?.startsWith(POINT_START_PARAM)) return null;
+  return raw.slice(POINT_START_PARAM.length) || null;
+}
+
+/**
  * Профиль человека и состояние лайка между вами.
  *
  * `zone` — пул, из которого профиль открыт: он же станет контекстом лайка.
@@ -792,9 +907,14 @@ export function leavePointPool(id: string): Promise<void> {
  * Невидимый по правилу пола или заблокировавший отвечает 404 `not_found`:
  * невидимый и несуществующий — один ответ (§4).
  */
-export function fetchPerson(id: string, zoneId?: string): Promise<PersonProfileDTO> {
-  const q = zoneId ? `?zone=${encodeURIComponent(zoneId)}` : '';
-  return request<PersonProfileDTO>(`/api/v1/people/${encodeURIComponent(id)}${q}`);
+export function fetchPerson(id: string, ctx?: MeetingContext): Promise<PersonProfileDTO> {
+  const q = new URLSearchParams();
+  if (ctx?.zoneId) q.set('zone', ctx.zoneId);
+  if (ctx?.pointId) q.set('point', ctx.pointId);
+  const query = q.toString();
+  return request<PersonProfileDTO>(
+    `/api/v1/people/${encodeURIComponent(id)}${query ? `?${query}` : ''}`,
+  );
 }
 
 /**
@@ -802,15 +922,20 @@ export function fetchPerson(id: string, zoneId?: string): Promise<PersonProfileD
  *
  * Отказы приходят кодами: 400 `need_search` — нет активного поиска (мини-форма),
  * 400 `like_limit` — израсходованы 5 в сутки (сообщение сервера уже называет
- * час возврата), 403 `not_approved` — анкета не одобрена. Ровно два ключа в
+ * час возврата), 403 `not_approved` — анкета не одобрена. Ровно три ключа в
  * теле: декодер сервера с DisallowUnknownFields откажет на любом лишнем.
- * Пустая зона легальна — у ответного лайка пула нет.
+ * Пустой контекст легален — у ответного лайка пула нет; точечному лайку
+ * активный поиск не нужен вовсе, отношение несёт сам пул или карточка (§2.2).
  */
-export function postLike(toId: string, zoneId?: string): Promise<LikeResponse> {
+export function postLike(toId: string, ctx?: MeetingContext): Promise<LikeResponse> {
   return request<LikeResponse>('/api/v1/likes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to_id: toId, zone_id: zoneId ?? '' }),
+    body: JSON.stringify({
+      to_id: toId,
+      zone_id: ctx?.zoneId ?? '',
+      point_id: ctx?.pointId ?? '',
+    }),
   });
 }
 

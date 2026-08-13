@@ -196,6 +196,8 @@ export function MySearchesScreen({
   onAddSearch,
   onReactivate,
   onOpenFlatPool,
+  onSharePoint,
+  onClosePoint,
   onCreateFlatPoint,
   onCreateHomePoint,
 }: {
@@ -222,6 +224,10 @@ export function MySearchesScreen({
   onReactivate?: (id: string) => void;
   /** → пул квартиры (список вошедших) */
   onOpenFlatPool?: (id: string) => void;
+  /** «Позвать в чат» — диплинк на свою квартиру (§6, вирусная петля). */
+  onSharePoint?: (id: string) => void;
+  /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
+  onClosePoint?: (id: string) => void;
   /** → форма «Найди со-съёмщика на свою квартиру» */
   onCreateFlatPoint?: () => void;
   /** → форма «К себе», сразу на гейте стадии */
@@ -378,7 +384,14 @@ export function MySearchesScreen({
           ) : (
             <>
               {flats.map((p) => (
-                <FlatRow key={p.id} point={p} mine onOpenPool={onOpenFlatPool} />
+                <FlatRow
+                  key={p.id}
+                  point={p}
+                  mine
+                  onOpenPool={onOpenFlatPool}
+                  onShare={onSharePoint}
+                  onClose={onClosePoint}
+                />
               ))}
               {enteredFlats.map((p) => (
                 <FlatRow key={p.id} point={p} onOpenPool={onOpenFlatPool} />
@@ -402,35 +415,7 @@ export function MySearchesScreen({
           ) : (
             <>
               {homes.map((h) => (
-                <article key={h.id} style={S.card}>
-                  <div
-                    style={{
-                      ...S.cardHeadBase,
-                      background: 'var(--type-home-bg)',
-                      color: 'var(--type-home-fg)',
-                    }}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
-                      Сосед к себе
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 590, opacity: 0.9 }}>
-                      {h.stage ? stageBadge(h.stage) : ''}
-                    </span>
-                  </div>
-                  <div style={{ ...S.cardBody, gap: 10 }}>
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <PointThumb url={h.photo_url} label="фото" />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                        <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(h)}</span>
-                        <span style={S.subtitle}>{money(h.price_share ?? 0)} с человека</span>
-                        <span style={{ fontSize: 13, fontWeight: 510 }}>
-                          {h.responses} {plural(h.responses, 'отклик', 'отклика', 'откликов')}
-                        </span>
-                      </div>
-                    </div>
-                    <StatusRow status={h.status} />
-                  </div>
-                </article>
+                <HomeRow key={h.id} point={h} onClose={onClosePoint} />
               ))}
               {homes.length < homeSlotsTotal && <CreateEntry tone="home" onClick={onCreateHomePoint} />}
             </>
@@ -444,18 +429,22 @@ export function MySearchesScreen({
 /**
  * Строка квартиры в «Присмотренных».
  *
- * Своя и чужая различаются только пометкой: у обеих один и тот же пул, и ведёт
- * в него один и тот же тап. Кнопок правки и закрытия нет — редактирования точек
- * в продукте нет вовсе (§6).
+ * Своя и чужая различаются пометкой и действиями: у обеих один и тот же пул, но
+ * звать в чат и закрывать можно только свою. Правки нет ни у той, ни у другой —
+ * редактирования точек в продукте нет вовсе (§6).
  */
 function FlatRow({
   point,
   mine,
   onOpenPool,
+  onShare,
+  onClose,
 }: {
   point: PointDTO;
   mine?: boolean;
   onOpenPool?: (id: string) => void;
+  onShare?: (id: string) => void;
+  onClose?: (id: string) => void;
 }) {
   const share = pricePerPerson(point.price_total, point.rooms);
   return (
@@ -484,8 +473,102 @@ function FlatRow({
           Смотреть пул · {point.pool_count}{' '}
           {plural(point.pool_count, 'человек', 'человека', 'человек')}
         </button>
+        {mine && (
+          <PointActions
+            id={point.id}
+            onShare={onShare}
+            onClose={onClose}
+            question="Закрыть квартиру?"
+          />
+        )}
       </div>
     </article>
+  );
+}
+
+/** Строка «к себе» в своём блоке: стадия, цена доли, отклики, закрытие. */
+function HomeRow({ point, onClose }: { point: PointDTO; onClose?: (id: string) => void }) {
+  return (
+    <article style={S.card}>
+      <div
+        style={{ ...S.cardHeadBase, background: 'var(--type-home-bg)', color: 'var(--type-home-fg)' }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>Сосед к себе</span>
+        <span style={{ fontSize: 12, fontWeight: 590, opacity: 0.9 }}>
+          {point.stage ? stageBadge(point.stage) : ''}
+        </span>
+      </div>
+      <div style={{ ...S.cardBody, gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <PointThumb url={point.photo_url} label="фото" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(point)}</span>
+            <span style={S.subtitle}>{money(point.price_share ?? 0)} с человека</span>
+            <span style={{ fontSize: 13, fontWeight: 510 }}>
+              {point.responses} {plural(point.responses, 'отклик', 'отклика', 'откликов')}
+            </span>
+          </div>
+        </div>
+        <StatusRow status={point.status} />
+        {/* Отклики автор смотрит в общем «Тебя лайкнули» — своего экрана
+            разбора у него нет by design (§2.2). */}
+        <PointActions id={point.id} onClose={onClose} question="Закрыть точку?" />
+      </div>
+    </article>
+  );
+}
+
+/**
+ * Действия над своей точкой.
+ *
+ * Подтверждение закрытия — вторым тапом прямо в карточке, а не шторкой: у
+ * поиска шторка спрашивает ПРИЧИНУ (она же метрика продукта, §3), а у точки
+ * причин нет, и шторка ради одного «точно?» была бы тяжелее самого действия.
+ */
+function PointActions({
+  id,
+  question,
+  onShare,
+  onClose,
+}: {
+  id: string;
+  question: string;
+  onShare?: (id: string) => void;
+  onClose?: (id: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  if (!onShare && !onClose) return null;
+
+  return (
+    <div style={L.actions}>
+      {onShare && (
+        <button type="button" style={L.actionLink} onClick={() => onShare(id)}>
+          Позвать в чат
+        </button>
+      )}
+      {onClose &&
+        (confirming ? (
+          <>
+            <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
+              {question}
+            </span>
+            <button type="button" style={L.destructiveLink} onClick={() => onClose(id)}>
+              Закрыть
+            </button>
+            <button type="button" style={L.actionLink} onClick={() => setConfirming(false)}>
+              Отмена
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            style={{ ...L.destructiveLink, marginLeft: 'auto' }}
+            onClick={() => setConfirming(true)}
+          >
+            Закрыть
+          </button>
+        ))}
+    </div>
   );
 }
 

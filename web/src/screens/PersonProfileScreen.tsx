@@ -127,6 +127,7 @@ export function PersonProfileScreen({
   verifiedBadge,
   lastSeen,
   zone,
+  point,
   matches,
   matchesTotal,
   about,
@@ -144,6 +145,13 @@ export function PersonProfileScreen({
   lastSeen?: string;
   /** Зона контекста, «Хамовники». Профиль открыт не из пула — строки нет. */
   zone?: string;
+  /**
+   * Точка контекста готовой строкой: «на комнату Кати · м. Сокол».
+   *
+   * Без «пересеклись:» — в отличие от зоны, метка точки уже рассказывает о
+   * себе целиком, и приставка сделала бы из неё «пересеклись: на комнату».
+   */
+  point?: string;
   matches: MatchRow[];
   matchesTotal: number; // «6 ИЗ 9»
   /** Только одобренное «о себе»: до аппрува блока нет вовсе (§5). */
@@ -188,6 +196,11 @@ export function PersonProfileScreen({
           {zone && (
             <ZoneLine>
               пересеклись: <b style={{ fontWeight: 590 }}>{zone}</b>
+            </ZoneLine>
+          )}
+          {point && (
+            <ZoneLine>
+              <b style={{ fontWeight: 590 }}>{point}</b>
             </ZoneLine>
           )}
         </div>

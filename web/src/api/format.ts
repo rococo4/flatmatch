@@ -386,6 +386,31 @@ export function pointTitle(p: Pick<PointDTO, 'type' | 'rooms' | 'zone'>): string
   return p.zone.name ? `${kind} · м. ${p.zone.name}` : kind;
 }
 
+/**
+ * Название точки в родительном: «2-комнатной у м. Фрунзенская».
+ *
+ * Нужно ровно одной строке — вопросу шторки «Выйти из пула {чего}?»: там
+ * именительный из pointTitle читался бы поломанным.
+ */
+export function pointTitleGen(p: Pick<PointDTO, 'type' | 'rooms' | 'zone'>): string {
+  const kind =
+    p.type === 'intent_home' ? 'комнаты' : p.rooms ? `${p.rooms}-комнатной` : 'квартиры';
+  return p.zone.name ? `${kind} у м. ${p.zone.name}` : kind;
+}
+
+/**
+ * Подпись ссылки на оригинал: «Открыть на Авито».
+ *
+ * Источник берётся из самой ссылки, а не из поля: доменов всего два (§5), и
+ * отдельного `source` карточка не несёт. Незнакомый хост — «Открыть оригинал»:
+ * врать про площадку хуже, чем не называть её.
+ */
+export function openOriginalLabel(url: string): string {
+  if (url.includes('avito.')) return 'Открыть на Авито';
+  if (url.includes('cian.')) return 'Открыть на Циан';
+  return 'Открыть оригинал';
+}
+
 /** «живёт здесь» / «заезжает · ищет со-съёмщика со старта». */
 export function stageBadge(stage: PointStage): string {
   return STAGE_BADGE[stage] ?? '';
@@ -422,6 +447,28 @@ export function lastSeenLabel(iso: string): string {
 export function pricePerPerson(total?: number, rooms?: number): number | null {
   if (total == null || rooms == null || rooms < 1) return null;
   return Math.round(total / rooms / 1000) * 1000;
+}
+
+/**
+ * Факты квартиры с рынка — одни и те же в ленте и на карточке в пуле.
+ *
+ * Неназванное объявлением просто отсутствует: строка «Санузлы — не указано»
+ * рассказывает про наши поля, а не про квартиру.
+ */
+export function flatFacts(p: PointDTO): { label: string; value: string }[] {
+  const facts: { label: string; value: string }[] = [];
+  if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
+  if (p.rooms) {
+    facts.push({
+      label: 'Комнаты',
+      value:
+        p.isolated == null ? String(p.rooms) : `${p.rooms}, ${p.isolated ? 'изолированные' : 'проходные'}`,
+    });
+  }
+  if (p.bathrooms) facts.push({ label: 'Санузлы', value: bathroomsLabel(p.bathrooms) });
+  if (p.utilities) facts.push({ label: 'Коммуналка', value: utilitiesLabel(p.utilities) });
+  if (p.deposit) facts.push({ label: 'Депозит', value: money(p.deposit) });
+  return facts;
 }
 
 export function bathroomsLabel(value: Bathrooms): string {

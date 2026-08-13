@@ -188,6 +188,29 @@ export function PerPerson({ children }: { children: ReactNode }) {
   );
 }
 
+/** Ограничения собственника — серые чипы: их читают до лайка, а не после мэтча (§2.2). */
+export function GreyChips({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+      {items.map((l) => (
+        <span
+          key={l}
+          style={{
+            padding: '4px 8px',
+            borderRadius: 7,
+            background: 'var(--chip-bg)',
+            color: 'var(--tg-theme-subtitle-text-color)',
+            fontSize: 12,
+          }}
+        >
+          {l}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function HabitsBlock({ items }: { items: string[] }) {
   return (
     <div style={S.block}>

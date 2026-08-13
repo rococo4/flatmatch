@@ -107,7 +107,7 @@ func intentHome(createdBy uuid.UUID, stage entity.PointStage) entity.Point {
 func closePoint(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
-		UPDATE points SET status = 'closed', close_reason = 'rejected' WHERE id = $1`, id)
+		UPDATE points SET status = 'closed', close_reason = 'closed' WHERE id = $1`, id)
 	if err != nil {
 		t.Fatalf("close point %s: %v", id, err)
 	}

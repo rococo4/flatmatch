@@ -25,6 +25,7 @@ import {
   closeSearch,
   createSearch,
   enterPointPool,
+  leavePointPool,
   fetchFeed,
   fetchIncoming,
   fetchMatches,
@@ -347,10 +348,19 @@ export function App() {
 
   const setProfile = useCallback((profile: Profile) => setState({ kind: 'ready', profile }), []);
 
-  const toTab = useCallback((next: Tab) => {
-    setTab(next);
-    setView('tab');
-  }, []);
+  const toTab = useCallback(
+    (next: Tab) => {
+      setTab(next);
+      setView('tab');
+      // Вердикты модератора приходят вне приложения — вкладка со списками
+      // перечитывает своё при каждом входе, иначе счётчики стоят до рестарта.
+      if (next === 'searches') {
+        reloadPoints();
+        void reloadSearches().catch(() => undefined);
+      }
+    },
+    [reloadPoints],
+  );
 
   // Стабильная ссылка: форма подписывает её на родную кнопку «назад».
   const closeForm = useCallback(() => {
@@ -605,6 +615,18 @@ export function App() {
     }
   };
 
+  /** Выход из чужого пула прямо из «Присмотренных» — лайки не трогает (§2.3). */
+  const leaveFromList = async (pointId: string) => {
+    setSearchesError(null);
+    try {
+      await leavePointPool(pointId);
+      reloadPoints();
+      void refreshFeed();
+    } catch (e: unknown) {
+      setSearchesError(asApiError(e).message);
+    }
+  };
+
   /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
   const closeMyPoint = async (pointId: string) => {
     setSearchesError(null);
@@ -820,6 +842,7 @@ export function App() {
             onOpenFlatPool={openFlatPool}
             onSharePoint={sharePoint}
             onClosePoint={(id) => void closeMyPoint(id)}
+            onLeavePool={(id) => void leaveFromList(id)}
             onCreateFlatPoint={() => setView('flatForm')}
             onCreateHomePoint={() => setView('homeForm')}
           />

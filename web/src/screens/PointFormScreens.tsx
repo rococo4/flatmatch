@@ -297,6 +297,41 @@ function ZoneField({
  * Отдельным вызовом, а не вместе с формой: скрин весит мегабайты, и переносить
  * его через каждую неудачную валидацию — терять минуту на каждую опечатку.
  */
+/**
+ * Денежное поле. В фокусе показывает голые цифры: форматированная строка
+ * («45 000 ₽») пересобиралась бы на каждый ввод, React ставил бы курсор в
+ * конец, а backspace по пробелу и «₽» не удалял бы ничего.
+ */
+function MoneyInput({
+  value,
+  invalid,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  invalid: boolean;
+  placeholder: string;
+  onChange: (digitsOnly: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const shown = focused ? value : value ? `${Number(value).toLocaleString('ru-RU')} ₽` : '';
+  return (
+    <input
+      style={{
+        ...F.input,
+        fontWeight: 590,
+        outline: invalid ? '1.5px solid var(--tg-theme-destructive-text-color)' : 'none',
+      }}
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={shown}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => onChange(digits(e.target.value))}
+    />
+  );
+}
+
 const MAX_POINT_PHOTOS = 10;
 
 function PhotoPicker({
@@ -387,7 +422,8 @@ function PhotoPicker({
             style={{
               ...F.dropzone,
               width: photos.length ? 96 : '100%',
-              height: photos.length ? 72 : undefined,
+              height: photos.length ? 72 : 140,
+              aspectRatio: 'auto',
               flex: '0 0 auto',
               borderColor: invalid
                 ? 'var(--tg-theme-destructive-text-color)'
@@ -662,18 +698,11 @@ export function FlatLinkFormScreen({
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: '1 1 0', minWidth: 0 }}>
               <Field label="Цена за квартиру">
-                <input
-                  style={{
-                    ...F.input,
-                    fontWeight: 590,
-                    outline: bad('price_total')
-                      ? '1.5px solid var(--tg-theme-destructive-text-color)'
-                      : 'none',
-                  }}
-                  inputMode="numeric"
+                <MoneyInput
+                  value={price}
+                  invalid={bad('price_total')}
                   placeholder="90 000 ₽"
-                  value={price ? `${Number(price).toLocaleString('ru-RU')} ₽` : ''}
-                  onChange={(e) => setPrice(digits(e.target.value))}
+                  onChange={setPrice}
                 />
               </Field>
             </div>
@@ -1011,35 +1040,21 @@ export function HomePointFormScreen({
             <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
                 <Field label="Цена доли">
-                  <input
-                    style={{
-                      ...F.input,
-                      fontWeight: 590,
-                      outline: bad('price_share')
-                        ? '1.5px solid var(--tg-theme-destructive-text-color)'
-                        : 'none',
-                    }}
-                    inputMode="numeric"
+                  <MoneyInput
+                    value={price}
+                    invalid={bad('price_share')}
                     placeholder="28 000 ₽"
-                    value={price ? `${Number(price).toLocaleString('ru-RU')} ₽` : ''}
-                    onChange={(e) => setPrice(digits(e.target.value))}
+                    onChange={setPrice}
                   />
                 </Field>
               </div>
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
                 <Field label="Депозит">
-                  <input
-                    style={{
-                      ...F.input,
-                      fontWeight: 590,
-                      outline: bad('deposit')
-                        ? '1.5px solid var(--tg-theme-destructive-text-color)'
-                        : 'none',
-                    }}
-                    inputMode="numeric"
+                  <MoneyInput
+                    value={deposit}
+                    invalid={bad('deposit')}
                     placeholder="необязательно"
-                    value={deposit ? `${Number(deposit).toLocaleString('ru-RU')} ₽` : ''}
-                    onChange={(e) => setDeposit(digits(e.target.value))}
+                    onChange={setDeposit}
                   />
                 </Field>
               </div>

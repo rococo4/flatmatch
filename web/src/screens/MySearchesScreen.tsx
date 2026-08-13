@@ -198,6 +198,7 @@ export function MySearchesScreen({
   onOpenFlatPool,
   onSharePoint,
   onClosePoint,
+  onLeavePool,
   onCreateFlatPoint,
   onCreateHomePoint,
 }: {
@@ -228,11 +229,15 @@ export function MySearchesScreen({
   onSharePoint?: (id: string) => void;
   /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
   onClosePoint?: (id: string) => void;
+  /** Выход из чужого пула прямо из списка — без похода на экран пула. */
+  onLeavePool?: (id: string) => void;
   /** → форма «Найди со-съёмщика на свою квартиру» */
   onCreateFlatPoint?: () => void;
   /** → форма «К себе», сразу на гейте стадии */
   onCreateHomePoint?: () => void;
 }) {
+  // Отклонённые висят в списке с пометкой, но слот лимита не занимают.
+  const liveFlats = flats.filter((p) => p.status !== 'rejected' && p.status !== 'closed').length;
   // Отказ по слотам показывается только после тапа: висящая плашка «занято»
   // над списком из трёх карточек и так очевидна, а до тапа она просто шум.
   const [slotsNotice, setSlotsNotice] = useState(false);
@@ -373,7 +378,7 @@ export function MySearchesScreen({
             пулы стоят рядом без счёта — вход в них бесплатен и безлимитен. */}
         <div style={L.section}>
           <span style={S.sectionTitle}>
-            ПРИСМОТРЕННЫЕ КВАРТИРЫ · {flats.length} ИЗ {flatSlotsTotal}
+            ПРИСМОТРЕННЫЕ КВАРТИРЫ · {liveFlats} ИЗ {flatSlotsTotal}
           </span>
 
           {flats.length === 0 && enteredFlats.length === 0 ? (
@@ -394,9 +399,9 @@ export function MySearchesScreen({
                 />
               ))}
               {enteredFlats.map((p) => (
-                <FlatRow key={p.id} point={p} onOpenPool={onOpenFlatPool} />
+                <FlatRow key={p.id} point={p} onOpenPool={onOpenFlatPool} onLeave={onLeavePool} />
               ))}
-              {flats.length < flatSlotsTotal && <CreateEntry tone="flat" onClick={onCreateFlatPoint} />}
+              {liveFlats < flatSlotsTotal && <CreateEntry tone="flat" onClick={onCreateFlatPoint} />}
             </>
           )}
         </div>
@@ -439,12 +444,15 @@ function FlatRow({
   onOpenPool,
   onShare,
   onClose,
+  onLeave,
 }: {
   point: PointDTO;
   mine?: boolean;
   onOpenPool?: (id: string) => void;
   onShare?: (id: string) => void;
   onClose?: (id: string) => void;
+  /** Быстрый выход из чужого пула прямо из списка (§6). */
+  onLeave?: (id: string) => void;
 }) {
   const share = pricePerPerson(point.price_total, point.rooms);
   return (
@@ -473,13 +481,19 @@ function FlatRow({
           Смотреть пул · {point.pool_count}{' '}
           {plural(point.pool_count, 'человек', 'человека', 'человек')}
         </button>
-        {mine && (
-          <PointActions
-            id={point.id}
-            onShare={onShare}
-            onClose={onClose}
-            question="Закрыть квартиру?"
-          />
+        {mine &&
+          (point.status === 'rejected' ? (
+            <PointActions id={point.id} onClose={onClose} question="Скрыть карточку?" />
+          ) : (
+            <PointActions
+              id={point.id}
+              onShare={onShare}
+              onClose={onClose}
+              question="Закрыть квартиру?"
+            />
+          ))}
+        {!mine && onLeave && (
+          <PointActions id={point.id} onClose={onLeave} question="Выйти из пула?" />
         )}
       </div>
     </article>

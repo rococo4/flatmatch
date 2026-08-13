@@ -103,7 +103,10 @@ func (r *Repo) CardByID(ctx context.Context, viewerID, pointID uuid.UUID) (FeedP
 
 func (r *Repo) Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []FeedPoint, err error) {
 
-	created, err = r.feed(ctx, `p.created_by = $1 AND p.status <> 'closed'`, viewerID)
+	// Отклонённая модератором остаётся в списке с пометкой — иначе точка
+	// пропадала бы молча (§5); «Скрыть» создателя переводит причину в 'closed'.
+	created, err = r.feed(ctx, `p.created_by = $1
+		  AND (p.status <> 'closed' OR p.close_reason = 'rejected')`, viewerID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("points created by %s: %w", viewerID, err)
 	}
@@ -221,7 +224,8 @@ func (r *Repo) Close(ctx context.Context, userID, pointID uuid.UUID) error {
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE points SET status = 'closed', close_reason = 'closed', edited_at = now()
-			WHERE id = $1 AND created_by = $2 AND status <> 'closed'`, pointID, userID)
+			WHERE id = $1 AND created_by = $2
+			  AND (status <> 'closed' OR close_reason = 'rejected')`, pointID, userID)
 		if err != nil {
 			return err
 		}

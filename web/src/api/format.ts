@@ -170,6 +170,7 @@ const POINT_STATUS_LABEL: Record<PointStatus, string> = {
   active: '',
   paused: 'скрыта',
   closed: 'закрыта',
+  rejected: 'отклонена',
 };
 
 /** Развёрнуто — для строки фактов карточки. */

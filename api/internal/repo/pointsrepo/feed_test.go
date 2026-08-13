@@ -533,3 +533,46 @@ func TestCountActiveIn(t *testing.T) {
 		t.Errorf("CountActiveIn() of an empty zone = %d, %v, want 0, nil", n, err)
 	}
 }
+
+// Отклонённая модератором точка не пропадает из «Присмотренных» молча: она
+// остаётся с причиной 'rejected', пока создатель не скроет её сам — Close
+// переводит причину в 'closed', и карточка уходит.
+func TestMineKeepsRejectedUntilHidden(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+
+	creator := seedUser(t, pool, 1)
+	rejected, err := repo.Create(t.Context(),
+		flatPoint(&creator, entity.SourceUserLink, "https://cian.ru/rejected-1", entity.PointPending))
+	if err != nil {
+		t.Fatalf("create point: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `
+		UPDATE points SET status = 'closed', close_reason = 'rejected' WHERE id = $1`,
+		rejected.ID); err != nil {
+		t.Fatalf("reject point: %v", err)
+	}
+
+	created, _, err := repo.Mine(t.Context(), creator)
+	if err != nil {
+		t.Fatalf("Mine() failed: %v", err)
+	}
+	if len(created) != 1 || created[0].Point.ID != rejected.ID {
+		t.Fatalf("rejected point must stay listed, got %d cards", len(created))
+	}
+	if reason := created[0].Point.CloseReason; reason == nil || *reason != "rejected" {
+		t.Errorf("close_reason = %v, want rejected", reason)
+	}
+
+	if err := repo.Close(t.Context(), creator, rejected.ID); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+	created, _, err = repo.Mine(t.Context(), creator)
+	if err != nil {
+		t.Fatalf("Mine() after hide failed: %v", err)
+	}
+	if len(created) != 0 {
+		t.Errorf("hidden rejected point still listed: %d cards", len(created))
+	}
+}

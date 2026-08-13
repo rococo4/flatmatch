@@ -251,7 +251,7 @@ export type PointType = 'flat' | 'intent_home';
 export type PointStage = 'live' | 'moving_in';
 
 /** unknown — значение уровня кода, как у Profile.status. */
-export type PointStatus = 'unknown' | 'pending' | 'active' | 'paused' | 'closed';
+export type PointStatus = 'unknown' | 'pending' | 'active' | 'paused' | 'closed' | 'rejected';
 
 /** «раздельный» важнее числа: вторая дверь для двух незнакомцев — это про быт. */
 export type Bathrooms = 'combined' | 'separate' | 'two';

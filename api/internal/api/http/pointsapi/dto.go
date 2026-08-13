@@ -214,6 +214,16 @@ func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 // toCard serialises a point. The photo of the point goes through the store as
 // it is; the face of an author goes through the §5 rule, the same one every
 // other screen applies.
+// cardStatus: отклонённая модератором точка — это closed с причиной
+// 'rejected', но создателю она показывается своим словом. Статус уровня
+// провода, в entity его нет.
+func cardStatus(p entity.Point) string {
+	if p.Status == entity.PointClosed && p.CloseReason != nil && *p.CloseReason == "rejected" {
+		return "rejected"
+	}
+	return string(p.Status)
+}
+
 func photoURLs(keys []string, photos Photos) []string {
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
@@ -227,7 +237,7 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
 	out := Card{
 		ID:             p.ID,
 		Type:           string(p.Type),
-		Status:         string(p.Status),
+		Status:         cardStatus(p),
 		Zone:           zone,
 		PriceTotal:     p.PriceTotal,
 		PriceShare:     p.PriceShare,

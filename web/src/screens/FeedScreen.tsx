@@ -310,7 +310,7 @@ function FlatPointCard({
           }
         />
         {point.in_pool ? (
-          <InPoolRow onOpenPool={onOpenFlat ? () => onOpenFlat(point) : undefined} />
+          <InPoolRow onOpenPool={onOpenFlat ? () => onOpenFlat(point) : undefined} poolCount={point.pool_count} />
         ) : (
           <PoolEntryButton
             label="Интересно — войти в пул"
@@ -457,14 +457,14 @@ function PointPhoto({ url, label, inCard }: { url: string; label: string; inCard
 }
 
 /** Вошёл — кнопки больше нет: вход одноразовый, выход живёт в самом пуле (§6). */
-function InPoolRow({ onOpenPool }: { onOpenPool?: () => void }) {
+function InPoolRow({ onOpenPool, poolCount }: { onOpenPool?: () => void; poolCount: number }) {
   return (
     <div
       onClick={onOpenPool}
       style={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         gap: 7,
         padding: 12,
         borderRadius: 10,
@@ -475,7 +475,13 @@ function InPoolRow({ onOpenPool }: { onOpenPool?: () => void }) {
         cursor: onOpenPool ? 'pointer' : 'default',
       }}
     >
-      ✓ Ты в пуле
+      <span>✓ Ты в пуле</span>
+      {onOpenPool && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          Смотреть пул{poolCount > 0 ? ` · ${poolCount}` : ''}
+          <span aria-hidden style={{ fontSize: 13 }}>›</span>
+        </span>
+      )}
     </div>
   );
 }

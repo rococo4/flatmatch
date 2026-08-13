@@ -473,13 +473,16 @@ function FlatRow({
             <span style={S.subtitle}>
               {share !== null ? `${money(share)} с человека` : money(point.price_total ?? 0)}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 510 }}>в пуле {point.pool_count}</span>
+            <span style={{ fontSize: 13, fontWeight: 510 }}>
+              {mine && point.pool_count === 0 ? 'в пуле пока только ты' : `в пуле ${point.pool_count}`}
+            </span>
           </div>
         </div>
         <StatusRow status={point.status} />
         <button type="button" style={S.secondaryButton} onClick={() => onOpenPool?.(point.id)}>
-          Смотреть пул · {point.pool_count}{' '}
-          {plural(point.pool_count, 'человек', 'человека', 'человек')}
+          {point.pool_count === 0
+            ? 'Смотреть пул'
+            : `Смотреть пул · ${point.pool_count} ${plural(point.pool_count, 'человек', 'человека', 'человек')}`}
         </button>
         {mine &&
           (point.status === 'rejected' ? (

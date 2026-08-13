@@ -140,7 +140,7 @@ func run() error {
 		matches:  matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, pointsRepo, dir),
 		// Модератор обязателен: точка создаётся в pending и без сообщения в чат
 		// осталась бы ждать вечно (§5).
-		points:       points.New(pointsRepo, searchesRepo, dir, moderator),
+		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,

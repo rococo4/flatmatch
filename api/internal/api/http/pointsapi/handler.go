@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +20,7 @@ import (
 	"flatmatch/api/internal/api/http/authmw"
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/httpx"
+	"flatmatch/api/internal/imagetype"
 	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/service/points"
 	"flatmatch/api/internal/service/zones"
@@ -26,13 +28,19 @@ import (
 
 const maxBodyBytes = 64 << 10
 
+// maxPhotoBytes is the limit of the questionnaire's upload, and for the same
+// reason: пять мегабайт — это фотография с телефона, а не архив.
+const maxPhotoBytes = 5 << 20
+
 type Points interface {
 	CreateFlat(ctx context.Context, userID uuid.UUID, in points.CreateFlat) (entity.Point, error)
 	CreateIntentHome(ctx context.Context, userID uuid.UUID, in points.CreateIntentHome) (entity.Point, error)
+	SavePhoto(ctx context.Context, file io.ReadSeeker) (string, error)
 	Point(ctx context.Context, viewerID, pointID uuid.UUID) (pointsrepo.FeedPoint, error)
 	Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []pointsrepo.FeedPoint, err error)
 	Enter(ctx context.Context, userID, pointID uuid.UUID) error
 	Leave(ctx context.Context, userID, pointID uuid.UUID) error
+	Close(ctx context.Context, userID, pointID uuid.UUID) error
 	Pool(ctx context.Context, viewer entity.User, pointID uuid.UUID) (points.PoolView, error)
 }
 
@@ -62,11 +70,14 @@ func New(points Points, photos Photos, dir ZoneDir) *Handler {
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.create)
+	// Фото уходит до самой точки: форма грузит его, пока точки ещё нет.
+	r.Post("/photo", h.uploadPhoto)
 	// «Мои» — раньше карточки: иначе /mine ушло бы в разбор uuid.
 	r.Get("/mine", h.mine)
 	r.Get("/{id}", h.card)
 	r.Post("/{id}/enter", h.enter)
 	r.Delete("/{id}/enter", h.leave)
+	r.Post("/{id}/close", h.close)
 	r.Get("/{id}/pool", h.pool)
 	return r
 }
@@ -121,6 +132,42 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusCreated, h.toCard(card))
 }
 
+// uploadPhoto takes the picture before the point exists — скрин объявления или
+// фото комнаты — и отдаёт ключ, который форма приложит к точке. Анкеты автора
+// он не касается: у фото точки нет своего статуса модерации, её смотрят
+// целиком (§5).
+func (h *Handler) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	if _, ok := authmw.FromContext(r.Context()); !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes+64<<10)
+
+	file, _, err := r.FormFile("photo")
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			httpx.BadRequest(w, r, httpx.CodeTooLarge, "photo is larger than 5 MB", nil, err)
+			return
+		}
+		httpx.BadRequest(w, r, httpx.CodeBadRequest, "no file in the photo field", nil, err)
+		return
+	}
+	defer file.Close()
+
+	key, err := h.points.SavePhoto(r.Context(), file)
+	if err != nil {
+		if errors.Is(err, imagetype.ErrUnsupported) {
+			httpx.BadRequest(w, r, httpx.CodeUnsupportedMedia, "unsupported image type", nil, err)
+			return
+		}
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusCreated, photoResponse{PhotoKey: key})
+}
+
 func (h *Handler) card(w http.ResponseWriter, r *http.Request) {
 	user, ok := authmw.FromContext(r.Context())
 	if !ok {
@@ -168,6 +215,13 @@ func (h *Handler) enter(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 	h.membership(w, r, h.points.Leave)
+}
+
+// close снимает точку с ленты рукой создателя: квартиру сдали, сосед нашёлся.
+// Чужая точка отвечает 404 — закрыть её не только нельзя, но и знать о ней
+// нечего (§5); уже закрытая проходит молча.
+func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
+	h.membership(w, r, h.points.Close)
 }
 
 func (h *Handler) pool(w http.ResponseWriter, r *http.Request) {

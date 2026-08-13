@@ -20,7 +20,8 @@ const joinedPointColumns = `p.id, p.type, p.stage, p.status, p.source, p.created
 	p.close_reason, p.created_at, p.edited_at`
 
 const personColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
-	u.gender AS u_gender, u.schedule AS u_schedule, u.smoking AS u_smoking,
+	u.gender AS u_gender, u.occupation AS u_occupation,
+	u.schedule AS u_schedule, u.smoking AS u_smoking,
 	u.pets_own AS u_pets_own, u.pets_ok AS u_pets_ok, u.noise AS u_noise,
 	u.guests AS u_guests, u.cleaning AS u_cleaning, u.alcohol AS u_alcohol,
 	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
@@ -83,6 +84,7 @@ type personRow struct {
 	UName        *string    `db:"u_name"`
 	UAge         *int       `db:"u_age"`
 	UGender      *string    `db:"u_gender"`
+	UOccupation  *string    `db:"u_occupation"`
 	USchedule    *string    `db:"u_schedule"`
 	USmoking     *string    `db:"u_smoking"`
 	UPetsOwn     *string    `db:"u_pets_own"`
@@ -171,17 +173,19 @@ func (r personRow) toEntity() *entity.User {
 		ID:   *r.UID,
 		Name: pointer.Get(r.UName),
 		Profile: entity.Profile{
-			Age:      pointer.Get(r.UAge),
-			Gender:   entity.ParseGender(pointer.Get(r.UGender)),
-			Schedule: entity.ParseSchedule(pointer.Get(r.USchedule)),
-			Smoking:  entity.ParseSmoking(pointer.Get(r.USmoking)),
-			PetsOwn:  entity.ParsePetsOwn(pointer.Get(r.UPetsOwn)),
-			PetsOK:   entity.ParsePetsOK(pointer.Get(r.UPetsOK)),
-			Noise:    entity.ParseNoise(pointer.Get(r.UNoise)),
-			Guests:   entity.ParseGuests(pointer.Get(r.UGuests)),
-			Cleaning: entity.ParseCleaning(pointer.Get(r.UCleaning)),
-			Alcohol:  entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
-			Expenses: entity.ParseExpenses(pointer.Get(r.UExpenses)),
+			Age:    pointer.Get(r.UAge),
+			Gender: entity.ParseGender(pointer.Get(r.UGender)),
+			// Занятость — подпись на витрине «к себе» (§6): «удалёнка», «офис».
+			Occupation: entity.ParseOccupation(pointer.Get(r.UOccupation)),
+			Schedule:   entity.ParseSchedule(pointer.Get(r.USchedule)),
+			Smoking:    entity.ParseSmoking(pointer.Get(r.USmoking)),
+			PetsOwn:    entity.ParsePetsOwn(pointer.Get(r.UPetsOwn)),
+			PetsOK:     entity.ParsePetsOK(pointer.Get(r.UPetsOK)),
+			Noise:      entity.ParseNoise(pointer.Get(r.UNoise)),
+			Guests:     entity.ParseGuests(pointer.Get(r.UGuests)),
+			Cleaning:   entity.ParseCleaning(pointer.Get(r.UCleaning)),
+			Alcohol:    entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
+			Expenses:   entity.ParseExpenses(pointer.Get(r.UExpenses)),
 		},
 		PhotoKey:    pointer.Get(r.UPhotoKey),
 		PhotoStatus: entity.ParseModerationStatus(pointer.Get(r.UPhotoStatus)),

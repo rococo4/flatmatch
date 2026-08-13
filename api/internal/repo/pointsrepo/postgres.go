@@ -209,6 +209,42 @@ func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
 	return nil
 }
 
+// Close снимает точку по воле создателя: квартира снята, соседа нашли,
+// передумал. Чужая точка отвечает тем же ErrNotFound, что и несуществующая —
+// закрытие принадлежит тому, кто подал (§5), — а уже закрытая проходит молча:
+// второй тап приходит с перерисованного экрана.
+//
+// Причина проставляется вместе со статусом: закрытая точка без неё нарушает
+// CHECK, и словаря причин у точек нет — в отличие от поисков, где причина
+// закрытия и есть главная метрика (§3).
+func (r *Repo) Close(ctx context.Context, userID, pointID uuid.UUID) error {
+	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE points SET status = 'closed', close_reason = 'closed', edited_at = now()
+			WHERE id = $1 AND created_by = $2 AND status <> 'closed'`, pointID, userID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() > 0 {
+			return nil
+		}
+		closed, err := exists(ctx, tx,
+			`SELECT 1 FROM points WHERE id = $1 AND created_by = $2 AND status = 'closed'`,
+			pointID, userID)
+		if err != nil {
+			return err
+		}
+		if !closed {
+			return entity.ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("close point %s: %w", pointID, err)
+	}
+	return nil
+}
+
 func (r *Repo) Leave(ctx context.Context, userID, pointID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,
 		`DELETE FROM likes_points WHERE user_id = $1 AND point_id = $2`, userID, pointID)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/imagetype"
 	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
@@ -37,6 +39,7 @@ type ErrDuplicateURL struct {
 
 type Repository interface {
 	Create(ctx context.Context, p entity.Point) (entity.Point, error)
+	Close(ctx context.Context, userID, pointID uuid.UUID) error
 	ByURLNorm(ctx context.Context, urlNorm string) (*entity.Point, error)
 	CardByID(ctx context.Context, viewerID, pointID uuid.UUID) (pointsrepo.FeedPoint, error)
 	Feed(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]pointsrepo.FeedPoint, error)
@@ -58,6 +61,13 @@ type Searches interface {
 // отменяет: очередь всегда можно дослать командой /queue.
 type Notifier interface {
 	PointPending(ctx context.Context, p entity.Point)
+}
+
+// PhotoStore keeps the picture the form uploads before the point exists: скрин
+// объявления или фото комнаты. Ключ формы — как у анкеты, но своей записи в
+// users он не трогает.
+type PhotoStore interface {
+	Put(ctx context.Context, key string, r io.Reader, contentType string) error
 }
 
 // CreateFlat is «Найди, с кем снять эту квартиру» (§6) — ссылка с рынка.
@@ -103,12 +113,13 @@ type PoolView struct {
 type Service struct {
 	repo     Repository
 	searches Searches
+	photos   PhotoStore
 	dir      *zones.Directory
 	notify   Notifier
 }
 
-func New(repo Repository, searches Searches, dir *zones.Directory, notify Notifier) *Service {
-	return &Service{repo: repo, searches: searches, dir: dir, notify: notify}
+func New(repo Repository, searches Searches, photos PhotoStore, dir *zones.Directory, notify Notifier) *Service {
+	return &Service{repo: repo, searches: searches, photos: photos, dir: dir, notify: notify}
 }
 
 func (e *ErrDuplicateURL) Error() string {
@@ -157,8 +168,32 @@ func (s *Service) Point(ctx context.Context, viewerID, pointID uuid.UUID) (point
 	return card, nil
 }
 
+// SavePhoto stores the picture of a form that has not been submitted yet: у
+// точки ещё нет id, а фото уже выбрано, поэтому ключ случайный и ни к кому не
+// привязан. Модерация смотрит его вместе с точкой (§5) — отдельного статуса у
+// него нет, и анкеты автора он не касается.
+func (s *Service) SavePhoto(ctx context.Context, file io.ReadSeeker) (string, error) {
+	contentType, ext, err := imagetype.Sniff(file)
+	if err != nil {
+		return "", fmt.Errorf("point photo: %w", err)
+	}
+
+	key := "points/" + uuid.NewString() + ext
+	if err := s.photos.Put(ctx, key, file, contentType); err != nil {
+		return "", fmt.Errorf("store point photo: %w", err)
+	}
+	return key, nil
+}
+
 func (s *Service) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
 	return s.repo.Enter(ctx, userID, pointID)
+}
+
+// Close is «закрыть» из «Моих поисков»: квартиру сдали, сосед нашёлся,
+// передумал. Точка смертна вместе с предложением автора (§2.2), и слот, за
+// которым следит лимит, освобождается вместе с ней.
+func (s *Service) Close(ctx context.Context, userID, pointID uuid.UUID) error {
+	return s.repo.Close(ctx, userID, pointID)
 }
 
 func (s *Service) Leave(ctx context.Context, userID, pointID uuid.UUID) error {

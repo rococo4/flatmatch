@@ -514,3 +514,71 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 		t.Errorf("InPool() after leaving = %v, %v, want false, nil", in, err)
 	}
 }
+
+// Точка смертна вместе с предложением автора (§2.2): закрыть её может только
+// он, и слот, за которым следит лимит, освобождается вместе с ней.
+func TestCloseBelongsToTheCreator(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	author := seedUser(t, pool, 1)
+	stranger := seedUser(t, pool, 2)
+
+	pending, err := repo.Create(t.Context(),
+		flatPoint(&author, entity.SourceUserLink, "https://avito.ru/1", entity.PointPending))
+	if err != nil {
+		t.Fatalf("Create(pending) failed: %v", err)
+	}
+	active, err := repo.Create(t.Context(),
+		flatPoint(&author, entity.SourceUserLink, "https://avito.ru/2", entity.PointActive))
+	if err != nil {
+		t.Fatalf("Create(active) failed: %v", err)
+	}
+	home, err := repo.Create(t.Context(), intentHome(author, entity.StageLive))
+	if err != nil {
+		t.Fatalf("Create(intent_home) failed: %v", err)
+	}
+
+	// Чужая точка отвечает как несуществующая — и остаётся нетронутой.
+	for _, id := range []uuid.UUID{pending.ID, active.ID, home.ID, uuid.New()} {
+		if err := repo.Close(t.Context(), stranger, id); !errors.Is(err, entity.ErrNotFound) {
+			t.Errorf("Close() by a stranger = %v, want ErrNotFound", err)
+		}
+	}
+	if n := countRows(t, pool,
+		`SELECT count(*) FROM points WHERE created_by = $1 AND status = 'closed'`, author); n != 0 {
+		t.Fatalf("a stranger closed %d points", n)
+	}
+
+	// Своя закрывается в любом живом статусе — и «на проверке», и одобренная, и
+	// «Зову к себе».
+	for _, id := range []uuid.UUID{pending.ID, active.ID, home.ID} {
+		if err := repo.Close(t.Context(), author, id); err != nil {
+			t.Fatalf("Close() failed: %v", err)
+		}
+		got, err := repo.ByID(t.Context(), id)
+		if err != nil {
+			t.Fatalf("ByID() failed: %v", err)
+		}
+		// Причина едет вместе со статусом: без неё падает CHECK.
+		if got.Status != entity.PointClosed || got.CloseReason == nil || *got.CloseReason != "closed" {
+			t.Errorf("point %s = %s / %v, want closed with a reason", id, got.Status, got.CloseReason)
+		}
+	}
+
+	// Повторный тап приходит с перерисованного экрана и проходит молча.
+	if err := repo.Close(t.Context(), author, active.ID); err != nil {
+		t.Errorf("second Close() = %v, want nil — идемпотентно", err)
+	}
+
+	// Закрытые слотов не держат: пять ссылок и две «к себе» снова свободны (§8).
+	for i := range entity.MaxUserLinkPoints {
+		url := fmt.Sprintf("https://avito.ru/after-%d", i)
+		if _, err := repo.Create(t.Context(), flatPoint(&author, entity.SourceUserLink, url, entity.PointPending)); err != nil {
+			t.Fatalf("Create() after closing #%d failed: %v", i+1, err)
+		}
+	}
+	if _, err := repo.Create(t.Context(), intentHome(author, entity.StageLive)); err != nil {
+		t.Errorf("Create(intent_home) after closing failed: %v", err)
+	}
+}

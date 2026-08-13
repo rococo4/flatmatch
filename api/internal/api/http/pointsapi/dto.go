@@ -93,14 +93,15 @@ type Card struct {
 // authorDTO is the showcase of «к себе» — единственная карточка с лицом (§2.2).
 // Контактов не несёт, как и всё, кроме экрана мэтча (§3); dto_test это пинует.
 type authorDTO struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Name     string    `json:"name"`
-	Age      int       `json:"age"`
-	PhotoURL string    `json:"photo_url"`
-	Schedule string    `json:"schedule"`
-	Smoking  string    `json:"smoking"`
-	PetsOwn  string    `json:"pets_own"`
-	LastSeen time.Time `json:"last_seen"`
+	UserID     uuid.UUID `json:"user_id"`
+	Name       string    `json:"name"`
+	Age        int       `json:"age"`
+	PhotoURL   string    `json:"photo_url"`
+	Occupation string    `json:"occupation"`
+	Schedule   string    `json:"schedule"`
+	Smoking    string    `json:"smoking"`
+	PetsOwn    string    `json:"pets_own"`
+	LastSeen   time.Time `json:"last_seen"`
 }
 
 type chipDTO struct {
@@ -136,6 +137,12 @@ type memberDTO struct {
 	Params        *paramsDTO `json:"params,omitempty"`
 	Zone          *zoneDTO   `json:"zone,omitempty"`
 	EnteredAt     time.Time  `json:"entered_at"`
+}
+
+// photoResponse hands the key back to the form: до сабмита точка живёт на
+// экране, а её фото — уже в хранилище.
+type photoResponse struct {
+	PhotoKey string `json:"photo_key"`
 }
 
 type poolResponse struct {
@@ -255,14 +262,15 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
 
 func toAuthor(u entity.User, photos Photos) authorDTO {
 	return authorDTO{
-		UserID:   u.ID,
-		Name:     u.Name,
-		Age:      u.Profile.Age,
-		PhotoURL: personPhoto(u, photos),
-		Schedule: string(u.Profile.Schedule),
-		Smoking:  string(u.Profile.Smoking),
-		PetsOwn:  string(u.Profile.PetsOwn),
-		LastSeen: u.LastSeen,
+		UserID:     u.ID,
+		Name:       u.Name,
+		Age:        u.Profile.Age,
+		PhotoURL:   personPhoto(u, photos),
+		Occupation: string(u.Profile.Occupation),
+		Schedule:   string(u.Profile.Schedule),
+		Smoking:    string(u.Profile.Smoking),
+		PetsOwn:    string(u.Profile.PetsOwn),
+		LastSeen:   u.LastSeen,
 	}
 }
 

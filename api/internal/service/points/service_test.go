@@ -1,9 +1,12 @@
 package points
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/imagetype"
 	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
@@ -39,6 +43,10 @@ type fakeRepo struct {
 	feedZones  []string
 	countZones []string
 
+	closed   uuid.UUID
+	closedBy uuid.UUID
+	closeErr error
+
 	inPool       bool
 	members      []pointsrepo.Member
 	membersCalls int
@@ -46,6 +54,13 @@ type fakeRepo struct {
 
 type fakeSearches struct {
 	list []entity.Search
+}
+
+// fakePhotos is the store the form's upload writes to: ключ придумывает сервис,
+// хранилище только кладёт байты.
+type fakePhotos struct {
+	keys []string
+	err  error
 }
 
 type fakeNotifier struct {
@@ -64,6 +79,19 @@ func (f *fakeRepo) Create(_ context.Context, p entity.Point) (entity.Point, erro
 		p.Status = entity.PointPending
 	}
 	return p, nil
+}
+
+func (f *fakePhotos) Put(_ context.Context, key string, _ io.Reader, _ string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.keys = append(f.keys, key)
+	return nil
+}
+
+func (f *fakeRepo) Close(_ context.Context, userID, pointID uuid.UUID) error {
+	f.closedBy, f.closed = userID, pointID
+	return f.closeErr
 }
 
 func (f *fakeRepo) ByURLNorm(_ context.Context, urlNorm string) (*entity.Point, error) {
@@ -119,11 +147,16 @@ func (f *fakeNotifier) PointPending(ctx context.Context, p entity.Point) {
 
 func newService(t *testing.T, repo *fakeRepo, searches *fakeSearches, notify Notifier) *Service {
 	t.Helper()
+	return New(repo, searches, &fakePhotos{}, mustDir(t), notify)
+}
+
+func mustDir(t *testing.T) *zones.Directory {
+	t.Helper()
 	dir, err := zones.Load()
 	if err != nil {
 		t.Fatalf("load zones: %v", err)
 	}
-	return New(repo, searches, dir, notify)
+	return dir
 }
 
 func validFlat() CreateFlat {
@@ -668,5 +701,67 @@ func TestFeedAndCountUseIntersectingZones(t *testing.T) {
 	}
 	if n, err := s.CountIn(t.Context(), "st-nowhere"); err != nil || n != 0 {
 		t.Errorf("CountIn() of an unknown zone = %d, %v, want 0, nil", n, err)
+	}
+}
+
+// Фото уходит в хранилище раньше самой точки: форма грузит его, пока точки
+// ещё нет, и получает ключ, который приложит к ней при сабмите.
+func TestSavePhotoStoresUnderItsOwnKey(t *testing.T) {
+	photos := &fakePhotos{}
+	s := New(&fakeRepo{}, &fakeSearches{}, photos, mustDir(t), nil)
+
+	key, err := s.SavePhoto(t.Context(), bytes.NewReader([]byte("\xff\xd8\xff\xe0 jpeg body")))
+	if err != nil {
+		t.Fatalf("SavePhoto() failed: %v", err)
+	}
+	if !strings.HasPrefix(key, "points/") {
+		t.Errorf("key = %q, want it under the points prefix", key)
+	}
+	if !strings.HasSuffix(key, ".jpg") {
+		t.Errorf("key = %q, want the sniffed extension", key)
+	}
+	if len(photos.keys) != 1 || photos.keys[0] != key {
+		t.Errorf("store got %v, want the returned key %q", photos.keys, key)
+	}
+
+	// Второе фото не затирает первое: у одного человека до семи точек (§8), и
+	// ключ анкеты им не подходит — он один на пользователя.
+	second, err := s.SavePhoto(t.Context(), bytes.NewReader([]byte("\x89PNG\r\n\x1a\n body")))
+	if err != nil {
+		t.Fatalf("SavePhoto() failed: %v", err)
+	}
+	if second == key {
+		t.Errorf("second upload reused the key %q", key)
+	}
+	if !strings.HasSuffix(second, ".png") {
+		t.Errorf("key = %q, want the sniffed extension", second)
+	}
+
+	// Не картинка до хранилища не доходит.
+	if _, err := s.SavePhoto(t.Context(), bytes.NewReader([]byte("GIF87a"))); !errors.Is(err, imagetype.ErrUnsupported) {
+		t.Errorf("SavePhoto() of a gif = %v, want ErrUnsupported", err)
+	}
+	if len(photos.keys) != 2 {
+		t.Errorf("store holds %d keys, want 2", len(photos.keys))
+	}
+}
+
+// Закрытие — дело создателя: сервис его не решает, но и не размазывает —
+// вопрос владения решается одним UPDATE'ом в репозитории.
+func TestCloseDelegatesToTheRepository(t *testing.T) {
+	repo := &fakeRepo{}
+	s := newService(t, repo, &fakeSearches{}, nil)
+	user, point := uuid.New(), uuid.New()
+
+	if err := s.Close(t.Context(), user, point); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+	if repo.closedBy != user || repo.closed != point {
+		t.Errorf("repo saw close(%s, %s), want (%s, %s)", repo.closedBy, repo.closed, user, point)
+	}
+
+	repo.closeErr = entity.ErrNotFound
+	if err := s.Close(t.Context(), user, point); !errors.Is(err, entity.ErrNotFound) {
+		t.Errorf("Close() of a foreign point = %v, want ErrNotFound", err)
 	}
 }

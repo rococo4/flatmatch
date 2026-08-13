@@ -50,8 +50,9 @@ func seedPerson(t *testing.T, pool *pgxpool.Pool, n int64, gender, pref string) 
 	var id uuid.UUID
 	err := pool.QueryRow(context.Background(), `
 		INSERT INTO users (tg_id, name, tg_username, status, gender, gender_pref,
-			age, schedule, smoking, photo_key, photo_status)
-		VALUES ($1, 'test', 'contact', 'active', $2, $3, 25, 'owl', 'no', 'users/a.jpg', 'ok')
+			age, occupation, schedule, smoking, photo_key, photo_status)
+		VALUES ($1, 'test', 'contact', 'active', $2, $3, 25, 'remote', 'owl', 'no',
+			'users/a.jpg', 'ok')
 		RETURNING id`, testTGBase-n, gender, pref).Scan(&id)
 	if err != nil {
 		t.Fatalf("seed person: %v", err)
@@ -340,6 +341,7 @@ func TestFeedAuthorIsShowcaseOnly(t *testing.T) {
 		t.Fatalf("intent_home came without its author")
 	}
 	if got.ID != author || got.Name != "test" || got.Profile.Age != 25 ||
+		got.Profile.Occupation != entity.OccupationRemote ||
 		got.Profile.Schedule != entity.ScheduleOwl || got.PhotoKey != "users/a.jpg" ||
 		got.PhotoStatus != entity.ModerationOK || got.Status != entity.StatusActive {
 		t.Errorf("author lost the showcase fields: %+v", got)

@@ -1,7 +1,10 @@
 package pointsapi
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,7 +44,11 @@ type fakePoints struct {
 	pool    points.PoolView
 	entered []uuid.UUID
 	left    []uuid.UUID
+	closed  []uuid.UUID
 	cards   int
+
+	photoKey  string
+	photoBody []byte
 }
 
 type fakeValidator struct{}
@@ -348,6 +355,26 @@ func (f *fakePoints) Leave(_ context.Context, _, pointID uuid.UUID) error {
 	return nil
 }
 
+func (f *fakePoints) Close(_ context.Context, _, pointID uuid.UUID) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.closed = append(f.closed, pointID)
+	return nil
+}
+
+func (f *fakePoints) SavePhoto(_ context.Context, file io.ReadSeeker) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	body, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+	f.photoBody = body
+	return f.photoKey, nil
+}
+
 func (f *fakePoints) Pool(context.Context, entity.User, uuid.UUID) (points.PoolView, error) {
 	return f.pool, f.err
 }
@@ -365,4 +392,89 @@ func (fakeValidator) Validate(string) (tma.InitData, error) {
 
 func (f fakeAccounts) EnsureFromTelegram(context.Context, entity.TelegramIdentity) (entity.User, error) {
 	return f.user, nil
+}
+
+// Фото уходит до самой точки: форма грузит его, пока точки ещё нет, и получает
+// ключ, который приложит к ней при сабмите. Анкеты автора это не касается —
+// у фото точки нет своего статуса модерации (§5).
+func TestUploadPhotoReturnsTheKey(t *testing.T) {
+	service := &fakePoints{photoKey: "points/a1b2.jpg"}
+	body := new(bytes.Buffer)
+	form := multipart.NewWriter(body)
+	part, err := form.CreateFormFile("photo", "room.jpg")
+	if err != nil {
+		t.Fatalf("build the form: %v", err)
+	}
+	if _, err := part.Write([]byte("\xff\xd8\xff\xe0 jpeg body")); err != nil {
+		t.Fatalf("write the file: %v", err)
+	}
+	if err := form.Close(); err != nil {
+		t.Fatalf("close the form: %v", err)
+	}
+
+	rec := upload(t, service, form.FormDataContentType(), body.String())
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusCreated, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"photo_key":"points/a1b2.jpg"`) {
+		t.Errorf("body = %s, want the stored key", rec.Body)
+	}
+	if string(service.photoBody) != "\xff\xd8\xff\xe0 jpeg body" {
+		t.Errorf("service got %q, want the uploaded bytes", service.photoBody)
+	}
+}
+
+// Без формы грузить нечего — это ошибка запроса, а не пятисотка.
+func TestUploadPhotoNeedsAMultipartForm(t *testing.T) {
+	service := &fakePoints{photoKey: "points/a1b2.jpg"}
+
+	rec := upload(t, service, "application/json", `{"photo":"room.jpg"}`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusBadRequest, rec.Body)
+	}
+	if service.photoBody != nil {
+		t.Errorf("the service was handed %q from a body with no file", service.photoBody)
+	}
+}
+
+// Закрыть точку может только создатель (§5): чужая отвечает 404 и остаётся на
+// месте, своя закрывается без тела в ответе.
+func TestCloseIsTheCreatorsOwn(t *testing.T) {
+	id := uuid.New()
+	service := &fakePoints{}
+
+	if rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+id.String()+"/close", ""); rec.Code != http.StatusNoContent {
+		t.Errorf("close status = %d, want %d (%s)", rec.Code, http.StatusNoContent, rec.Body)
+	}
+	if len(service.closed) != 1 || service.closed[0] != id {
+		t.Errorf("service closed %v, want %s", service.closed, id)
+	}
+
+	foreign := &fakePoints{err: entity.ErrNotFound}
+	rec := do(t, foreign, uuid.New(), http.MethodPost, "/points/"+id.String()+"/close", "")
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("close of a foreign point = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if len(foreign.closed) != 0 {
+		t.Errorf("a foreign point was closed anyway: %v", foreign.closed)
+	}
+}
+
+func upload(t *testing.T, service *fakePoints, contentType, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	router := chi.NewRouter()
+	router.Use(authmw.New(fakeValidator{}, fakeAccounts{
+		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
+	}))
+	router.Mount("/points", New(service, stubPhotos{}, fakeDir{}).Routes())
+
+	req := httptest.NewRequest(http.MethodPost, "/points/photo", strings.NewReader(body))
+	req.Header.Set("Authorization", "tma stub")
+	req.Header.Set("Content-Type", contentType)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	return rec
 }

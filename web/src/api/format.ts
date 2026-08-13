@@ -7,14 +7,21 @@
 
    Чистые функции, React здесь не живёт. */
 import type {
+  Bathrooms,
   CloseReason,
   ParamOverlap,
+  PointDTO,
+  PointStage,
+  PointStatus,
+  PointType,
   PoolChip,
   PoolPersonDTO,
   PoolSectionDTO,
   Questionnaire,
+  Restriction,
   SearchParamsNoZone,
   Term,
+  Utilities,
 } from './client';
 import type { Verdict } from '../ui/primitives';
 
@@ -144,6 +151,66 @@ const OVERLAP_LABEL: Record<ParamOverlap['param'], string> = {
   term: 'Срок',
 };
 
+/** Бейдж стадии «к себе» — дословно §2.2, обе формулировки от лица автора. */
+const STAGE_BADGE: Record<PointStage, string> = {
+  live: 'живёт здесь',
+  moving_in: 'заезжает · ищет со-съёмщика со старта',
+};
+
+/**
+ * Строка статуса своей точки.
+ *
+ * У активной строки нет: «в ленте» — это норма, а не новость. Закрытую «Мои
+ * поиски» не показывают вовсе, и метка ей нужна только на случай, если сервер
+ * когда-нибудь её отдаст.
+ */
+const POINT_STATUS_LABEL: Record<PointStatus, string> = {
+  unknown: '',
+  pending: 'на проверке',
+  active: '',
+  paused: 'скрыта',
+  closed: 'закрыта',
+};
+
+/** Развёрнуто — для строки фактов карточки. */
+const BATHROOMS_LABEL: Record<Bathrooms, string> = {
+  combined: '1 совмещённый',
+  separate: '1 раздельный',
+  two: '2',
+};
+
+/** Коротко — для чипов формы, где три варианта стоят в ряд. */
+const BATHROOMS_SHORT: Record<Bathrooms, string> = {
+  combined: '1 совм.',
+  separate: '1 разд.',
+  two: '2',
+};
+
+const UTILITIES_LABEL: Record<Utilities, string> = {
+  included: 'включена',
+  meters: 'по счётчикам',
+};
+
+/**
+ * Одно ограничение — две формулировки: у квартиры с рынка запрещает
+ * собственник, у «к себе» рассказывает тот, кто там живёт (§2.2, §6).
+ */
+const RESTRICTION_LABEL: Record<PointType, Record<Restriction, string>> = {
+  flat: {
+    no_pets: 'без животных',
+    no_couples: 'не сдают парам',
+    no_smoking: 'курить нельзя',
+  },
+  intent_home: {
+    no_pets: 'нельзя с животными',
+    no_couples: 'хозяин против пар',
+    no_smoking: 'курить нельзя',
+  },
+};
+
+/** Порядок чипов ограничений в форме — он же порядок на карточке. */
+const RESTRICTIONS: Restriction[] = ['no_pets', 'no_couples', 'no_smoking'];
+
 const SECTION_LABEL: Record<PoolSectionDTO['id'], string> = {
   all: 'СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ',
   partial: 'ПЕРЕСЕКАЮТСЯ ЧАСТИЧНО',
@@ -248,9 +315,14 @@ export function overlapRow(o: ParamOverlap): { label: string; value: string } | 
  * входящего лайка, и одна метка должна обслуживать оба экрана.
  */
 export function habitsLine(p: Pick<PoolPersonDTO, 'schedule' | 'smoking' | 'pets_own'>): string {
-  return [SCHEDULE_LABEL[p.schedule], SMOKING_LABEL[p.smoking], PETS_OWN_LABEL[p.pets_own]]
-    .filter(Boolean)
-    .join(' · ');
+  return habitChips(p).join(' · ');
+}
+
+/** Те же три привычки чипами — блоком «Привычки» на карточке с лицом. */
+export function habitChips(p: Pick<PoolPersonDTO, 'schedule' | 'smoking' | 'pets_own'>): string[] {
+  return [SCHEDULE_LABEL[p.schedule], SMOKING_LABEL[p.smoking], PETS_OWN_LABEL[p.pets_own]].filter(
+    Boolean,
+  );
 }
 
 /**
@@ -298,6 +370,90 @@ export function sectionTitle(id: PoolSectionDTO['id'], n: number): string {
  */
 export function closeReasonLabel(reason?: CloseReason): string {
   return reason ? CLOSE_REASON_LABEL[reason] : '';
+}
+
+/* ── Точки (§2.2, §6) ───────────────────────────────────────────────────── */
+
+/**
+ * Заголовок карточки точки: «2-комнатная · м. Фрунзенская», «Комната · м. Сокол».
+ *
+ * Точка всегда стоит на станции (§5), поэтому «м.» — не догадка. Зона, которой
+ * справочник больше не знает, оставляет один тип: «м.» без названия хуже.
+ */
+export function pointTitle(p: Pick<PointDTO, 'type' | 'rooms' | 'zone'>): string {
+  const kind =
+    p.type === 'intent_home' ? 'Комната' : p.rooms ? `${p.rooms}-комнатная` : 'Квартира';
+  return p.zone.name ? `${kind} · м. ${p.zone.name}` : kind;
+}
+
+/** «живёт здесь» / «заезжает · ищет со-съёмщика со старта». */
+export function stageBadge(stage: PointStage): string {
+  return STAGE_BADGE[stage] ?? '';
+}
+
+/** «на проверке» / «скрыта». У активной точки строки нет — это норма. */
+export function pointStatusLabel(status: PointStatus): string {
+  return POINT_STATUS_LABEL[status] ?? '';
+}
+
+/** «добавлена вчера» / «добавлена 5 дней назад». Точность до дня (§8). */
+export function addedLabel(daysAgo: number): string {
+  if (daysAgo <= 0) return 'добавлена сегодня';
+  if (daysAgo === 1) return 'добавлена вчера';
+  return `добавлена ${daysAgo} ${plural(daysAgo, 'день', 'дня', 'дней')} назад`;
+}
+
+/**
+ * Когда автор «к себе» заходил: «в сети вчера».
+ *
+ * Без рода: «была вчера» из §6 — про Иру из макета, а пол автора карточка не
+ * знает и знать не должна (§4 — это правило видимости, не поле витрины).
+ */
+export function lastSeenLabel(iso: string): string {
+  return `в сети ${relativeDay(iso)}`;
+}
+
+/**
+ * Цена доли рыночной квартиры: аренда, делённая на комнаты.
+ *
+ * Без комнатности доли нет: делить «на двоих» наугад — это обещание, которого
+ * объявление не давало. Округляем до тысяч, чтобы не показывать 31 666 ₽.
+ */
+export function pricePerPerson(total?: number, rooms?: number): number | null {
+  if (total == null || rooms == null || rooms < 1) return null;
+  return Math.round(total / rooms / 1000) * 1000;
+}
+
+export function bathroomsLabel(value: Bathrooms): string {
+  return BATHROOMS_LABEL[value] ?? '';
+}
+
+export function utilitiesLabel(value: Utilities): string {
+  return UTILITIES_LABEL[value] ?? '';
+}
+
+/** Метки ограничений для карточки: формулировка зависит от типа точки. */
+export function restrictionLabels(codes: Restriction[] | undefined, type: PointType): string[] {
+  return (codes ?? []).map((code) => RESTRICTION_LABEL[type][code] ?? code);
+}
+
+/** Чипы формы: код едет на сервер, метка стоит на экране. */
+export function restrictionOptions(type: PointType): { value: Restriction; label: string }[] {
+  return RESTRICTIONS.map((value) => ({ value, label: RESTRICTION_LABEL[type][value] }));
+}
+
+export function bathroomsOptions(): { value: Bathrooms; label: string }[] {
+  return (['combined', 'separate', 'two'] as Bathrooms[]).map((value) => ({
+    value,
+    label: BATHROOMS_SHORT[value],
+  }));
+}
+
+export function utilitiesOptions(): { value: Utilities; label: string }[] {
+  return (['included', 'meters'] as Utilities[]).map((value) => ({
+    value,
+    label: UTILITIES_LABEL[value],
+  }));
 }
 
 /** Русская плюрализация счётчиков: 1 человек / 2 человека / 5 человек. */

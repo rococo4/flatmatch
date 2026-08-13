@@ -6,7 +6,16 @@
    Отклики автор смотрит в общем «Тебя лайкнули» (пометка «на твою комнату»). */
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { plural } from '../api/format';
+import type { PointDTO } from '../api/client';
+import {
+  addedLabel,
+  money,
+  plural,
+  pointStatusLabel,
+  pointTitle,
+  pricePerPerson,
+  stageBadge,
+} from '../api/format';
 import { Badge, LimitChip, PhotoPlaceholder, S } from '../ui/primitives';
 
 export type SavedSearch = {
@@ -27,27 +36,6 @@ export type ArchivedSearch = {
   params: string[];
   /** «нашёл здесь» / «нашёл в другом месте» / «передумал»; пусто — пауза по молчанию. */
   reason: string;
-};
-
-export type MarketFlat = {
-  id: string;
-  title: string;
-  pricePerPerson: string;
-  addedAt: string;
-  poolCount: number;
-  change?: string; // жёлтая плашка изменения точки
-  /** Участники пула отметили квартиру сданной — точка скрыта из ленты. */
-  hiddenAsRented?: boolean;
-};
-
-export type HomePoint = {
-  id: string;
-  title: string; // «Комната · м. Сокол»
-  pricePerPerson: string;
-  stage: 'living' | 'moving';
-  /** «живёт здесь» / «заезжает · ищет со-съёмщика со старта» */
-  stageBadge: string;
-  responseCount: number; // «N откликов»
 };
 
 const L = {
@@ -127,18 +115,6 @@ const L = {
     border: 'none',
     font: 'inherit',
   } as CSSProperties,
-  changeBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '8px 10px',
-    borderRadius: 9,
-    background: 'var(--warning-bg)',
-    color: 'var(--warning-fg)',
-    fontSize: 13,
-    fontWeight: 590,
-    lineHeight: 1.35,
-  } as CSSProperties,
   emptyTitle: { fontSize: 15, fontWeight: 590, textWrap: 'pretty' } as CSSProperties,
 };
 
@@ -209,6 +185,7 @@ export function MySearchesScreen({
   archived,
   error,
   flats,
+  enteredFlats,
   flatSlotsTotal,
   homes,
   homeSlotsTotal,
@@ -219,10 +196,6 @@ export function MySearchesScreen({
   onAddSearch,
   onReactivate,
   onOpenFlatPool,
-  onRemoveFlat,
-  onConfirmAlive,
-  onEditHome,
-  onRemoveHome,
   onCreateFlatPoint,
   onCreateHomePoint,
 }: {
@@ -232,9 +205,12 @@ export function MySearchesScreen({
   archived: ArchivedSearch[];
   /** Отказ последнего действия с поиском — обычно «поиски заняты 3 из 3» от сервера. */
   error?: string | null;
-  flats: MarketFlat[];
+  /** Свои квартиры с рынка: только они и считаются в лимит пяти. */
+  flats: PointDTO[];
+  /** Чужие пулы, в которые вошёл: лимита у них нет, слоты они не занимают. */
+  enteredFlats: PointDTO[];
   flatSlotsTotal: number;
-  homes: HomePoint[];
+  homes: PointDTO[];
   homeSlotsTotal: number;
   /** → выдача поиска (лента с его параметрами) */
   onOpenSearch?: (id: string) => void;
@@ -244,12 +220,8 @@ export function MySearchesScreen({
   onCloseSearch?: (id: string) => void;
   onAddSearch?: () => void;
   onReactivate?: (id: string) => void;
+  /** → пул квартиры (список вошедших) */
   onOpenFlatPool?: (id: string) => void;
-  onRemoveFlat?: (id: string) => void;
-  /** «Проверил — она живая»: снимает скрытие по сигналам пула. */
-  onConfirmAlive?: (id: string) => void;
-  onEditHome?: (id: string) => void;
-  onRemoveHome?: (id: string) => void;
   /** → форма «Найди со-съёмщика на свою квартиру» */
   onCreateFlatPoint?: () => void;
   /** → форма «К себе», сразу на гейте стадии */
@@ -391,94 +363,27 @@ export function MySearchesScreen({
           </div>
         )}
 
-        {/* 2. Присмотренные квартиры с рынка */}
+        {/* 2. Присмотренные квартиры с рынка: свои считаются в лимит, чужие
+            пулы стоят рядом без счёта — вход в них бесплатен и безлимитен. */}
         <div style={L.section}>
           <span style={S.sectionTitle}>
             ПРИСМОТРЕННЫЕ КВАРТИРЫ · {flats.length} ИЗ {flatSlotsTotal}
           </span>
 
-          {flats.length === 0 ? (
+          {flats.length === 0 && enteredFlats.length === 0 ? (
             <div style={L.emptyCard}>
               <span style={L.emptyTitle}>Присмотрел вариант на Авито? Собери на него людей</span>
               <CreateEntry tone="flat" onClick={onCreateFlatPoint} />
             </div>
           ) : (
             <>
-              {flats.map((f) => (
-                <article key={f.id} style={S.card}>
-                  <div
-                    style={{
-                      ...S.cardHeadBase,
-                      background: 'var(--type-flat-bg)',
-                      color: 'var(--type-flat-fg)',
-                    }}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
-                      Квартира с рынка
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>{f.addedAt}</span>
-                  </div>
-                  <div style={{ ...S.cardBody, gap: 10 }}>
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <PhotoPlaceholder
-                        label="скрин"
-                        style={{ flex: '0 0 72px', height: 54, borderRadius: 8 }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                        <span style={{ fontSize: 15, fontWeight: 590 }}>{f.title}</span>
-                        <span style={S.subtitle}>{f.pricePerPerson}</span>
-                        <span style={{ fontSize: 13, fontWeight: 510 }}>в пуле {f.poolCount}</span>
-                      </div>
-                    </div>
-                    {f.change && <div style={L.changeBanner}>{f.change}</div>}
-                    {f.hiddenAsRented && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                          padding: 10,
-                          borderRadius: 10,
-                          background: 'var(--warning-bg)',
-                          color: 'var(--warning-fg)',
-                        }}
-                      >
-                        <span style={{ fontSize: 13, fontWeight: 590, lineHeight: 1.35 }}>
-                          Скрыта: участники пула отметили, что сдана
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => onConfirmAlive?.(f.id)}
-                          style={{
-                            alignSelf: 'flex-start',
-                            padding: '8px 12px',
-                            border: 'none',
-                            borderRadius: 9,
-                            background: 'var(--card-bg)',
-                            font: 'inherit',
-                            fontSize: 13,
-                            fontWeight: 590,
-                            color: 'var(--tg-theme-accent-text-color)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Проверил — она живая
-                        </button>
-                      </div>
-                    )}
-                    <button type="button" style={S.secondaryButton} onClick={() => onOpenFlatPool?.(f.id)}>
-                      Смотреть пул · {f.poolCount}{' '}
-                      {plural(f.poolCount, 'человек', 'человека', 'человек')}
-                    </button>
-                    <div style={L.actions}>
-                      <button type="button" style={L.destructiveLink} onClick={() => onRemoveFlat?.(f.id)}>
-                        Закрыть точку
-                      </button>
-                    </div>
-                  </div>
-                </article>
+              {flats.map((p) => (
+                <FlatRow key={p.id} point={p} mine onOpenPool={onOpenFlatPool} />
               ))}
-              <CreateEntry tone="flat" onClick={onCreateFlatPoint} />
+              {enteredFlats.map((p) => (
+                <FlatRow key={p.id} point={p} onOpenPool={onOpenFlatPool} />
+              ))}
+              {flats.length < flatSlotsTotal && <CreateEntry tone="flat" onClick={onCreateFlatPoint} />}
             </>
           )}
         </div>
@@ -508,34 +413,22 @@ export function MySearchesScreen({
                     <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
                       Сосед к себе
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 590, opacity: 0.9 }}>{h.stageBadge}</span>
+                    <span style={{ fontSize: 12, fontWeight: 590, opacity: 0.9 }}>
+                      {h.stage ? stageBadge(h.stage) : ''}
+                    </span>
                   </div>
                   <div style={{ ...S.cardBody, gap: 10 }}>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <PhotoPlaceholder
-                        label="фото"
-                        style={{ flex: '0 0 72px', height: 54, borderRadius: 8 }}
-                      />
+                      <PointThumb url={h.photo_url} label="фото" />
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                        <span style={{ fontSize: 15, fontWeight: 590 }}>{h.title}</span>
-                        <span style={S.subtitle}>{h.pricePerPerson}</span>
+                        <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(h)}</span>
+                        <span style={S.subtitle}>{money(h.price_share ?? 0)} с человека</span>
                         <span style={{ fontSize: 13, fontWeight: 510 }}>
-                          {h.responseCount} откликов
+                          {h.responses} {plural(h.responses, 'отклик', 'отклика', 'откликов')}
                         </span>
                       </div>
                     </div>
-                    <div style={L.actions}>
-                      <button type="button" style={L.actionLink} onClick={() => onEditHome?.(h.id)}>
-                        Редактировать
-                      </button>
-                      <button
-                        type="button"
-                        style={L.destructiveLink}
-                        onClick={() => onRemoveHome?.(h.id)}
-                      >
-                        Закрыть точку
-                      </button>
-                    </div>
+                    <StatusRow status={h.status} />
                   </div>
                 </article>
               ))}
@@ -548,28 +441,67 @@ export function MySearchesScreen({
   );
 }
 
-/* Демо-данные для вёрстки блоков 2 и 3: точки приедут с §12 шагом 5.
-   Поиски здесь живые — их демо-заготовка удалена. */
-export const DEMO_MARKET_FLATS: MarketFlat[] = [
-  {
-    id: 'f1',
-    title: '2-комнатная · Хамовники',
-    pricePerPerson: '45 000 ₽ с человека',
-    addedAt: 'я добавил · 20 июля',
-    poolCount: 6,
-    change: 'Цена изменилась: 96 000 → 90 000 ₽',
-    /** Скрыта по сигналам пула — создатель может вернуть её одним тапом. */
-    hiddenAsRented: true,
-  },
-];
+/**
+ * Строка квартиры в «Присмотренных».
+ *
+ * Своя и чужая различаются только пометкой: у обеих один и тот же пул, и ведёт
+ * в него один и тот же тап. Кнопок правки и закрытия нет — редактирования точек
+ * в продукте нет вовсе (§6).
+ */
+function FlatRow({
+  point,
+  mine,
+  onOpenPool,
+}: {
+  point: PointDTO;
+  mine?: boolean;
+  onOpenPool?: (id: string) => void;
+}) {
+  const share = pricePerPerson(point.price_total, point.rooms);
+  return (
+    <article style={S.card}>
+      <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>
+        <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
+          {mine ? 'Квартира с рынка' : 'Я в пуле'}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>
+          {addedLabel(point.created_days_ago)}
+        </span>
+      </div>
+      <div style={{ ...S.cardBody, gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <PointThumb url={point.photo_url} label="скрин" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(point)}</span>
+            <span style={S.subtitle}>
+              {share !== null ? `${money(share)} с человека` : money(point.price_total ?? 0)}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 510 }}>в пуле {point.pool_count}</span>
+          </div>
+        </div>
+        <StatusRow status={point.status} />
+        <button type="button" style={S.secondaryButton} onClick={() => onOpenPool?.(point.id)}>
+          Смотреть пул · {point.pool_count}{' '}
+          {plural(point.pool_count, 'человек', 'человека', 'человек')}
+        </button>
+      </div>
+    </article>
+  );
+}
 
-export const DEMO_MY_HOMES: HomePoint[] = [
-  {
-    id: 'h1',
-    title: 'Комната · м. Сокол',
-    pricePerPerson: '28 000 ₽ с человека',
-    stage: 'living',
-    stageBadge: 'живёт здесь',
-    responseCount: 5,
-  },
-];
+/** Статус своей точки — только когда есть что сказать: активная и так в ленте. */
+function StatusRow({ status }: { status: PointDTO['status'] }) {
+  const label = pointStatusLabel(status);
+  if (!label) return null;
+  return (
+    <div>
+      <LimitChip>{label}</LimitChip>
+    </div>
+  );
+}
+
+function PointThumb({ url, label }: { url: string; label: string }) {
+  const style: CSSProperties = { flex: '0 0 72px', width: 72, height: 54, borderRadius: 8 };
+  if (!url) return <PhotoPlaceholder label={label} style={style} />;
+  return <img src={url} alt="" style={{ ...style, objectFit: 'cover', display: 'block' }} />;
+}

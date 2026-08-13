@@ -130,13 +130,17 @@ export function PointCreatedScreen({
       </div>
 
       <div style={L.fixed}>
-        <button
-          type="button"
-          style={{ ...S.secondaryButton, background: 'var(--chip-bg)', padding: 14, fontSize: 16 }}
-          onClick={onShare}
-        >
-          Позвать в пул — поделиться в чат
-        </button>
+        {/* Шеринг появляется вместе с обработчиком: ссылка на точку — это
+            диплинк, и рисовать кнопку, которая никуда не ведёт, незачем. */}
+        {onShare && (
+          <button
+            type="button"
+            style={{ ...S.secondaryButton, background: 'var(--chip-bg)', padding: 14, fontSize: 16 }}
+            onClick={onShare}
+          >
+            Позвать в пул — поделиться в чат
+          </button>
+        )}
         <button type="button" style={L.ghostButton} onClick={onToSearches}>
           К моим поискам
         </button>

@@ -531,13 +531,21 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
  * Своего экрана у него нет намеренно: выбор зоны это шаг формы, а не место,
  * куда можно прийти. Справочник конечен (~450 зон) и ищется целиком на
  * клиенте — сетевого поиска здесь нет.
+ *
+ * `kinds` сужает справочник: у поиска зоной может быть район, станция или
+ * ветка, а точка стоит на конкретной станции (§5), и предлагать ей ветку
+ * значило бы предлагать заведомый отказ сервера.
  */
-function ZonePicker({
+export function ZonePicker({
   zones,
+  kinds,
+  title = 'Где ищешь',
   onPick,
   onClose,
 }: {
   zones: Zone[] | null;
+  kinds?: ZoneKind[];
+  title?: string;
   onPick: (id: string) => void;
   onClose: () => void;
 }) {
@@ -546,8 +554,11 @@ function ZonePicker({
   // Индекс строится один раз на справочник, а не на каждое нажатие клавиши:
   // 454 нормализации на символ ввода — заметная работа в WebView телефона.
   const index = useMemo(
-    () => (zones ?? []).map((zone) => ({ zone, key: normalize(zone.name) })),
-    [zones],
+    () =>
+      (zones ?? [])
+        .filter((zone) => !kinds || kinds.includes(zone.kind))
+        .map((zone) => ({ zone, key: normalize(zone.name) })),
+    [zones, kinds],
   );
 
   const q = normalize(query.trim());
@@ -565,7 +576,7 @@ function ZonePicker({
         <span style={F.back} onClick={onClose}>
           ‹
         </span>
-        <span style={F.headerTitle}>Где ищешь</span>
+        <span style={F.headerTitle}>{title}</span>
       </div>
 
       <input

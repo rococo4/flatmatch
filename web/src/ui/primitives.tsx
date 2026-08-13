@@ -208,25 +208,33 @@ export function PersonRow({
   age,
   occupation,
   verifiedBadge,
+  photoUrl,
 }: {
   name: string;
   age: number;
-  occupation: string;
+  /** Пусто — строки нет: занятость есть не в каждом ответе сервера. */
+  occupation?: string;
   verifiedBadge?: string;
+  /** Пусто = фото не одобрено: вместо него инициалы (§5). */
+  photoUrl?: string;
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <Avatar name={name} size={48} />
+      <Avatar name={name} size={48} src={photoUrl} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
         <span style={S.title}>
           {name}, {age}
         </span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
-            {occupation}
-          </span>
-          {verifiedBadge && <Badge tone="accent">{verifiedBadge}</Badge>}
-        </div>
+        {(occupation || verifiedBadge) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            {occupation && (
+              <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>
+                {occupation}
+              </span>
+            )}
+            {verifiedBadge && <Badge tone="accent">{verifiedBadge}</Badge>}
+          </div>
+        )}
       </div>
     </div>
   );

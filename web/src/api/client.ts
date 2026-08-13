@@ -152,7 +152,7 @@ export interface SearchResponse extends SearchParamsNoZone {
   full_match: number;
   /** «M новых» — гаснет побочным эффектом захода в пул этой зоны. */
   new_count: number;
-  /** Всегда 0 до §12 шага 5: точек ещё нет. */
+  /** «M квартир под эти параметры»: активные точки зон, пересекающих зону поиска. */
   points_count: number;
 }
 
@@ -176,8 +176,8 @@ export interface FeedPromo {
 
 export interface FeedResponse {
   promo: FeedPromo;
-  /** Всегда [] до §12 шага 5. Пустой список — пустое состояние, не DEMO-квартира. */
-  points: unknown[];
+  /** Точки зоны выдачи, оба типа вперемешку: ранжирование считает сервер (§8). */
+  points: PointDTO[];
 }
 
 /**
@@ -232,6 +232,121 @@ export interface PoolResponse {
   ranked: boolean;
   sections: PoolSectionDTO[];
   people: PoolPersonDTO[];
+}
+
+/* ── Точки: квартиры с рынка и «сосед к себе» (§2.2, §6) ────────────────────
+   Словарные значения едут кодами — русские метки разные у двух типов карточек
+   («без животных» на квартире, «нельзя с животными» у «к себе»), и собирает их
+   api/format.ts. */
+
+/** Тип точки решает всё: у `flat` пул и дешёвый вход, у `intent_home` — отклики. */
+export type PointType = 'flat' | 'intent_home';
+
+/** Стадия «к себе»: уже живёт или заезжает. У квартиры с рынка стадии нет. */
+export type PointStage = 'live' | 'moving_in';
+
+/** unknown — значение уровня кода, как у Profile.status. */
+export type PointStatus = 'unknown' | 'pending' | 'active' | 'paused' | 'closed';
+
+/** «раздельный» важнее числа: вторая дверь для двух незнакомцев — это про быт. */
+export type Bathrooms = 'combined' | 'separate' | 'two';
+
+export type Utilities = 'included' | 'meters';
+
+/** Ограничения собственника — коды, показываются ДО дорогого лайка (§2.2). */
+export type Restriction = 'no_pets' | 'no_couples' | 'no_smoking';
+
+/**
+ * Автор «к себе» — единственная карточка с лицом (§2.2).
+ *
+ * Контактов не несёт: @username живёт только в мэтче (§3). Пустой `photo_url` =
+ * фото не одобрено, вместо него заглушка (§5).
+ */
+export interface PointAuthorDTO {
+  user_id: string;
+  name: string;
+  age: number;
+  photo_url: string;
+  schedule: NonNullable<Questionnaire['schedule']>;
+  smoking: NonNullable<Questionnaire['smoking']>;
+  pets_own: NonNullable<Questionnaire['pets_own']>;
+  last_seen: string;
+}
+
+/**
+ * Точка, как её показывают все экраны: лента, карточка, оба блока «Моих поисков».
+ *
+ * `created_by` тут нет и не будет: квартира с рынка обезличена (§2.2). Лицо есть
+ * только у «к себе» и приезжает в `author`.
+ *
+ * Счётчики персональные и по типу разные: `pool_count` — «в пуле N» квартиры,
+ * `responses` — «N откликов» у «к себе». `in_pool` — вошёл ли смотрящий.
+ */
+export interface PointDTO {
+  id: string;
+  type: PointType;
+  stage?: PointStage;
+  status: PointStatus;
+  zone: ZoneRef;
+
+  price_total?: number;
+  price_share?: number;
+  rooms?: number;
+  isolated?: boolean;
+  bathrooms?: Bathrooms;
+  utilities?: Utilities;
+  restrictions?: Restriction[];
+  photo_url: string;
+  /** Нормализованная ссылка на оригинал; есть только у квартир с рынка. */
+  url?: string;
+  /** День заезда, «2026-09-15». У точки это дата, а не месяц как у поиска. */
+  move_in?: string;
+  deposit?: number;
+
+  /** «добавлена N дней назад» — точность до дня, «20 минут назад» не обещаем (§8). */
+  created_days_ago: number;
+  pool_count: number;
+  responses: number;
+  in_pool: boolean;
+
+  author?: PointAuthorDTO;
+}
+
+/** Тело формы «Найди, с кем снять эту квартиру» (§6). */
+export interface CreateFlatPoint {
+  type: 'flat';
+  url: string;
+  zone_id: string;
+  price_total: number;
+  rooms?: number | null;
+  isolated?: boolean | null;
+  bathrooms?: Bathrooms | null;
+  utilities?: Utilities | null;
+  restrictions?: Restriction[];
+  photo_key: string;
+}
+
+/** Тело формы «Зову соседа к себе» (§2.2). Заезд обязателен у `moving_in`. */
+export interface CreateHomePoint {
+  type: 'intent_home';
+  stage: PointStage;
+  zone_id: string;
+  price_share: number;
+  rooms?: number | null;
+  isolated?: boolean | null;
+  restrictions?: Restriction[];
+  photo_key: string;
+  move_in?: string | null;
+  deposit?: number | null;
+}
+
+export type CreatePointBody = CreateFlatPoint | CreateHomePoint;
+
+export interface MyPointsResponse {
+  /** Мои точки во всех статусах, кроме закрытых: они и считаются в лимит. */
+  created: PointDTO[];
+  /** Чужие квартиры, в чьи пулы я вошёл. Лимита у них нет. */
+  entered: PointDTO[];
 }
 
 /* ── Профиль, дорогой лайк, мэтчи (§2.3, §6) ────────────────────────────────
@@ -368,6 +483,13 @@ export interface ApiErrorBody {
   error: { code: string; message: string; fields?: string[] };
 }
 
+/** 409 на ссылку, которая в продукте уже есть: всё для кнопки «Войти» — в теле. */
+interface DuplicateBody extends ApiErrorBody {
+  point_id: string;
+  pool_count: number;
+  status: PointStatus;
+}
+
 /**
  * Неудачный вызов API. `code` — стабильный идентификатор, по которому ветвимся;
  * `status` — HTTP-статус, он отличает «не вошёл» от «сервер лежит»;
@@ -388,6 +510,27 @@ export class ApiError extends Error {
 }
 
 /**
+ * Ссылку уже приносили: 409 `duplicate_url`.
+ *
+ * Отдельный класс, потому что форме мало текста — ей нужна сама точка: у
+ * активной есть пул, в который зовут войти, а точка на проверке ещё ничья, и
+ * входить в неё некуда (§5). Ветвиться по `pointStatus`, не по сообщению.
+ */
+export class DuplicatePointError extends ApiError {
+  readonly pointId: string;
+  readonly poolCount: number;
+  readonly pointStatus: PointStatus;
+
+  constructor(status: number, message: string, body: DuplicateBody) {
+    super(status, body.error.code, message);
+    this.name = 'DuplicatePointError';
+    this.pointId = body.point_id;
+    this.poolCount = body.pool_count;
+    this.pointStatus = body.status;
+  }
+}
+
+/**
  * Базовый адрес API.
  *
  * Пустой по умолчанию, поэтому все вызовы same-origin: в проде Caddy отдаёт
@@ -404,6 +547,16 @@ const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '';
  * credential перечитывается на каждом вызове.
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await call(path, init);
+  return (await response.json()) as T;
+}
+
+/** Вызов, который отвечает 204: тела нет, и разбирать его нечем. */
+async function requestNoContent(path: string, init?: RequestInit): Promise<void> {
+  await call(path, init);
+}
+
+async function call(path: string, init?: RequestInit): Promise<Response> {
   const initData = retrieveRawInitData();
   if (!initData) {
     throw new ApiError(0, 'no_init_data', 'Приложение открыто не из Telegram');
@@ -420,7 +573,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw await readError(response);
   }
-  return (await response.json()) as T;
+  return response;
 }
 
 /**
@@ -429,14 +582,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
  */
 async function readError(response: Response): Promise<ApiError> {
   try {
-    const body = (await response.json()) as Partial<ApiErrorBody>;
+    const body = (await response.json()) as Partial<DuplicateBody>;
     if (body.error?.code) {
-      return new ApiError(
-        response.status,
-        body.error.code,
-        body.error.message ?? response.statusText,
-        body.error.fields ?? [],
-      );
+      const message = body.error.message ?? response.statusText;
+      if (body.error.code === 'duplicate_url' && body.point_id) {
+        return new DuplicatePointError(response.status, message, body as DuplicateBody);
+      }
+      return new ApiError(response.status, body.error.code, message, body.error.fields ?? []);
     }
   } catch {
     // Тело нечитаемое — падаем в общее сообщение ниже.
@@ -581,6 +733,55 @@ export function reactivateSearch(id: string): Promise<SearchResponse> {
  */
 export function fetchZonePool(zoneId: string): Promise<PoolResponse> {
   return request<PoolResponse>(`/api/v1/pools/zone/${encodeURIComponent(zoneId)}`);
+}
+
+/**
+ * Создаёт точку: обе формы §6 ходят одним вызовом, тип решает тело.
+ *
+ * Отказы приходят кодами: 400 `invalid_field` — в `fields` ровно те поля,
+ * которые не понравились; 400 `point_limit` — слоты заняты (сообщение сервера
+ * уже названо по типу формы); 409 `duplicate_url` — ссылку уже приносили,
+ * и тогда это DuplicatePointError с самой точкой.
+ */
+export function postPoint(body: CreatePointBody): Promise<PointDTO> {
+  return request<PointDTO>('/api/v1/points', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Загружает фото точки — скрин объявления или фото комнаты.
+ *
+ * НЕ `/me/photo`: тот аплоад заменяет лицо в анкете и сбрасывает его на
+ * перепроверку (§5), то есть скрин Авито стёр бы человеку фото профиля.
+ * Content-Type не выставляем — boundary проставит браузер.
+ */
+export function uploadPointPhoto(file: File): Promise<{ photo_key: string }> {
+  const form = new FormData();
+  form.append('photo', file);
+  return request<{ photo_key: string }>('/api/v1/points/photo', { method: 'POST', body: form });
+}
+
+/** Карточка точки. Точка на проверке видна только создателю, остальным 404 (§5). */
+export function fetchPoint(id: string): Promise<PointDTO> {
+  return request<PointDTO>(`/api/v1/points/${encodeURIComponent(id)}`);
+}
+
+/** Блоки 2–3 «Моих поисков»: свои точки и чужие пулы, в которые вошёл. */
+export function fetchPointsMine(): Promise<MyPointsResponse> {
+  return request<MyPointsResponse>('/api/v1/points/mine');
+}
+
+/** «Интересно — войти в пул»: бесплатно, безлимитно, повторный тап не ошибка. */
+export function enterPointPool(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/enter`, { method: 'POST' });
+}
+
+/** «Выйти из пула». Дорогие лайки при этом не сгорают (§2.3) — говорить о них нечего. */
+export function leavePointPool(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/enter`, { method: 'DELETE' });
 }
 
 /**

@@ -1,9 +1,9 @@
 /* Оболочка приложения: тема, табы §6 и переходы между экранами.
 
    Живыми данными питаются анкета (§12 шаг 2), зоны, поиски, лента и зонный
-   пул (§12 шаг 3), профиль человека, лайки и мэтчи (§12 шаг 4). Точки ждут
-   своего шага и пока отрисованы на DEMO_*-данных из макета: вёрстка и
-   переходы настоящие, содержимое подставное.
+   пул (§12 шаг 3), профиль человека, лайки и мэтчи (§12 шаг 4), точки и их
+   формы (§12 шаг 5). На DEMO-данных остался только пул квартиры — он приедет
+   вместе с откликами следующей задачей.
 
    Здесь же живёт состояние ленты — намеренно выше экранов: переключение табов
    не должно ронять выдачу и перезапрашивать её. И здесь единственный владелец
@@ -19,10 +19,12 @@ import {
   ApiError,
   closeSearch,
   createSearch,
+  enterPointPool,
   fetchFeed,
   fetchIncoming,
   fetchMatches,
   fetchMe,
+  fetchPointsMine,
   fetchSearches,
   fetchZones,
   postLike,
@@ -33,6 +35,8 @@ import {
   type FeedResponse,
   type IncomingLikeDTO,
   type MatchDTO,
+  type MyPointsResponse,
+  type PointDTO,
   type Profile,
   type SearchResponse,
   type Zone,
@@ -41,9 +45,12 @@ import {
   closeReasonLabel,
   dayMonth,
   habitsLine,
+  money,
   occupationLabel,
   paramChips,
   plural,
+  pointTitle,
+  pricePerPerson,
   relativeDay,
 } from './api/format';
 import { TabBar, type Tab } from './ui/TabBar';
@@ -64,13 +71,7 @@ import { PersonProfileView } from './screens/PersonProfileView';
 import { MatchView } from './screens/MatchView';
 import { DEMO_FLAT_POOL, FlatPoolScreen } from './screens/FlatPoolScreen';
 import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
-import {
-  DEMO_MARKET_FLATS,
-  DEMO_MY_HOMES,
-  MySearchesScreen,
-  type ArchivedSearch,
-  type SavedSearch,
-} from './screens/MySearchesScreen';
+import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
 import { MyProfileScreen, type MyMatch } from './screens/MyProfileScreen';
 import { FlatLinkFormScreen, HomePointFormScreen } from './screens/PointFormScreens';
 import { PointCreatedScreen } from './screens/PointCreatedScreen';
@@ -176,6 +177,15 @@ export function App() {
 
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [searches, setSearches] = useState<SearchResponse[] | null>(null);
+  /**
+   * Мои точки и чужие пулы, в которые я вошёл: блоки 2–3 «Моих поисков».
+   *
+   * Как и поиски, живут выше экранов и перечитываются целиком после каждой
+   * мутации — счётчики пулов и статусы модерации считает только сервер.
+   */
+  const [myPoints, setMyPoints] = useState<MyPointsResponse>({ created: [], entered: [] });
+  /** Только что созданная точка — её показывает экран успеха. */
+  const [createdPoint, setCreatedPoint] = useState<PointDTO | null>(null);
   const [feed, setFeed] = useState<FeedState>(EMPTY_FEED);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [poolZone, setPoolZone] = useState<string | null>(null);
@@ -221,6 +231,13 @@ export function App() {
       .catch(() => undefined);
     void fetchMatches()
       .then(setMatches)
+      .catch(() => undefined);
+  }, []);
+
+  /** Перечитывает блоки 2–3 «Моих поисков». Отказ переживаем молча. */
+  const reloadPoints = useCallback(() => {
+    void fetchPointsMine()
+      .then(setMyPoints)
       .catch(() => undefined);
   }, []);
 
@@ -271,6 +288,7 @@ export function App() {
         // Бейдж входящих на табе «Профиль» нужен с первого экрана — иначе о
         // лайке узнают только те, кто сам зашёл в раздел.
         reloadLikes();
+        reloadPoints();
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -282,7 +300,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [reloadLikes]);
+  }, [reloadLikes, reloadPoints]);
 
   const setProfile = useCallback((profile: Profile) => setState({ kind: 'ready', profile }), []);
 
@@ -352,6 +370,32 @@ export function App() {
       return f.slotsFull && used < total ? { ...f, slotsFull: false } : f;
     });
     return list;
+  };
+
+  /** Перечитывает выдачу текущих параметров: счётчики пулов считает сервер. */
+  const refreshFeed = async () => {
+    if (!feed.data) return;
+    const data = await fetchFeed(draftToParams(feed.draft)).catch(() => null);
+    if (data) setFeed((f) => ({ ...f, data }));
+  };
+
+  /**
+   * «Интересно — войти в пул» (§2.2): вход бесплатный и в один тап, поэтому
+   * карточка меняется сразу — держать её мёртвой на время запроса не за что.
+   * Отказ откатывает счётчик и говорит словами сервера.
+   */
+  const enterFlatPool = async (id: string) => {
+    setFeed((f) => ({ ...f, data: withPoolMark(f.data, id, true), error: null }));
+    try {
+      await enterPointPool(id);
+      reloadPoints();
+    } catch (e: unknown) {
+      setFeed((f) => ({
+        ...f,
+        data: withPoolMark(f.data, id, false),
+        error: asApiError(e).message,
+      }));
+    }
   };
 
   /** Форма параметров просмотра: «Найти» с входа и «Изменить параметры» с выдачи. */
@@ -632,16 +676,15 @@ export function App() {
             zone={promo.zone.name}
             params={paramChips(draftToParams(feed.draft), { zoneName: promo.zone.name })}
             promo={buildPromo(promo, active, feed.slotsFull)}
-            // Точек ещё нет (§12 шаг 5), поэтому и переходов с их карточек в
-            // профиль нет: открывать живой профиль без id человека нечем.
-            items={[]}
+            points={feed.data.points}
             error={feed.error}
             onEditParams={() => openLookForm(feed.draft)}
             onJoinPool={() => void joinPool()}
             onOpenPool={() => openZonePool(promo.zone.id)}
             onFreeSlot={() => toTab('searches')}
-            onEnterFlatPool={() => setView('flatPool')}
-            onOpenSource={() => setSheet('stillLive')}
+            onEnterFlatPool={(id) => void enterFlatPool(id)}
+            // «Хочу эту комнату» и профиль автора с точкой-контекстом — там же,
+            // где отклики: следующей задачей шага 5.
           />
         );
       }
@@ -652,9 +695,10 @@ export function App() {
             searchSlotsTotal={3}
             archived={archivedSearches}
             error={searchesError}
-            flats={DEMO_MARKET_FLATS}
+            flats={myPoints.created.filter((p) => p.type === 'flat')}
+            enteredFlats={myPoints.entered}
             flatSlotsTotal={5}
-            homes={DEMO_MY_HOMES}
+            homes={myPoints.created.filter((p) => p.type === 'intent_home')}
             homeSlotsTotal={2}
             onOpenPool={(id) => {
               const s = active.find((x) => x.id === id);
@@ -823,17 +867,53 @@ export function App() {
           />
         );
       case 'flatForm':
-        return <FlatLinkFormScreen onBack={back} onSubmit={() => setView('pointCreated')} />;
+        return (
+          <FlatLinkFormScreen
+            zones={zones}
+            onBack={back}
+            onCreated={(point) => {
+              setCreatedPoint(point);
+              reloadPoints();
+              setView('pointCreated');
+            }}
+            // Дубль: своей точки не появилось, зато человек в чужом пуле —
+            // ведём в ленту, где карточка уже зелёная.
+            onEnteredPool={() => {
+              reloadPoints();
+              void refreshFeed();
+              toTab('feed');
+            }}
+          />
+        );
       case 'homeForm':
-        return <HomePointFormScreen onBack={back} onSubmit={() => setView('pointCreated')} />;
-      case 'pointCreated':
+        return (
+          <HomePointFormScreen
+            zones={zones}
+            hasLivePoint={myPoints.created.some((p) => p.stage === 'live')}
+            onBack={back}
+            // У «к себе» пула нет (§2.2), и «ты первый в пуле» ему сказать
+            // нечего: точка сразу видна в своём блоке со статусом проверки.
+            onCreated={() => {
+              reloadPoints();
+              toTab('searches');
+            }}
+          />
+        );
+      case 'pointCreated': {
+        if (!createdPoint) return tabScreen();
+        const share = pricePerPerson(createdPoint.price_total, createdPoint.rooms);
         return (
           <PointCreatedScreen
-            title="2-комнатная · Хамовники"
-            pricePerPerson="45 000 ₽"
+            title={pointTitle(createdPoint)}
+            pricePerPerson={
+              share !== null
+                ? `${money(share)} с человека`
+                : money(createdPoint.price_total ?? 0)
+            }
             onToSearches={() => toTab('searches')}
           />
         );
+      }
       default:
         return tabScreen();
     }
@@ -923,6 +1003,19 @@ function buildPromo(p: FeedPromo, active: SearchResponse[], slotsFull: boolean):
     avatars: p.avatars,
     slot: p.slots_used + 1,
     slotsTotal: p.slots_total,
+  };
+}
+
+/** Отмечает вход в пул точки в уже показанной выдаче — до ответа сервера. */
+function withPoolMark(data: FeedResponse | null, id: string, entered: boolean): FeedResponse | null {
+  if (!data) return data;
+  return {
+    ...data,
+    points: data.points.map((p) =>
+      p.id === id
+        ? { ...p, in_pool: entered, pool_count: Math.max(0, p.pool_count + (entered ? 1 : -1)) }
+        : p,
+    ),
   };
 }
 

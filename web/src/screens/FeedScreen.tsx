@@ -3,7 +3,20 @@
    Сохранение поиска живёт только в промо-блоке людей.
    Микрокопия дословная. */
 import type { CSSProperties } from 'react';
-import { money, plural } from '../api/format';
+import type { PointDTO } from '../api/client';
+import {
+  addedLabel,
+  bathroomsLabel,
+  dayMonth,
+  habitChips,
+  lastSeenLabel,
+  money,
+  plural,
+  pointTitle,
+  pricePerPerson,
+  restrictionLabels,
+  utilitiesLabel,
+} from '../api/format';
 import {
   FactsBlock,
   HabitsBlock,
@@ -17,51 +30,12 @@ import {
   type Fact,
 } from '../ui/primitives';
 import { PoolPromoBlock, type PromoState } from '../ui/PoolPromoBlock';
-import { FreshnessRow, type Freshness } from './EdgeStates';
 
-export type FlatCard = {
-  kind: 'flat';
-  id: string;
-  source: string;
-  postedAt: string;
-  title: string;
-  priceTotal: number;
-  pricePerPerson: number;
-  facts: Fact[];
-  /** Ограничения собственника — серые чипы на карточке: рушат мэтч до контакта. */
-  ownerLimits?: string[];
-  /** Источник и свежесть: ссылка на оригинал + строка проверки под ней. */
-  sourceName?: string;
-  freshness?: Freshness;
-  poolCount: number;
-};
-
-/** «К себе»: пула нет — счётчик откликов и дорогой лайк сразу автору. */
-export type HomeCard = {
-  kind: 'intent_home';
-  id: string;
-  name: string;
-  age: number;
-  occupation: string;
-  lastSeen: string;
-  verifiedBadge?: string;
-  /** Стадия автора: шапка карточки меняет текст. */
-  stage: 'living' | 'moving';
-  /** Для 'moving' — дата заезда в шапке: «15 августа» */
-  moveInLabel?: string;
-  facts: Fact[];
-  /** Ограничения квартиры — серые чипы ДО кнопки дорогого лайка. */
-  homeLimits?: string[];
-  habits: string[];
-  responseCount: number; // «5 откликов»
-};
-
-export const homeCardTitle = (it: HomeCard) =>
-  it.stage === 'moving'
-    ? `Сосед к себе — заезжает ${it.moveInLabel ?? ''}`.trim()
-    : 'Сосед к себе — уже живёт там';
-
-export type FeedItem = FlatCard | HomeCard;
+/** Шапка «к себе»: стадия автора решает, что на ней написано (§2.2). */
+function homeCardTitle(p: PointDTO): string {
+  if (p.stage !== 'moving_in') return 'Сосед к себе — уже живёт там';
+  return p.move_in ? `Сосед к себе — заезжает ${dayMonth(p.move_in)}` : 'Сосед к себе — заезжает';
+}
 
 const L = {
   screen: {
@@ -121,34 +95,35 @@ export function FeedScreen({
   zone,
   params,
   promo,
-  items,
+  points,
   error,
+  likesRemaining,
   onEditParams,
   onJoinPool,
   onOpenPool,
   onFreeSlot,
   onEnterFlatPool,
-  onOpenSource,
   onWantRoom,
   onOpenProfile,
 }: {
   zone: string;
   params: string[]; // текущие фильтры просмотра, только чтение
   promo: PromoState;
-  items: FeedItem[];
+  points: PointDTO[];
   /** Отказ сохранения поиска — строкой над промо-блоком, а не молчанием. */
   error?: string | null;
+  /** Остаток дорогих лайков для подписи «N из 5» под «Хочу эту комнату». */
+  likesRemaining?: number;
   onEditParams?: () => void;
   onJoinPool?: () => void;
   onOpenPool?: () => void;
   /** «Освободить слот» из состояния full — в «Мои поиски». */
   onFreeSlot?: () => void;
   onEnterFlatPool?: (id: string) => void;
-  /** Ссылка на оригинал; после возврата хост показывает StillLiveSheet. */
-  onOpenSource?: (id: string) => void;
-  onWantRoom?: (id: string) => void;
+  /** «Хочу эту комнату» — дорогой лайк автору «к себе» прямо с карточки. */
+  onWantRoom?: (point: PointDTO) => void;
   /** Тап по строке автора → полный профиль с анкетой и «о себе». */
-  onOpenProfile?: (id: string) => void;
+  onOpenProfile?: (point: PointDTO) => void;
 }) {
   return (
     <div style={L.screen}>
@@ -199,14 +174,20 @@ export function FeedScreen({
             onFreeSlot={onFreeSlot}
           />
 
-          {items.length === 0 ? (
+          {points.length === 0 ? (
             <PointsSoon />
           ) : (
-            items.map((it) =>
-              it.kind === 'flat' ? (
-                <FlatPointCard key={it.id} it={it} onEnterPool={onEnterFlatPool} onOpenSource={onOpenSource} />
+            points.map((p) =>
+              p.type === 'flat' ? (
+                <FlatPointCard key={p.id} point={p} onEnterPool={onEnterFlatPool} />
               ) : (
-                <HomePointCard key={it.id} it={it} onWantRoom={onWantRoom} onOpenProfile={onOpenProfile} />
+                <HomePointCard
+                  key={p.id}
+                  point={p}
+                  likesRemaining={likesRemaining}
+                  onWantRoom={onWantRoom}
+                  onOpenProfile={onOpenProfile}
+                />
               ),
             )
           )}
@@ -220,7 +201,8 @@ export function FeedScreen({
  * Место точек, пока их нет.
  *
  * Ни одной выдуманной квартиры: пустой список — это пустое состояние, а не
- * повод показать демо-карточку. Настоящие точки приедут с §12 шагом 5.
+ * повод показать демо-карточку. Тот же блок стоит на экране входа в ленту,
+ * где параметров ещё нет и спрашивать нечего.
  */
 export function PointsSoon() {
   return (
@@ -235,86 +217,70 @@ export function PointsSoon() {
 
 /** Квартира с рынка: пул есть, вход дешёвый — secondary. */
 function FlatPointCard({
-  it,
+  point,
   onEnterPool,
-  onOpenSource,
 }: {
-  it: FlatCard;
+  point: PointDTO;
   onEnterPool?: (id: string) => void;
-  onOpenSource?: (id: string) => void;
 }) {
+  const share = pricePerPerson(point.price_total, point.rooms);
   return (
     <article style={S.card}>
       <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>
         <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>Квартира с рынка</span>
         <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>
-          {it.source} · {it.postedAt}
+          {addedLabel(point.created_days_ago)}
         </span>
       </div>
       <div style={S.cardBody}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <PhotoPlaceholder label="скрин объявления" style={{ aspectRatio: '16/9', borderRadius: 10 }} />
-          <span style={S.title}>{it.title}</span>
+          <PointPhoto url={point.photo_url} label="скрин объявления" />
+          <span style={S.title}>{pointTitle(point)}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
-              {money(it.pricePerPerson)}{' '}
-              <span
-                style={{ fontSize: 14, fontWeight: 400, color: 'var(--tg-theme-subtitle-text-color)' }}
-              >
-                с человека
+            {/* Цена доли — только когда есть на что делить: комнатность
+                объявление называет не всегда, а придумывать «на двоих» за него
+                нельзя. */}
+            {share !== null ? (
+              <>
+                <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
+                  {money(share)}{' '}
+                  <span
+                    style={{ fontSize: 14, fontWeight: 400, color: 'var(--tg-theme-subtitle-text-color)' }}
+                  >
+                    с человека
+                  </span>
+                </span>
+                <span style={S.subtitle}>{money(point.price_total ?? 0)} / мес за квартиру</span>
+              </>
+            ) : (
+              <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
+                {money(point.price_total ?? 0)}{' '}
+                <span
+                  style={{ fontSize: 14, fontWeight: 400, color: 'var(--tg-theme-subtitle-text-color)' }}
+                >
+                  / мес за квартиру
+                </span>
               </span>
-            </span>
-            <span style={S.subtitle}>{money(it.priceTotal)} / мес за квартиру · на двоих</span>
+            )}
           </div>
         </div>
-        <FactsBlock title="Квартира" facts={it.facts}>
-          {it.ownerLimits && it.ownerLimits.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
-              {it.ownerLimits.map((l) => (
-                <span
-                  key={l}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 7,
-                    background: 'var(--chip-bg)',
-                    color: 'var(--tg-theme-subtitle-text-color)',
-                    fontSize: 12,
-                  }}
-                >
-                  {l}
-                </span>
-              ))}
-            </div>
-          )}
+        <FactsBlock title="Квартира" facts={flatFacts(point)}>
+          <GreyChips items={restrictionLabels(point.restrictions, 'flat')} />
         </FactsBlock>
-        {it.sourceName && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button
-              type="button"
-              onClick={() => onOpenSource?.(it.id)}
-              style={{
-                alignSelf: 'flex-start',
-                border: 'none',
-                background: 'none',
-                padding: 0,
-                font: 'inherit',
-                fontSize: 13,
-                fontWeight: 510,
-                color: 'var(--tg-theme-accent-text-color)',
-                cursor: 'pointer',
-              }}
-            >
-              Открыть на {it.sourceName} ↗
-            </button>
-            {it.freshness && <FreshnessRow freshness={it.freshness} />}
-          </div>
-        )}
-        <PoolCount n={it.poolCount} kind="flat" hint="увидишь после входа" />
-        <PoolEntryButton
-          label="Интересно — войти в пул"
-          caption="Вход бесплатный и безлимитный"
-          onClick={() => onEnterPool?.(it.id)}
+        <PoolCount
+          n={point.pool_count}
+          kind="flat"
+          hint={point.in_pool ? undefined : 'увидишь после входа'}
         />
+        {point.in_pool ? (
+          <InPoolRow />
+        ) : (
+          <PoolEntryButton
+            label="Интересно — войти в пул"
+            caption="Вход бесплатный и безлимитный"
+            onClick={() => onEnterPool?.(point.id)}
+          />
+        )}
       </div>
     </article>
   );
@@ -323,25 +289,33 @@ function FlatPointCard({
 /** Сосед к себе: пула нет. Счётчик откликов + дорогой лайк автору (filled).
  *  Тап по строке человека — полный профиль (тот же экран, что из пула). */
 function HomePointCard({
-  it,
+  point,
+  likesRemaining,
   onWantRoom,
   onOpenProfile,
 }: {
-  it: HomeCard;
-  onWantRoom?: (id: string) => void;
-  onOpenProfile?: (id: string) => void;
+  point: PointDTO;
+  likesRemaining?: number;
+  onWantRoom?: (point: PointDTO) => void;
+  onOpenProfile?: (point: PointDTO) => void;
 }) {
+  const author = point.author;
+  // Витрина «к себе» — это автор: без него карточке нечего показывать (§2.2).
+  if (!author) return null;
+
   return (
     <article style={S.card}>
       <div style={{ ...S.cardHeadBase, background: 'var(--type-home-bg)', color: 'var(--type-home-fg)' }}>
         <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
-          {homeCardTitle(it)}
+          {homeCardTitle(point)}
         </span>
-        <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>{it.lastSeen}</span>
+        <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>
+          {lastSeenLabel(author.last_seen)}
+        </span>
       </div>
       <div style={S.cardBody}>
         <div
-          onClick={() => onOpenProfile?.(it.id)}
+          onClick={onOpenProfile ? () => onOpenProfile(point) : undefined}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -349,52 +323,37 @@ function HomePointCard({
             padding: 8,
             margin: -8,
             borderRadius: 11,
-            cursor: 'pointer',
+            cursor: onOpenProfile ? 'pointer' : 'default',
           }}
         >
           <PersonRow
-            name={it.name}
-            age={it.age}
-            occupation={it.occupation}
-            verifiedBadge={it.verifiedBadge}
+            name={author.name}
+            age={author.age}
+            occupation=""
+            photoUrl={author.photo_url || undefined}
           />
-          <span
-            style={{
-              marginLeft: 'auto',
-              flex: '0 0 auto',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 13,
-              fontWeight: 510,
-              color: 'var(--tg-theme-accent-text-color)',
-            }}
-          >
-            Анкета<span style={{ fontSize: 17, lineHeight: 1 }}>›</span>
-          </span>
-        </div>
-        <FactsBlock title={`Комната у ${it.name}`} facts={it.facts}>
-          <PhotoPlaceholder inCard label="фото комнаты" style={{ aspectRatio: '16/9', borderRadius: 8 }} />
-          {it.homeLimits && it.homeLimits.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
-              {it.homeLimits.map((l) => (
-                <span
-                  key={l}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 7,
-                    background: 'var(--chip-bg)',
-                    color: 'var(--tg-theme-subtitle-text-color)',
-                    fontSize: 12,
-                  }}
-                >
-                  {l}
-                </span>
-              ))}
-            </div>
+          {onOpenProfile && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                flex: '0 0 auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 13,
+                fontWeight: 510,
+                color: 'var(--tg-theme-accent-text-color)',
+              }}
+            >
+              Анкета<span style={{ fontSize: 17, lineHeight: 1 }}>›</span>
+            </span>
           )}
+        </div>
+        <FactsBlock title={`Комната у ${author.name}`} facts={homeFacts(point)}>
+          <PointPhoto url={point.photo_url} label="фото комнаты" inCard />
+          <GreyChips items={restrictionLabels(point.restrictions, 'intent_home')} />
         </FactsBlock>
-        <HabitsBlock items={it.habits} />
+        <HabitsBlock items={habitChips(author)} />
         <div
           style={{
             display: 'flex',
@@ -414,65 +373,111 @@ function HomePointCard({
             }}
           />
           <span style={{ color: 'var(--tg-theme-text-color)', fontWeight: 510 }}>
-            {it.responseCount} откликов
+            {point.responses} {plural(point.responses, 'отклик', 'отклика', 'откликов')}
           </span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <button type="button" style={S.filledButton} onClick={() => onWantRoom?.(it.id)}>
-            Хочу жить вместе
-          </button>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LimitChip small>3 из 5</LimitChip>
+        {/* Кнопка появляется вместе с обработчиком: дорогой лайк с карточки —
+            это §12 шаг 5 в части точек, и рисовать её мёртвой незачем. */}
+        {onWantRoom && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <button type="button" style={S.filledButton} onClick={() => onWantRoom(point)}>
+              Хочу эту комнату
+            </button>
+            {likesRemaining != null && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <LimitChip small>{likesRemaining} из 5</LimitChip>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </article>
   );
 }
 
-/* Демо-данные для вёрстки карточек точек: сами точки приедут с §12 шагом 5,
-   а чипы фильтров и промо-блок уже живые — их демо-заготовки удалены, чтобы
-   не разъезжаться с сервером. */
-export const DEMO_FEED: FeedItem[] = [
-  {
-    kind: 'flat',
-    id: 'p1',
-    source: 'Авито',
-    postedAt: '27 июля',
-    title: '2-комнатная · Хамовники',
-    priceTotal: 90000,
-    pricePerPerson: 45000,
-    facts: [
-      { label: 'Метро', value: 'Фрунзенская · 12 мин пешком' },
-      { label: 'Комнаты', value: '2, изолированные' },
-      { label: 'Мебель и техника', value: 'есть' },
-      { label: 'Заезд', value: 'с 15 августа' },
-      { label: 'Санузлы', value: '1 раздельный' },
-      { label: 'Коммуналка', value: 'по счётчикам' },
-    ],
-    ownerLimits: ['без животных', 'не сдают парам'],
-    sourceName: 'Авито',
-    freshness: { kind: 'confirmed', label: 'подтверждена вчера' },
-    poolCount: 6,
-  },
-  {
-    kind: 'intent_home',
-    id: 'p2',
-    name: 'Ира',
-    age: 27,
-    occupation: 'удалёнка',
-    lastSeen: 'была вчера',
-    verifiedBadge: 'Рабочая почта',
-    stage: 'living',
-    facts: [
-      { label: 'Цена доли', value: <PerPerson>28 000 ₽</PerPerson> },
-      { label: 'Метро', value: 'Сокол · 8 мин пешком' },
-      { label: 'Комната', value: 'изолированная, 14 м²' },
-      { label: 'Депозит', value: '28 000 ₽' },
-      { label: 'Заезд', value: 'с 15 августа' },
-    ],
-    homeLimits: ['нельзя с животными', 'курить нельзя'],
-    habits: ['жаворонок', 'не курю', 'кот'],
-    responseCount: 5,
-  },
-];
+/** Фото точки. Пустой адрес — заглушка: карточка без фото всё равно карточка. */
+function PointPhoto({ url, label, inCard }: { url: string; label: string; inCard?: boolean }) {
+  const style: CSSProperties = { aspectRatio: '16/9', borderRadius: inCard ? 8 : 10 };
+  if (!url) return <PhotoPlaceholder inCard={inCard} label={label} style={style} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      style={{ ...style, width: '100%', objectFit: 'cover', display: 'block' }}
+    />
+  );
+}
+
+/** Ограничения — серые чипы: их читают до лайка, а не после мэтча (§2.2). */
+function GreyChips({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+      {items.map((l) => (
+        <span
+          key={l}
+          style={{
+            padding: '4px 8px',
+            borderRadius: 7,
+            background: 'var(--chip-bg)',
+            color: 'var(--tg-theme-subtitle-text-color)',
+            fontSize: 12,
+          }}
+        >
+          {l}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Вошёл — кнопки больше нет: вход одноразовый, выход живёт в самом пуле (§6). */
+function InPoolRow() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
+        padding: 12,
+        borderRadius: 10,
+        background: 'var(--verdict-ok-bg)',
+        color: 'var(--verdict-ok-fg)',
+        fontSize: 15,
+        fontWeight: 590,
+      }}
+    >
+      ✓ Ты в пуле
+    </div>
+  );
+}
+
+function flatFacts(p: PointDTO): Fact[] {
+  const facts: Fact[] = [];
+  if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
+  if (p.rooms) {
+    facts.push({
+      label: 'Комнаты',
+      value: p.isolated == null ? String(p.rooms) : `${p.rooms}, ${p.isolated ? 'изолированные' : 'проходные'}`,
+    });
+  }
+  if (p.bathrooms) facts.push({ label: 'Санузлы', value: bathroomsLabel(p.bathrooms) });
+  if (p.utilities) facts.push({ label: 'Коммуналка', value: utilitiesLabel(p.utilities) });
+  if (p.deposit) facts.push({ label: 'Депозит', value: money(p.deposit) });
+  return facts;
+}
+
+function homeFacts(p: PointDTO): Fact[] {
+  const facts: Fact[] = [];
+  if (p.price_share) {
+    facts.push({ label: 'Цена доли', value: <PerPerson>{money(p.price_share)}</PerPerson> });
+  }
+  if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
+  if (p.isolated != null) {
+    facts.push({ label: 'Комната', value: p.isolated ? 'изолированная' : 'проходная' });
+  }
+  if (p.deposit) facts.push({ label: 'Депозит', value: money(p.deposit) });
+  if (p.move_in) facts.push({ label: 'Заезд', value: `с ${dayMonth(p.move_in)}` });
+  return facts;
+}

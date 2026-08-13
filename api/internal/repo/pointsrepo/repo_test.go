@@ -17,8 +17,11 @@ import (
 )
 
 // Test users live in their own negative tg_id range so leftovers never collide
-// with real accounts or with the other repos' tests.
-const testTGBase int64 = -995000000
+// with real accounts or with the other repos' tests: each cleanup wipes its
+// whole window, so a shared base makes parallel packages delete each other's
+// rows. Taken: -994 usersrepo, -995 matchesrepo, -996 likesrepo, -997 pools,
+// -998 searchesrepo.
+const testTGBase int64 = -993000000
 
 // Точки парсера и досыпки создателя не имеют, и по тестовым юзерам их не
 // найти — поэтому все точки тестов живут в своей зоне и чистятся по ней.
@@ -261,9 +264,13 @@ func TestIntentHomeLimitsByStage(t *testing.T) {
 			t.Errorf("third point (%s) = %v, want ErrPointLimit", stage, err)
 		}
 	}
-	// Слот поисков «к себе» не занимает, и пять ссылок с рынка — тоже свой счёт.
-	if _, err := repo.Create(t.Context(), flatPoint(&user, entity.SourceUserLink, "https://avito.ru/1", entity.PointPending)); err != nil {
-		t.Errorf("flat alongside two intent_home points failed: %v", err)
+	// Слот поисков «к себе» не занимает, и пять ссылок с рынка — тоже свой счёт:
+	// все пять обязаны пройти рядом с двумя «к себе», иначе лимит их смешивает.
+	for i := range entity.MaxUserLinkPoints {
+		url := fmt.Sprintf("https://avito.ru/%d", i)
+		if _, err := repo.Create(t.Context(), flatPoint(&user, entity.SourceUserLink, url, entity.PointPending)); err != nil {
+			t.Errorf("flat #%d alongside two intent_home points failed: %v", i+1, err)
+		}
 	}
 
 	// Закрытая точка слот не держит: «живу здесь» освободилось.
@@ -343,6 +350,62 @@ func TestByURLNormIgnoresClosed(t *testing.T) {
 	}
 	if found == nil || found.ID != again.ID {
 		t.Errorf("ByURLNorm() = %+v, want the re-submitted point", found)
+	}
+
+	// Живую ссылку второй раз не подать. Сервис ловит дубль через ByURLNorm
+	// заранее — сюда доходит только гонка двух одновременных подач.
+	if _, err := repo.Create(t.Context(), flatPoint(&user, entity.SourceUserLink, url, entity.PointActive)); !errors.Is(err, ErrURLTaken) {
+		t.Errorf("duplicate of a live link = %v, want ErrURLTaken", err)
+	}
+}
+
+// Пул принадлежит точке, а не пользователю: вход в одну квартиру не должен
+// делать человека участником соседней.
+func TestPoolMembershipIsPerPoint(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	author := seedUser(t, pool, 1)
+	guest := seedUser(t, pool, 2)
+
+	first, err := repo.Create(t.Context(),
+		flatPoint(&author, entity.SourceUserLink, "https://avito.ru/1", entity.PointActive))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	second, err := repo.Create(t.Context(),
+		flatPoint(&author, entity.SourceUserLink, "https://avito.ru/2", entity.PointActive))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	inPool := func(pointID uuid.UUID) bool {
+		t.Helper()
+		in, err := repo.InPool(t.Context(), guest, pointID)
+		if err != nil {
+			t.Fatalf("InPool() failed: %v", err)
+		}
+		return in
+	}
+
+	if err := repo.Enter(t.Context(), guest, first.ID); err != nil {
+		t.Fatalf("Enter() failed: %v", err)
+	}
+	if !inPool(first.ID) || inPool(second.ID) {
+		t.Errorf("after entering the first point: in first = %v, in second = %v, want true, false",
+			inPool(first.ID), inPool(second.ID))
+	}
+
+	// Выход из второй квартиры не выносит человека из первой.
+	if err := repo.Enter(t.Context(), guest, second.ID); err != nil {
+		t.Fatalf("Enter() failed: %v", err)
+	}
+	if err := repo.Leave(t.Context(), guest, second.ID); err != nil {
+		t.Fatalf("Leave() failed: %v", err)
+	}
+	if !inPool(first.ID) || inPool(second.ID) {
+		t.Errorf("after leaving the second point: in first = %v, in second = %v, want true, false",
+			inPool(first.ID), inPool(second.ID))
 	}
 }
 

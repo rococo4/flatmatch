@@ -8,6 +8,7 @@ import (
 	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/postgres"
@@ -26,7 +27,7 @@ func (r *Repo) Create(ctx context.Context, p entity.Point) (entity.Point, error)
 				price_total, price_share, rooms, isolated, bathrooms, utilities,
 				restrictions, photo_key, url_norm, move_in, deposit)
 			VALUES ($1, $2, COALESCE(NULLIF($3, ''), 'pending'), $4, $5, $6,
-				$7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), $15, $16, $17)
+				$7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''), NULLIF($15, ''), $16, $17)
 			RETURNING `+pointColumns,
 			string(p.Type), enumArg(p.Stage), string(p.Status), string(p.Source),
 			p.CreatedBy, p.ZoneID, p.PriceTotal, p.PriceShare, p.Rooms, p.Isolated,
@@ -39,7 +40,7 @@ func (r *Repo) Create(ctx context.Context, p entity.Point) (entity.Point, error)
 		return err
 	})
 	if err != nil {
-		return entity.Point{}, fmt.Errorf("create %s point: %w", p.Type, err)
+		return entity.Point{}, fmt.Errorf("create %s point: %w", p.Type, urlTaken(err))
 	}
 	return out, nil
 }
@@ -282,6 +283,14 @@ func collectPoint(rows pgx.Rows) (entity.Point, error) {
 		return entity.Point{}, err
 	}
 	return row.toEntity(), nil
+}
+
+func urlTaken(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == urlNormIndex {
+		return ErrURLTaken
+	}
+	return err
 }
 
 func exists(ctx context.Context, tx pgx.Tx, query string, args ...any) (bool, error) {

@@ -36,6 +36,10 @@ const memberColumns = `lp.created_at AS entered_at, ` + personColumns + `,
 
 const livePoint = `status IN ('pending', 'active')`
 
+const uniqueViolation = "23505"
+
+const urlNormIndex = "points_url_norm_active"
+
 type FeedPoint struct {
 	Point     entity.Point
 	PoolCount int

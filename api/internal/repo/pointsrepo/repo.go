@@ -2,7 +2,13 @@
 // (§2.2).
 package pointsrepo
 
-import "github.com/jackc/pgx/v5/pgxpool"
+import (
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var ErrURLTaken = errors.New("url already taken by a live point")
 
 type Repo struct {
 	pool *pgxpool.Pool

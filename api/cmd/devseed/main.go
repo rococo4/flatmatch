@@ -437,7 +437,9 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 //
 // The points are upserted by their fixed ids: unlike a search, a point cannot
 // be wiped and rewritten, because the pool under it references it and entering
-// a pool is a thing the dev does by hand during a walkthrough.
+// a pool is a thing the dev does by hand during a walkthrough. A rerun states
+// the point again rather than patches it — close_reason goes with the status,
+// and half of a closed point would break the CHECK that pairs them.
 func seedFlats(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) (int, error) {
 	const query = `
 		INSERT INTO points (id, type, status, source, zone_id, price_total, rooms,
@@ -445,7 +447,7 @@ func seedFlats(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) (in
 		VALUES ($1, 'flat', 'active', 'manual', $2, $3, $4, true, $5,
 			now() - make_interval(days => $6::int), now() - make_interval(days => $6::int))
 		ON CONFLICT (id) DO UPDATE SET
-			status = 'active', zone_id = EXCLUDED.zone_id,
+			status = 'active', close_reason = NULL, zone_id = EXCLUDED.zone_id,
 			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
 			isolated = EXCLUDED.isolated, photo_key = EXCLUDED.photo_key,
 			created_at = EXCLUDED.created_at, edited_at = EXCLUDED.edited_at`
@@ -496,7 +498,7 @@ func seedIntentHome(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID
 			45000, 2, true, ARRAY['no_smoking']::text[], $4, 45000,
 			now() - make_interval(days => 3), now() - make_interval(days => 3))
 		ON CONFLICT (id) DO UPDATE SET
-			status = 'active', created_by = EXCLUDED.created_by,
+			status = 'active', close_reason = NULL, created_by = EXCLUDED.created_by,
 			zone_id = EXCLUDED.zone_id, price_share = EXCLUDED.price_share,
 			rooms = EXCLUDED.rooms, isolated = EXCLUDED.isolated,
 			restrictions = EXCLUDED.restrictions, photo_key = EXCLUDED.photo_key,

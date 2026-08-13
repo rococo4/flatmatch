@@ -33,7 +33,7 @@ func NewDir(root, baseURL string) (*Dir, error) {
 }
 
 func (d *Dir) Put(_ context.Context, key string, r io.Reader, _ string) error {
-	name, err := d.path(key)
+	name, err := d.Path(key)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (d *Dir) Put(_ context.Context, key string, r io.Reader, _ string) error {
 }
 
 func (d *Dir) Delete(_ context.Context, key string) error {
-	name, err := d.path(key)
+	name, err := d.Path(key)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,10 @@ func (d *Dir) URL(key string) string {
 
 func (d *Dir) Root() string { return d.root }
 
-func (d *Dir) path(key string) (string, error) {
+// Path is the local file behind a key. Telegram cannot fetch a photo from a
+// стенд that is not on the public internet, so the moderation chat uploads the
+// bytes instead of sending a URL (§5).
+func (d *Dir) Path(key string) (string, error) {
 	clean := path.Clean("/" + key)
 	name := filepath.Join(d.root, filepath.FromSlash(clean))
 

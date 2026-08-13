@@ -13,9 +13,11 @@
 // POOL: every applicant wants the same one room, so the response is an
 // expensive like straight to the author («Хочу эту комнату»).
 //
-// Also owns freshness (§8): the crowdsourced «Объявление ещё живое?» vote after
-// following a link out, hiding at max(2, 30% of the pool) «сдана» votes, the
-// 14-day TTL, and last_seen_alive.
+// Both forms land in the moderation queue: автовалидация здесь (домен ссылки,
+// вилка цены, станция из справочника, §5), человек — в чате основателя.
 //
-// Empty on purpose — built in §12 step 5.
+// Freshness (§8) — the crowdsourced «Объявление ещё живое?» vote, the hiding
+// threshold and last_seen_alive — is §12 step 7 and lives nowhere yet.
+//
+// Built in §12 step 5.
 package points

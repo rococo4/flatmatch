@@ -1,0 +1,148 @@
+package moderation
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/AlekSi/pointer"
+	"github.com/google/uuid"
+
+	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/logctx"
+	"flatmatch/api/internal/service/zones"
+)
+
+// Sender is the moderation chat's transport. Фото уходит файлом, а не ссылкой:
+// на стенде картинки недоступны из интернета, а Telegram ходит за URL сам.
+// Кнопка — пара (текст, callback_data).
+type Sender interface {
+	SendModerationPhoto(ctx context.Context, chatID int64, photoPath, caption string, buttons [][2]string) (int, error)
+}
+
+type UsersMod interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.User, error)
+	SetModeration(ctx context.Context, id uuid.UUID, status *entity.Status, photo, about *entity.ModerationStatus) (entity.User, error)
+	PendingModeration(ctx context.Context) ([]entity.User, error)
+}
+
+type PointsMod interface {
+	SetStatus(ctx context.Context, id uuid.UUID, status entity.PointStatus, closeReason *string) (bool, error)
+	PendingModeration(ctx context.Context) ([]entity.Point, error)
+}
+
+// PhotoURLs resolves a stored key to a local file: в базе лежит ключ, адрес
+// собирает хранилище.
+type PhotoURLs interface {
+	Path(key string) (string, error)
+}
+
+type Service struct {
+	bot    Sender
+	chatID int64
+	users  UsersMod
+	points PointsMod
+	photos PhotoURLs
+	dir    *zones.Directory
+}
+
+func New(bot Sender, chatID int64, users UsersMod, points PointsMod, photos PhotoURLs, dir *zones.Directory) *Service {
+	return &Service{bot: bot, chatID: chatID, users: users, points: points, photos: photos, dir: dir}
+}
+
+// UserPending shows a questionnaire to the moderator: фото и «о себе» — ровно
+// то, что он смотрит (§5).
+func (s *Service) UserPending(ctx context.Context, u entity.User) {
+	s.send(ctx, subjectUser, u.ID, u.PhotoKey, userCaption(u), [][2]string{
+		{"ок", callback(subjectUser, opOK, u.ID)},
+		{"фото не ок", callback(subjectUser, opPhoto, u.ID)},
+		{"текст не ок", callback(subjectUser, opAbout, u.ID)},
+	})
+}
+
+func (s *Service) PointPending(ctx context.Context, p entity.Point) {
+	s.send(ctx, subjectPoint, p.ID, p.PhotoKey, s.pointCaption(p), [][2]string{
+		{"ок", callback(subjectPoint, opOK, p.ID)},
+		{"отклонить", callback(subjectPoint, opNo, p.ID)},
+	})
+}
+
+// SendQueue re-sends everything still waiting — догон после рестарта, когда
+// сообщения с кнопками потерялись или бот стоял (§3 дизайна).
+func (s *Service) SendQueue(ctx context.Context) error {
+	users, err := s.users.PendingModeration(ctx)
+	if err != nil {
+		return err
+	}
+	for _, u := range users {
+		s.UserPending(ctx, u)
+	}
+
+	points, err := s.points.PendingModeration(ctx)
+	if err != nil {
+		return err
+	}
+	for _, p := range points {
+		s.PointPending(ctx, p)
+	}
+	return nil
+}
+
+// send is best-effort by design: очередь живёт в БД, а не в чате, поэтому
+// неотправленное сообщение — повод для warn и команды /queue, но не ошибка
+// наверх, которая отменила бы создание точки или отправку анкеты.
+func (s *Service) send(ctx context.Context, subject string, id uuid.UUID, photoKey, caption string, buttons [][2]string) {
+	log := logctx.From(ctx).With("subject", subject, "id", id)
+	if s.chatID == 0 {
+		log.Warn("moderation chat is not configured, the queue only piles up in the database")
+		return
+	}
+	if photoKey == "" {
+		log.Warn("nothing to show the moderator: no photo")
+		return
+	}
+
+	path, err := s.photos.Path(photoKey)
+	if err != nil {
+		log.Warn("resolve photo for moderation", "error", err)
+		return
+	}
+	if _, err := s.bot.SendModerationPhoto(ctx, s.chatID, path, caption, buttons); err != nil {
+		log.Warn("send to the moderation chat", "error", err)
+	}
+}
+
+func (s *Service) pointCaption(p entity.Point) string {
+	station := p.ZoneID
+	if zone, ok := s.dir.Get(p.ZoneID); ok {
+		station = zone.Name
+	}
+
+	if p.Type == entity.PointIntentHome {
+		return fmt.Sprintf("%s\nдоля %d ₽ · м. %s",
+			stageLabel(p.Stage), pointer.Get(p.PriceShare), station)
+	}
+
+	caption := fmt.Sprintf("%s\n%d ₽ · м. %s",
+		pointer.Get(p.URLNorm), pointer.Get(p.PriceTotal), station)
+	if p.Rooms != nil {
+		caption += fmt.Sprintf(" · %d комн.", *p.Rooms)
+	}
+	return caption
+}
+
+func userCaption(u entity.User) string {
+	// Одобренная анкета в очереди — это правка фото или «о себе»: остальное
+	// меняется молча (§5).
+	status := string(entity.StatusPending)
+	if u.Status == entity.StatusActive {
+		status = "правка"
+	}
+	return fmt.Sprintf("%s, %d\n%s\nстатус: %s", u.Name, u.Profile.Age, u.Profile.About, status)
+}
+
+func stageLabel(stage *entity.PointStage) string {
+	if pointer.Get(stage) == entity.StageMovingIn {
+		return "заезжает · ищет со-съёмщика со старта"
+	}
+	return "живёт здесь"
+}

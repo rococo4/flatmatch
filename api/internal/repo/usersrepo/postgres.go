@@ -114,6 +114,52 @@ func (r *Repo) SetStatus(ctx context.Context, id uuid.UUID, status entity.Status
 	return user, nil
 }
 
+// SetModeration applies a moderator's verdict: nil leaves a field alone.
+// Всё тремя указателями сразу, потому что вердикт §5 — это связка: «ок»
+// проявляет человека везде разом, а реджект фото у неодобренной анкеты
+// возвращает её в draft тем же движением.
+func (r *Repo) SetModeration(ctx context.Context, id uuid.UUID, status *entity.Status, photo, about *entity.ModerationStatus) (entity.User, error) {
+	const query = `
+		UPDATE users SET
+			status       = COALESCE($2, status),
+			photo_status = COALESCE($3, photo_status),
+			about_status = COALESCE($4, about_status)
+		WHERE id = $1
+		RETURNING ` + columns
+
+	user, err := r.one(ctx, query, id, enumArg(status), enumArg(photo), enumArg(about))
+	if err != nil {
+		return entity.User{}, fmt.Errorf("set moderation of user %s: %w", id, err)
+	}
+	return user, nil
+}
+
+// PendingModeration is the questionnaire queue (§5), both of its kinds: a
+// freshly submitted profile and a re-check of the photo or «о себе» of somebody
+// already active — the moderator looks at exactly those two fields.
+func (r *Repo) PendingModeration(ctx context.Context) ([]entity.User, error) {
+	const query = `
+		SELECT ` + columns + `
+		FROM users
+		WHERE status = 'pending'
+		   OR (status = 'active' AND (photo_status = 'pending' OR about_status = 'pending'))
+		ORDER BY created_at, id`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list users pending moderation: %w", err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[userRow])
+	if err != nil {
+		return nil, fmt.Errorf("list users pending moderation: %w", err)
+	}
+	out := make([]entity.User, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity(ctx))
+	}
+	return out, nil
+}
+
 func (r *Repo) one(ctx context.Context, query string, args ...any) (entity.User, error) {
 	var user entity.User
 

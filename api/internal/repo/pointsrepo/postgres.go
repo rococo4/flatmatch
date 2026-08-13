@@ -75,14 +75,27 @@ func (r *Repo) ByURLNorm(ctx context.Context, urlNorm string) (*entity.Point, er
 }
 
 func (r *Repo) Feed(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]FeedPoint, error) {
-	points, err := r.feed(ctx, `p.status = 'active' AND p.zone_id = ANY($2)
-		  AND (p.type = 'flat'
-		       OR (EXISTS (SELECT 1 FROM visible_people($1) vp WHERE vp = p.created_by)
-		           AND `+notMatchedWith("p.created_by")+`))`, viewerID, zoneIDs)
+	points, err := r.feed(ctx,
+		`p.status = 'active' AND p.zone_id = ANY($2) AND `+cardShown(), viewerID, zoneIDs)
 	if err != nil {
 		return nil, fmt.Errorf("feed for viewer %s: %w", viewerID, err)
 	}
 	return points, nil
+}
+
+// CardByID is the card of one point, counters and all — the same row the feed
+// builds, so an open card cannot say something the list did not. Status is not
+// filtered: точка на проверке принадлежит создателю (§5), и решает это сервис.
+func (r *Repo) CardByID(ctx context.Context, viewerID, pointID uuid.UUID) (FeedPoint, error) {
+	points, err := r.feed(ctx,
+		`p.id = $2 AND (p.created_by = $1 OR `+cardShown()+`)`, viewerID, pointID)
+	if err != nil {
+		return FeedPoint{}, fmt.Errorf("card of point %s: %w", pointID, err)
+	}
+	if len(points) == 0 {
+		return FeedPoint{}, entity.ErrNotFound
+	}
+	return points[0], nil
 }
 
 func (r *Repo) Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []FeedPoint, err error) {
@@ -137,6 +150,38 @@ func (r *Repo) CountActiveIn(ctx context.Context, zoneIDs []string) (int, error)
 		return 0, fmt.Errorf("count active points in zones: %w", err)
 	}
 	return n, nil
+}
+
+// SetStatus applies a moderator's verdict and reports whether it landed: only a
+// point still on review moves, so a second tap on a stale button in the chat is
+// a no-op and answers «уже обработано» (§5).
+func (r *Repo) SetStatus(ctx context.Context, id uuid.UUID, status entity.PointStatus, closeReason *string) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE points SET status = $2, close_reason = $3, edited_at = now()
+		WHERE id = $1 AND status = 'pending'`, id, string(status), closeReason)
+	if err != nil {
+		return false, fmt.Errorf("set status of point %s to %s: %w", id, status, err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// PendingModeration is the points queue (§5). Источники без человека приходят
+// сразу активными (§8), поэтому здесь всегда пользовательские формы.
+func (r *Repo) PendingModeration(ctx context.Context) ([]entity.Point, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+pointColumns+` FROM points WHERE status = 'pending' ORDER BY created_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list points pending moderation: %w", err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[pointRow])
+	if err != nil {
+		return nil, fmt.Errorf("list points pending moderation: %w", err)
+	}
+	out := make([]entity.Point, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
 }
 
 func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
@@ -219,6 +264,17 @@ func (r *Repo) feed(ctx context.Context, where string, args ...any) ([]FeedPoint
 		out = append(out, row.toEntity())
 	}
 	return out, nil
+}
+
+// cardShown decides whether a card exists for the viewer at all. Автор «к себе»
+// и есть карточка: при несовпадении gender_pref человека нет нигде (§4),
+// поэтому его комната в чужую выдачу не попадает, а смэтченный уходит из
+// discovery (§2.3). У квартиры с рынка автора нет — она обезличена и видна
+// всем. The viewer is always $1.
+func cardShown() string {
+	return `(p.type = 'flat'
+	       OR (EXISTS (SELECT 1 FROM visible_people($1) vp WHERE vp = p.created_by)
+	           AND ` + notMatchedWith("p.created_by") + `))`
 }
 
 // notMatchedWith is the filter searchesrepo.PoolCandidates carries too: the

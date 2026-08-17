@@ -18,7 +18,9 @@ import (
 // Кладовая поисков обязана оставаться той, кого просит middleware.
 var _ Touches = (*searchesrepo.Repo)(nil)
 
-type fakeValidator struct{}
+type fakeValidator struct {
+	err error
+}
 
 type fakeAccounts struct {
 	user entity.User
@@ -29,7 +31,10 @@ type fakeTouches struct {
 	err   error
 }
 
-func (fakeValidator) Validate(string) (tma.InitData, error) {
+func (f fakeValidator) Validate(string) (tma.InitData, error) {
+	if f.err != nil {
+		return tma.InitData{}, f.err
+	}
 	return tma.InitData{User: tma.User{ID: 1, FirstName: "Катя"}}, nil
 }
 
@@ -82,6 +87,29 @@ func TestMiddlewareTouchesOncePerWindow(t *testing.T) {
 
 	if len(touches.calls) != 1 || touches.calls[0] != user.ID {
 		t.Errorf("Touch calls = %v, want exactly one for %s", touches.calls, user.ID)
+	}
+}
+
+// Отбитый запрос — не активность: чужие или протухшие initData не должны
+// двигать поиски человека, которого в них назвали.
+func TestRefusedRequestDoesNotTouch(t *testing.T) {
+	touches := &fakeTouches{}
+	mw := New(fakeValidator{err: errors.New("bad hash")}, fakeAccounts{
+		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
+	}, touches)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/feed", nil)
+	req.Header.Set("Authorization", "tma stub")
+	mw(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("the request reached the handler")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+	if len(touches.calls) != 0 {
+		t.Errorf("Touch calls = %v, want none for a refused request", touches.calls)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 
 type fakeRepo struct {
 	rows []entity.Notification
+	seen map[string]bool
 	// ctxErr — отмену запроса строка события переживает, и проверить это можно
 	// только тем контекстом, который доехал до репозитория.
 	ctxErr error
@@ -29,8 +30,7 @@ func (f *fakeRepo) Insert(ctx context.Context, n entity.Notification) (bool, err
 	if f.err != nil {
 		return false, f.err
 	}
-	f.rows = append(f.rows, n)
-	return true, nil
+	return f.keep(n), nil
 }
 
 func (f *fakeRepo) InsertMany(ctx context.Context, ns []entity.Notification) (int, error) {
@@ -38,8 +38,39 @@ func (f *fakeRepo) InsertMany(ctx context.Context, ns []entity.Notification) (in
 	if f.err != nil {
 		return 0, f.err
 	}
-	f.rows = append(f.rows, ns...)
-	return len(ns), nil
+	inserted := 0
+	for _, n := range ns {
+		if f.keep(n) {
+			inserted++
+		}
+	}
+	return inserted, nil
+}
+
+// keep повторяет уникальный индекс лога — (адресат, тип, актор, контекст):
+// дубли невозможны на уровне БД (§7), и фейк, который их принимает, разрешил бы
+// сервису то, чего база не разрешит.
+func (f *fakeRepo) keep(n entity.Notification) bool {
+	key := strings.Join([]string{n.UserID.String(), string(n.Type), n.ActorKey, n.ContextKey}, "|")
+	if f.seen[key] {
+		return false
+	}
+	if f.seen == nil {
+		f.seen = map[string]bool{}
+	}
+	f.seen[key] = true
+	f.rows = append(f.rows, n)
+	return true
+}
+
+func (f *fakeRepo) typed(typ entity.NotificationType) []entity.Notification {
+	var out []entity.Notification
+	for _, n := range f.rows {
+		if n.Type == typ {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func (f *fakeRepo) contexts(userID uuid.UUID) []string {
@@ -53,9 +84,10 @@ func (f *fakeRepo) contexts(userID uuid.UUID) []string {
 }
 
 type fakeSearches struct {
-	searches []entity.Search
-	asked    []string
-	err      error
+	searches  []entity.Search
+	asked     []string
+	err       error
+	byUserErr error
 }
 
 func (f *fakeSearches) ActiveIn(_ context.Context, zoneIDs []string) ([]entity.Search, error) {
@@ -66,6 +98,19 @@ func (f *fakeSearches) ActiveIn(_ context.Context, zoneIDs []string) ([]entity.S
 	var out []entity.Search
 	for _, s := range f.searches {
 		if slices.Contains(zoneIDs, s.ZoneID) {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeSearches) ActiveByUser(_ context.Context, userID uuid.UUID) ([]entity.Search, error) {
+	if f.byUserErr != nil {
+		return nil, f.byUserErr
+	}
+	var out []entity.Search
+	for _, s := range f.searches {
+		if s.UserID == userID {
 			out = append(out, s)
 		}
 	}
@@ -299,6 +344,80 @@ func TestProfileVerdict(t *testing.T) {
 	}
 	if at := n.ActorKey[len(prefix):]; at == "" || at == "0" {
 		t.Errorf("actor %q carries no verdict time", n.ActorKey)
+	}
+}
+
+// Поиски сохраняют и до аппрува (§4), но до него человека не видно нигде (§5):
+// фан-аут его поисков выходит пустым, и рассказать о нём пулам можно только в
+// момент одобрения.
+func TestApprovalAnnouncesTheSearchesSavedBefore(t *testing.T) {
+	newcomer, subscriber := uuid.New(), uuid.New()
+	mine := search(newcomer, "line-1")
+
+	repo := &fakeRepo{}
+	searches := &fakeSearches{searches: []entity.Search{mine, search(subscriber, "d-khamovniki")}}
+	// Неодобренного не отдаёт visible_people — для подписчика его нет.
+	people := &fakePeople{invisibleTo: map[uuid.UUID]bool{subscriber: true}}
+	svc := testService(t, repo, searches, &fakePoints{}, people)
+
+	svc.ZoneNew(t.Context(), mine)
+	if got := repo.typed(entity.NotifZoneNew); len(got) != 0 {
+		t.Fatalf("wrote %d rows about a pending newcomer, want 0: %+v", len(got), got)
+	}
+
+	// Аппрув: человек проявляется везде разом (§5).
+	delete(people.invisibleTo, subscriber)
+	svc.ProfileVerdict(t.Context(), newcomer, entity.NotifProfileOK)
+
+	announced := repo.typed(entity.NotifZoneNew)
+	if len(announced) != 1 {
+		t.Fatalf("announced %d searches after the approval, want 1: %+v", len(announced), announced)
+	}
+	n := announced[0]
+	if n.UserID != subscriber || n.ActorKey != newcomer.String() || n.ContextKey != "d-khamovniki" {
+		t.Errorf("row %+v, want zone_new about %s to %s in d-khamovniki", n, newcomer, subscriber)
+	}
+	if len(repo.typed(entity.NotifProfileOK)) != 1 {
+		t.Errorf("the approval itself was not pushed: %+v", repo.rows)
+	}
+
+	// Второй аппрув дубля не даёт: у доанонса ключ строки тот же.
+	svc.ProfileVerdict(t.Context(), newcomer, entity.NotifProfileOK)
+	if got := repo.typed(entity.NotifZoneNew); len(got) != 1 {
+		t.Errorf("announced %d rows after a repeated approval, want 1: %+v", len(got), got)
+	}
+}
+
+// Доанонс — свойство аппрува: реджекты пулам ничего не рассказывают, человека
+// в них по-прежнему нет.
+func TestRejectionAnnouncesNothing(t *testing.T) {
+	newcomer, subscriber := uuid.New(), uuid.New()
+	repo := &fakeRepo{}
+	searches := &fakeSearches{searches: []entity.Search{
+		search(newcomer, "line-1"), search(subscriber, "d-khamovniki"),
+	}}
+	svc := testService(t, repo, searches, &fakePoints{}, &fakePeople{})
+
+	svc.ProfileVerdict(t.Context(), newcomer, entity.NotifPhotoRejected)
+	svc.ProfileVerdict(t.Context(), newcomer, entity.NotifAboutRejected)
+
+	if got := repo.typed(entity.NotifZoneNew); len(got) != 0 {
+		t.Errorf("wrote %d zone_new rows on a rejection, want 0: %+v", len(got), got)
+	}
+}
+
+// Непрочитанные поиски не отменяют вердикт: строка «анкета одобрена» уже нужна
+// человеку, а доанонс — украшение аппрува.
+func TestApprovalSurvivesUnreadableSearches(t *testing.T) {
+	userID := uuid.New()
+	repo := &fakeRepo{}
+	svc := testService(t, repo, &fakeSearches{byUserErr: errors.New("no database today")},
+		&fakePoints{}, &fakePeople{})
+
+	svc.ProfileVerdict(t.Context(), userID, entity.NotifProfileOK)
+
+	if len(repo.typed(entity.NotifProfileOK)) != 1 {
+		t.Errorf("rows = %+v, want the approval push", repo.rows)
 	}
 }
 

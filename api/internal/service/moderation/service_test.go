@@ -38,6 +38,7 @@ type fakeUsers struct {
 	user    entity.User
 	pending []entity.User
 	sets    []setCall
+	setErr  error
 }
 
 type statusCall struct {
@@ -50,6 +51,7 @@ type fakePoints struct {
 	pending []entity.Point
 	sets    []statusCall
 	changed bool
+	setErr  error
 	point   entity.Point
 	byIDErr error
 }
@@ -67,6 +69,9 @@ func (f *fakeUsers) ByID(context.Context, uuid.UUID) (entity.User, error) {
 
 func (f *fakeUsers) SetModeration(_ context.Context, id uuid.UUID, status *entity.Status, photo, about *entity.ModerationStatus) (entity.User, error) {
 	f.sets = append(f.sets, setCall{id: id, status: status, photo: photo, about: about})
+	if f.setErr != nil {
+		return entity.User{}, f.setErr
+	}
 	return f.user, nil
 }
 
@@ -80,6 +85,9 @@ func (f *fakePoints) ByID(context.Context, uuid.UUID) (entity.Point, error) {
 
 func (f *fakePoints) SetStatus(_ context.Context, id uuid.UUID, status entity.PointStatus, reason *string) (bool, error) {
 	f.sets = append(f.sets, statusCall{id: id, status: status, reason: reason})
+	if f.setErr != nil {
+		return false, f.setErr
+	}
 	return f.changed, nil
 }
 

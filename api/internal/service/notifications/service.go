@@ -18,9 +18,11 @@ type Repository interface {
 }
 
 // Searches отдаёт подписчиков зоны: активный поиск — это и есть подписка на
-// «появился новый совпавший» (§3).
+// «появился новый совпавший» (§3). ActiveByUser — обратная сторона: чьи поиски
+// доанонсировать, когда человека наконец одобрили.
 type Searches interface {
 	ActiveIn(ctx context.Context, zoneIDs []string) ([]entity.Search, error)
+	ActiveByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
 }
 
 type Points interface {
@@ -31,6 +33,14 @@ type People interface {
 	VisibleBetween(ctx context.Context, a, b uuid.UUID) (bool, error)
 	IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error)
 }
+
+// Ключи payload: их пишет сервис событий, читает воркер.
+const (
+	payloadName     = "name"
+	payloadGender   = "gender"
+	payloadPeerName = "peer_name"
+	payloadSearchID = "search_id"
+)
 
 type Service struct {
 	repo     Repository
@@ -51,7 +61,7 @@ func (s *Service) Liked(ctx context.Context, toID, fromID uuid.UUID, fromName st
 		UserID:   toID,
 		Type:     entity.NotifLiked,
 		ActorKey: fromID.String(),
-		Payload:  map[string]any{"name": fromName, "gender": string(fromGender)},
+		Payload:  map[string]any{payloadName: fromName, payloadGender: string(fromGender)},
 	})
 }
 
@@ -77,6 +87,13 @@ func (s *Service) ProfileVerdict(ctx context.Context, userID uuid.UUID, typ enti
 		Type:     typ,
 		ActorKey: verdictActor(userID, typ, time.Now()),
 	})
+	// Аппрув — это и есть «человек появился в пулах» (§5): поиски он мог
+	// сохранить и до одобрения, но visible_people его тогда не отдавала, и
+	// фан-аут вышел пустым. Доанонс безопасен — писать было нечего, а повтор
+	// отобьёт уникальный индекс по актору.
+	if typ == entity.NotifProfileOK {
+		s.announceSearches(ctx, userID)
+	}
 }
 
 func (s *Service) PointVerdict(ctx context.Context, point entity.Point, ok bool) {

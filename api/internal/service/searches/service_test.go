@@ -16,10 +16,11 @@ import (
 )
 
 type fakeRepo struct {
-	existing  *entity.Search // what ByID answers; nil → ErrNotFound
-	created   *entity.SearchParams
-	updated   *entity.SearchParams
-	createErr error
+	existing      *entity.Search // what ByID answers; nil → ErrNotFound
+	created       *entity.SearchParams
+	updated       *entity.SearchParams
+	createErr     error
+	reactivateErr error
 
 	listCalls       int
 	closeCalls      int
@@ -57,7 +58,15 @@ func (f *fakeRepo) Close(_ context.Context, _, _ uuid.UUID, reason entity.CloseR
 }
 func (f *fakeRepo) Reactivate(context.Context, uuid.UUID, uuid.UUID) (entity.Search, error) {
 	f.reactivateCalls++
-	return entity.Search{Status: entity.SearchActive}, nil
+	if f.reactivateErr != nil {
+		return entity.Search{}, f.reactivateErr
+	}
+	revived := entity.Search{Status: entity.SearchActive}
+	if f.existing != nil {
+		revived = *f.existing
+		revived.Status = entity.SearchActive
+	}
+	return revived, nil
 }
 
 func testDir(t *testing.T) *zones.Directory {

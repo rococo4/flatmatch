@@ -63,16 +63,39 @@ func TestUpdateStaysSilent(t *testing.T) {
 
 // Реактивация — тот же приход человека в пул, что и создание (§3).
 func TestReactivateAnnouncesTheSearch(t *testing.T) {
-	repo := &fakeRepo{}
+	repo := &fakeRepo{existing: &entity.Search{
+		SearchParams: entity.SearchParams{ZoneID: "line-1", PriceMax: 40000},
+		Status:       entity.SearchClosed,
+	}}
 	pushes := &fakePushes{}
 	svc := New(repo, testDir(t), pushes)
 
-	if _, err := svc.Reactivate(t.Context(), uuid.New(), uuid.New()); err != nil {
+	revived, err := svc.Reactivate(t.Context(), uuid.New(), uuid.New())
+	if err != nil {
 		t.Fatalf("Reactivate() failed: %v", err)
 	}
 
 	if len(pushes.zoneNew) != 1 {
-		t.Errorf("ZoneNew called %d times, want 1", len(pushes.zoneNew))
+		t.Fatalf("ZoneNew called %d times, want 1", len(pushes.zoneNew))
+	}
+	// Фан-аут строит пул по зоне: анонсировать надо ровно тот поиск, что вернул
+	// репозиторий, а не форму запроса.
+	if got := pushes.zoneNew[0]; got.ZoneID != revived.ZoneID || got.ZoneID != "line-1" {
+		t.Errorf("ZoneNew got the search of zone %q, want %q", got.ZoneID, revived.ZoneID)
+	}
+}
+
+func TestFailedReactivateAnnouncesNothing(t *testing.T) {
+	repo := &fakeRepo{reactivateErr: errors.New("no such search")}
+	pushes := &fakePushes{}
+	svc := New(repo, testDir(t), pushes)
+
+	if _, err := svc.Reactivate(t.Context(), uuid.New(), uuid.New()); err == nil {
+		t.Fatal("Reactivate() succeeded, want the repo error")
+	}
+
+	if len(pushes.zoneNew) != 0 {
+		t.Errorf("ZoneNew called %d times after a failed reactivation, want 0", len(pushes.zoneNew))
 	}
 }
 

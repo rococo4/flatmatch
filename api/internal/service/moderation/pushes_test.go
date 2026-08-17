@@ -117,6 +117,37 @@ func TestStaleUserVerdictPushesNothing(t *testing.T) {
 	}
 }
 
+// Вердикт не применился — рассказывать нечего: пуш «анкета одобрена» без
+// одобрения врал бы человеку.
+func TestFailedUserVerdictPushesNothing(t *testing.T) {
+	user := submitted()
+	pushes := &fakePushes{}
+	s := newPushService(t, &fakeUsers{user: user, setErr: errors.New("database is away")},
+		&fakePoints{}, pushes)
+
+	if _, err := s.HandleCallback(t.Context(), callback(subjectUser, opOK, user.ID)); err == nil {
+		t.Fatal("HandleCallback() succeeded, want the repo error")
+	}
+
+	if len(pushes.profiles) != 0 {
+		t.Errorf("ProfileVerdict called %d times after a failed verdict, want 0", len(pushes.profiles))
+	}
+}
+
+func TestFailedPointVerdictPushesNothing(t *testing.T) {
+	pushes := &fakePushes{}
+	s := newPushService(t, &fakeUsers{},
+		&fakePoints{setErr: errors.New("database is away")}, pushes)
+
+	if _, err := s.HandleCallback(t.Context(), callback(subjectPoint, opOK, uuid.New())); err == nil {
+		t.Fatal("HandleCallback() succeeded, want the repo error")
+	}
+
+	if len(pushes.points) != 0 {
+		t.Errorf("PointVerdict called %d times after a failed verdict, want 0", len(pushes.points))
+	}
+}
+
 func TestPointVerdictPushesToItsAuthor(t *testing.T) {
 	tests := []struct {
 		name string

@@ -82,3 +82,51 @@ func TestActiveIn(t *testing.T) {
 		}
 	}
 }
+
+func TestActiveByUser(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+
+	owner := seedUser(t, pool, 1, "active", "male", "any")
+	stranger := seedUser(t, pool, 2, "active", "male", "any")
+
+	create := func(userID uuid.UUID, zone string) entity.Search {
+		t.Helper()
+		s, err := repo.Create(t.Context(), userID, testParams(zone))
+		if err != nil {
+			t.Fatalf("Create() failed: %v", err)
+		}
+		return s
+	}
+
+	inA := create(owner, fanoutZoneA)
+	inB := create(owner, fanoutZoneB)
+	strangers := create(stranger, fanoutZoneA)
+	closed := create(owner, fanoutZoneC)
+	if _, err := repo.Close(t.Context(), owner, closed.ID, entity.CloseFoundHere); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+
+	got, err := repo.ActiveByUser(t.Context(), owner)
+	if err != nil {
+		t.Fatalf("ActiveByUser() failed: %v", err)
+	}
+
+	ids := make([]uuid.UUID, 0, len(got))
+	for _, s := range got {
+		ids = append(ids, s.ID)
+	}
+	if !slices.Equal(ids, []uuid.UUID{inA.ID, inB.ID}) {
+		t.Errorf("ActiveByUser() = %v, want the two active searches %v and %v", ids, inA.ID, inB.ID)
+	}
+	for _, unwanted := range []entity.Search{strangers, closed} {
+		if slices.Contains(ids, unwanted.ID) {
+			t.Errorf("ActiveByUser() returned %s — someone else's search or a closed one", unwanted.ID)
+		}
+	}
+	// Доанонс строит контекст из зоны, и она обязана доехать целой.
+	if got[0].ZoneID != fanoutZoneA || got[0].UserID != owner {
+		t.Errorf("ActiveByUser() returned %+v, want user %s in zone %s", got[0], owner, fanoutZoneA)
+	}
+}

@@ -60,12 +60,12 @@ func TestActiveIn(t *testing.T) {
 	for _, s := range got {
 		ids = append(ids, s.ID)
 	}
-	for _, want := range []entity.Search{inA, inB, neighbourInA, pendingInA} {
+	for _, want := range []entity.Search{inA, inB, neighbourInA} {
 		if !slices.Contains(ids, want.ID) {
 			t.Errorf("ActiveIn() lost the active search %s in %s", want.ID, want.ZoneID)
 		}
 	}
-	for _, unwanted := range []entity.Search{elsewhere, closed, paused} {
+	for _, unwanted := range []entity.Search{elsewhere, closed, paused, pendingInA} {
 		if slices.Contains(ids, unwanted.ID) {
 			t.Errorf("ActiveIn() returned %s — a search in another zone or not active", unwanted.ID)
 		}

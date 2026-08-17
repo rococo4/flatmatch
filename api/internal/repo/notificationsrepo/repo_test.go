@@ -553,3 +553,36 @@ func TestLikedTailLivesInTheSentRow(t *testing.T) {
 		t.Errorf("LastLikedTail() outside the window = %+v, want nil", got)
 	}
 }
+
+// PendingPersonal — отдельная страница личных: агрегат, стоящий первым в
+// очереди, в неё не попадает.
+func TestPendingPersonalSkipsAggregates(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	me := seedUser(t, pool, 1, "active")
+
+	for _, n := range []entity.Notification{
+		{UserID: me, Type: entity.NotifZoneNew, ActorKey: "a1", ContextKey: "z"},
+		{UserID: me, Type: entity.NotifLiked, ActorKey: "a2"},
+	} {
+		if _, err := repo.Insert(t.Context(), n); err != nil {
+			t.Fatalf("Insert() failed: %v", err)
+		}
+	}
+
+	personal, err := repo.PendingPersonal(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("PendingPersonal() failed: %v", err)
+	}
+	if len(personal) != 1 || personal[0].Type != entity.NotifLiked {
+		t.Errorf("PendingPersonal(1) = %+v, want the liked row past the older aggregate", personal)
+	}
+	all, err := repo.Pending(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("Pending() failed: %v", err)
+	}
+	if len(all) != 1 || all[0].Type != entity.NotifZoneNew {
+		t.Errorf("Pending(1) = %+v, want the older aggregate first", all)
+	}
+}

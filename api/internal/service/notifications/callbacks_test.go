@@ -14,6 +14,8 @@ type fakeSearchAnswers struct {
 	searches map[uuid.UUID]entity.Search
 	cleared  []uuid.UUID
 	closed   map[uuid.UUID]entity.CloseReason
+	revived  []uuid.UUID
+	noSlots  bool
 }
 
 func (f *fakeSearchAnswers) ByID(_ context.Context, userID, id uuid.UUID) (entity.Search, error) {
@@ -27,6 +29,20 @@ func (f *fakeSearchAnswers) ByID(_ context.Context, userID, id uuid.UUID) (entit
 func (f *fakeSearchAnswers) ClearTTLAsked(_ context.Context, id uuid.UUID) error {
 	f.cleared = append(f.cleared, id)
 	return nil
+}
+
+func (f *fakeSearchAnswers) Reactivate(_ context.Context, userID, id uuid.UUID) (entity.Search, error) {
+	search, ok := f.searches[id]
+	if !ok || search.UserID != userID {
+		return entity.Search{}, entity.ErrNotFound
+	}
+	if f.noSlots {
+		return entity.Search{}, entity.ErrSearchLimit
+	}
+	f.revived = append(f.revived, id)
+	search.Status = entity.SearchActive
+	f.searches[id] = search
+	return search, nil
 }
 
 func (f *fakeSearchAnswers) Close(_ context.Context, userID, id uuid.UUID, reason entity.CloseReason) (entity.Search, error) {
@@ -100,6 +116,8 @@ func TestSearchCallbacks(t *testing.T) {
 		wantCleared bool
 		wantClosed  bool
 		wantErr     bool
+		wantRevived bool
+		noSlots     bool
 	}{
 		{name: "«да, ищу» по своему", tgID: ownerTG, data: searchCallback(opStillSearching, active.ID),
 			ack: ackSearching, wantCleared: true},
@@ -111,8 +129,11 @@ func TestSearchCallbacks(t *testing.T) {
 			ack: ackNotYourSearch},
 		{name: "тап из чата, которого нет в базе", tgID: 999, data: searchCallback(opFound, active.ID),
 			ack: ackNotYourSearch},
+
 		{name: "«да, ищу» по погашенному", tgID: ownerTG, data: searchCallback(opStillSearching, paused.ID),
-			ack: ackAnswered},
+			ack: ackRevived, wantRevived: true},
+		{name: "«да, ищу» по погашенному без слотов", tgID: ownerTG, data: searchCallback(opStillSearching, paused.ID),
+			ack: ackNoSlots, noSlots: true},
 		{name: "повторное «нашёл»", tgID: ownerTG, data: searchCallback(opFound, closed.ID),
 			ack: ackAnswered},
 		{name: "мусор вместо ответа", tgID: ownerTG, data: "srch:maybe:" + active.ID.String(), wantErr: true},
@@ -123,7 +144,7 @@ func TestSearchCallbacks(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			searches := &fakeSearchAnswers{searches: map[uuid.UUID]entity.Search{
 				active.ID: active, paused.ID: paused, closed.ID: closed,
-			}}
+			}, noSlots: tc.noSlots}
 			users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{ownerTG: owner, strangerTG: stranger}}
 			callbacks := NewCallbacks(searches, &fakePollAnswers{}, users)
 
@@ -142,6 +163,9 @@ func TestSearchCallbacks(t *testing.T) {
 			}
 			if got := len(searches.cleared) == 1; got != tc.wantCleared {
 				t.Errorf("cleared %v, want cleared = %v", searches.cleared, tc.wantCleared)
+			}
+			if got := len(searches.revived) == 1; got != tc.wantRevived {
+				t.Errorf("revived %v, want revived = %v", searches.revived, tc.wantRevived)
 			}
 
 			if got := searches.closed[active.ID] == entity.CloseFoundHere; got != tc.wantClosed {

@@ -8,7 +8,19 @@ const hushing = "гкхжчшщ"
 
 const sibilants = "жчшщц"
 
+var exceptions = map[string][2]string{
+	"Илья":   {"Ильи", "Ильёй"},
+	"Пётр":   {"Петра", "Петром"},
+	"Петр":   {"Петра", "Петром"},
+	"Лев":    {"Льва", "Львом"},
+	"Павел":  {"Павла", "Павлом"},
+	"Любовь": {"Любови", "Любовью"},
+}
+
 func GenitiveFirstName(name string) string {
+	if forms, ok := exceptions[strings.TrimSpace(name)]; ok {
+		return forms[0]
+	}
 	runes := []rune(strings.TrimSpace(name))
 	if len(runes) == 0 {
 		return name
@@ -35,6 +47,9 @@ func GenitiveFirstName(name string) string {
 }
 
 func InstrumentalFirstName(name string) string {
+	if forms, ok := exceptions[strings.TrimSpace(name)]; ok {
+		return forms[1]
+	}
 	runes := []rune(strings.TrimSpace(name))
 	if len(runes) == 0 {
 		return name

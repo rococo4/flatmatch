@@ -19,6 +19,8 @@ const (
 
 const (
 	ackSearching     = "✓ Ищу дальше"
+	ackRevived       = "✓ Поиск снова активен"
+	ackNoSlots       = "Свободных поисков нет — закрой один в „Моих поисках\""
 	ackClosed        = "✓ Поиск закрыт — удачи!"
 	ackAnswered      = "уже ответил"
 	ackNotYourSearch = "не твой поиск"
@@ -29,6 +31,7 @@ type SearchAnswers interface {
 	ByID(ctx context.Context, userID, id uuid.UUID) (entity.Search, error)
 	ClearTTLAsked(ctx context.Context, id uuid.UUID) error
 	Close(ctx context.Context, userID, id uuid.UUID, reason entity.CloseReason) (entity.Search, error)
+	Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Search, error)
 }
 
 type PollAnswers interface {
@@ -73,13 +76,25 @@ func (c *Callbacks) HandleSearchCallback(ctx context.Context, tgID int64, data s
 		if err != nil {
 			return "", err
 		}
-		if search.Status != entity.SearchActive {
+		switch search.Status {
+		case entity.SearchActive:
+			if err := c.searches.ClearTTLAsked(ctx, searchID); err != nil {
+				return "", err
+			}
+			return ackSearching, nil
+		case entity.SearchPaused:
+
+			_, err := c.searches.Reactivate(ctx, user.ID, searchID)
+			switch {
+			case errors.Is(err, entity.ErrSearchLimit):
+				return ackNoSlots, nil
+			case err != nil:
+				return "", err
+			}
+			return ackRevived, nil
+		default:
 			return ackAnswered, nil
 		}
-		if err := c.searches.ClearTTLAsked(ctx, searchID); err != nil {
-			return "", err
-		}
-		return ackSearching, nil
 
 	case opFound:
 

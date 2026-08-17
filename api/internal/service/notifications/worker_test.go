@@ -63,6 +63,20 @@ func (q *fakeQueue) Pending(_ context.Context, limit int) ([]entity.Notification
 	return out, nil
 }
 
+func (q *fakeQueue) PendingPersonal(ctx context.Context, limit int) ([]entity.Notification, error) {
+	all, err := q.Pending(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	var out []entity.Notification
+	for _, n := range all {
+		if !n.Type.Aggregated() {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
 func (q *fakeQueue) Insert(_ context.Context, n entity.Notification) (bool, error) {
 	for _, row := range q.rows {
 		if row.UserID == n.UserID && row.Type == n.Type &&
@@ -200,8 +214,10 @@ type fakeSender struct {
 	sent   []sentPush
 	edited []editedPush
 
-	err    error
-	nextID int
+	err error
+
+	editErr error
+	nextID  int
 }
 
 func (f *fakeSender) SendPush(_ context.Context, chatID int64, text string, buttons []tgbot.PushButton) (int, error) {
@@ -214,6 +230,9 @@ func (f *fakeSender) SendPush(_ context.Context, chatID int64, text string, butt
 }
 
 func (f *fakeSender) EditPushText(_ context.Context, chatID int64, messageID int, text string, _ []tgbot.PushButton) error {
+	if f.editErr != nil {
+		return f.editErr
+	}
 	if f.err != nil {
 		return f.err
 	}
@@ -798,5 +817,56 @@ func TestTTLQuestionRepeatsOnTheNextSilence(t *testing.T) {
 
 	if got := f.queue.count(entity.NotifStillSearching); got != 2 {
 		t.Errorf("%d questions after a second silence, want 2", got)
+	}
+}
+
+func TestRateLimitDoesNotCountAnAttempt(t *testing.T) {
+	w, f := newWorker(t, workerFakes{sender: &fakeSender{
+		err: &tgbot.APIError{Method: "sendMessage", Code: 429, Description: "Too Many Requests: retry after 3"},
+	}})
+	viewer := f.addressee(1001)
+	row := f.queue.put(entity.Notification{UserID: viewer, Type: entity.NotifMatched, ActorKey: uuid.NewString()})
+
+	w.pass(t.Context())
+
+	if got := f.queue.byID(row.ID); got.Attempts != 0 || got.FailedAt != nil || got.SentAt != nil {
+		t.Errorf("row after 429 = %+v, want untouched and still queued", got)
+	}
+}
+
+func TestGoneTailCarrierFallsBackToAFreshPush(t *testing.T) {
+	sender := &fakeSender{editErr: &tgbot.APIError{Method: "editMessageText", Code: 400,
+		Description: "Bad Request: message to edit not found"}}
+	w, f := newWorker(t, workerFakes{sender: sender})
+	viewer := f.addressee(1001)
+	seedSentLikes(f, viewer, entity.MaxPersonalPushesPerDay)
+	late := f.queue.put(entity.Notification{
+		UserID: viewer, Type: entity.NotifLiked, ActorKey: uuid.NewString(),
+		Payload: map[string]any{payloadName: "Катя", payloadGender: "female"},
+	})
+
+	w.pass(t.Context())
+
+	if got := f.queue.byID(late.ID); got.SentAt == nil || got.FailedAt != nil {
+		t.Fatalf("late like after the carrier vanished = %+v, want sent", got)
+	}
+	if len(sender.sent) != 1 || sender.sent[0].text != LikedText("Катя", entity.GenderFemale) {
+		t.Errorf("sent %v, want one fresh «Тебя лайкнула Катя»", sender.texts())
+	}
+}
+
+func TestNoAnswersMeansNoQuestions(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	w = w.WithoutAnswers()
+	viewer := f.addressee(1001)
+	f.ttl.stale = []entity.Search{search(viewer, "d-khamovniki")}
+
+	w.pass(t.Context())
+
+	if len(f.ttl.asked) != 0 {
+		t.Errorf("asked %v while the bot cannot hear answers", f.ttl.asked)
+	}
+	if pending, _ := f.queue.Pending(t.Context(), 10); len(pending) != 0 {
+		t.Errorf("queued %d questions with nobody listening", len(pending))
 	}
 }

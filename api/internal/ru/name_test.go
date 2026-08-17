@@ -53,3 +53,21 @@ func TestInstrumentalFirstName(t *testing.T) {
 		}
 	}
 }
+
+func TestExceptions(t *testing.T) {
+	cases := []struct{ name, gen, ins string }{
+		{"Илья", "Ильи", "Ильёй"},
+		{"Пётр", "Петра", "Петром"},
+		{"Лев", "Льва", "Львом"},
+		{"Павел", "Павла", "Павлом"},
+		{"Любовь", "Любови", "Любовью"},
+	}
+	for _, tc := range cases {
+		if got := GenitiveFirstName(tc.name); got != tc.gen {
+			t.Errorf("GenitiveFirstName(%q) = %q, want %q", tc.name, got, tc.gen)
+		}
+		if got := InstrumentalFirstName(tc.name); got != tc.ins {
+			t.Errorf("InstrumentalFirstName(%q) = %q, want %q", tc.name, got, tc.ins)
+		}
+	}
+}

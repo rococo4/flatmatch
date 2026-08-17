@@ -1,6 +1,7 @@
 package searchesrepo
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
@@ -224,16 +225,24 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 	silentSearch := create(silent)
 	backdate(t, pool, silentSearch.ID, "last_active_at", 2*ttlAnswer)
 	backdate(t, pool, silentSearch.ID, "ttl_asked_at", ttlAnswer+time.Hour)
+	askedAndSent(t, pool, silent, silentSearch.ID)
 
 	answeredSearch := create(answered)
 	backdate(t, pool, answeredSearch.ID, "ttl_asked_at", ttlAnswer+time.Hour)
+	askedAndSent(t, pool, answered, answeredSearch.ID)
 
 	waitingSearch := create(waiting)
 	backdate(t, pool, waitingSearch.ID, "last_active_at", 2*ttlAnswer)
 	backdate(t, pool, waitingSearch.ID, "ttl_asked_at", time.Hour)
+	askedAndSent(t, pool, waiting, waitingSearch.ID)
 
 	neverSearch := create(never)
 	backdate(t, pool, neverSearch.ID, "last_active_at", 10*ttlAnswer)
+
+	unsent := seedUser(t, pool, 5, "active", "male", "any")
+	unsentSearch := create(unsent)
+	backdate(t, pool, unsentSearch.ID, "last_active_at", 2*ttlAnswer)
+	backdate(t, pool, unsentSearch.ID, "ttl_asked_at", ttlAnswer+time.Hour)
 
 	paused, err := repo.PauseUnanswered(t.Context(), ttlAnswer)
 	if err != nil {
@@ -242,7 +251,7 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 	if !slices.Contains(paused, silentSearch.ID) {
 		t.Errorf("PauseUnanswered() = %v, want it to hold %s", paused, silentSearch.ID)
 	}
-	for _, id := range []uuid.UUID{answeredSearch.ID, waitingSearch.ID, neverSearch.ID} {
+	for _, id := range []uuid.UUID{answeredSearch.ID, waitingSearch.ID, neverSearch.ID, unsentSearch.ID} {
 		if slices.Contains(paused, id) {
 			t.Errorf("PauseUnanswered() paused %s", id)
 		}
@@ -261,6 +270,7 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 	}
 	for _, pair := range [][2]uuid.UUID{
 		{answered, answeredSearch.ID}, {waiting, waitingSearch.ID}, {never, neverSearch.ID},
+		{unsent, unsentSearch.ID},
 	} {
 		if got := status(pair[0], pair[1]); got != entity.SearchActive {
 			t.Errorf("search %s is %s, want active", pair[1], got)
@@ -327,6 +337,7 @@ func TestReactivateResetsTheTTLQuestion(t *testing.T) {
 	}
 	backdate(t, pool, search.ID, "last_active_at", 10*24*time.Hour)
 	backdate(t, pool, search.ID, "ttl_asked_at", 4*24*time.Hour)
+	askedAndSent(t, pool, me, search.ID)
 
 	paused, err := repo.PauseUnanswered(t.Context(), ttlAnswer)
 	if err != nil {
@@ -359,5 +370,17 @@ func TestReactivateResetsTheTTLQuestion(t *testing.T) {
 	}
 	if got := staleIDs(t, repo, me); len(got) != 0 {
 		t.Errorf("a reactivated search is already stale: %v", got)
+	}
+}
+
+func askedAndSent(t *testing.T, pool *pgxpool.Pool, userID, searchID uuid.UUID) {
+	t.Helper()
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO notifications (user_id, type, actor_key, context_key, payload, sent_at)
+		SELECT $1, 'still_searching', $2::text || ':' || extract(epoch FROM last_active_at)::bigint,
+		       zone_id, jsonb_build_object('search_id', $2::text), ttl_asked_at + interval '10 seconds'
+		FROM searches WHERE id = $2::uuid`, userID, searchID)
+	if err != nil {
+		t.Fatalf("seed the sent ttl question: %v", err)
 	}
 }

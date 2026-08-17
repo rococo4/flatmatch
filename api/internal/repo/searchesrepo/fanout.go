@@ -14,6 +14,7 @@ func (r *Repo) ActiveIn(ctx context.Context, zoneIDs []string) ([]entity.Search,
 		SELECT `+searchColumns+`
 		FROM searches
 		WHERE status = 'active' AND zone_id = ANY($1)
+		  AND EXISTS (SELECT 1 FROM users u WHERE u.id = searches.user_id AND u.status = 'active')
 		ORDER BY user_id, created_at, id`, zoneIDs)
 	if err != nil {
 		return nil, fmt.Errorf("active searches in zones: %w", err)

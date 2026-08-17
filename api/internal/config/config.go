@@ -92,19 +92,21 @@ func Load() (Config, error) {
 	}
 	cfg.BotPollingEnabled = polling
 
-	if cfg.BotPollingEnabled {
-		if cfg.AppURL == "" {
-			fail("APP_URL is required when BOT_POLLING_ENABLED=true")
-		} else if !strings.HasPrefix(cfg.AppURL, "https://") {
-			fail("APP_URL must be https:// for a Mini App button, got %q", cfg.AppURL)
-		}
-	}
-
 	pushes, err := parseBool(envOr("PUSH_WORKER_ENABLED", "true"))
 	if err != nil {
 		fail("PUSH_WORKER_ENABLED: %w", err)
 	}
 	cfg.PushWorkerEnabled = pushes
+
+	// Кнопки пушей — тоже web_app с APP_URL: без адреса воркер слал бы кнопки в
+	// никуда, Telegram отвечал бы 400, и очередь легла бы за пять попыток.
+	if cfg.BotPollingEnabled || cfg.PushWorkerEnabled {
+		if cfg.AppURL == "" {
+			fail("APP_URL is required when BOT_POLLING_ENABLED or PUSH_WORKER_ENABLED is true")
+		} else if !strings.HasPrefix(cfg.AppURL, "https://") {
+			fail("APP_URL must be https:// for a Mini App button, got %q", cfg.AppURL)
+		}
+	}
 
 	tick, err := time.ParseDuration(envOr("PUSH_TICK", "30s"))
 	switch {

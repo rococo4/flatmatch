@@ -220,12 +220,19 @@ func (r *Repo) MarkTTLAsked(ctx context.Context, id uuid.UUID) error {
 
 func (r *Repo) PauseUnanswered(ctx context.Context, olderThan time.Duration) ([]uuid.UUID, error) {
 	rows, err := r.pool.Query(ctx, `
-		UPDATE searches SET status = 'paused', updated_at = now()
-		WHERE status = 'active'
-		  AND ttl_asked_at IS NOT NULL
-		  AND ttl_asked_at < now() - make_interval(secs => $1)
-		  AND last_active_at < ttl_asked_at
-		RETURNING id`, olderThan.Seconds())
+		UPDATE searches s SET status = 'paused', updated_at = now()
+		WHERE s.status = 'active'
+		  AND s.ttl_asked_at IS NOT NULL
+		  AND s.ttl_asked_at < now() - make_interval(secs => $1)
+		  AND s.last_active_at < s.ttl_asked_at
+		  AND EXISTS (
+		      SELECT 1 FROM notifications n
+		      WHERE n.type = 'still_searching'
+		        AND n.user_id = s.user_id
+		        AND n.payload->>'search_id' = s.id::text
+		        AND n.sent_at IS NOT NULL
+		        AND n.sent_at >= s.ttl_asked_at - interval '1 minute')
+		RETURNING s.id`, olderThan.Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("pause unanswered searches: %w", err)
 	}

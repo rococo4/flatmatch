@@ -141,6 +141,9 @@ func run() error {
 	pushWorker := notifications.NewWorker(notificationsRepo,
 		tgbot.NewPushSender(botClient, cfg.AppURL), usersRepo, searchesRepo,
 		matchesRepo, pointsRepo, dir, cfg.PushTick, log)
+	if !cfg.BotPollingEnabled {
+		pushWorker = pushWorker.WithoutAnswers()
+	}
 	pushCallbacks := notifications.NewCallbacks(searchesRepo, matchesRepo, usersRepo)
 
 	bot := tgbot.NewBot(botClient, cfg.AppURL, log, moderator, cfg.ModerationChatID, pushCallbacks)

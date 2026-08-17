@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,6 +52,7 @@ var errUnknownContext = errors.New("the push context is gone")
 
 type Queue interface {
 	Pending(ctx context.Context, limit int) ([]entity.Notification, error)
+	PendingPersonal(ctx context.Context, limit int) ([]entity.Notification, error)
 	Insert(ctx context.Context, n entity.Notification) (bool, error)
 	MarkSent(ctx context.Context, ids []uuid.UUID, at time.Time) error
 	MarkFailed(ctx context.Context, ids []uuid.UUID) error
@@ -104,6 +107,8 @@ type Worker struct {
 	now func() time.Time
 
 	lastScan time.Time
+
+	answersReachUs bool
 }
 
 func NewWorker(queue Queue, sender Sender, users Recipients, searches SearchTTL,
@@ -111,8 +116,13 @@ func NewWorker(queue Queue, sender Sender, users Recipients, searches SearchTTL,
 	return &Worker{
 		queue: queue, sender: sender, users: users, searches: searches,
 		matches: matches, points: points, dir: dir, log: log,
-		tick: tick, now: time.Now,
+		tick: tick, now: time.Now, answersReachUs: true,
 	}
+}
+
+func (w *Worker) WithoutAnswers() *Worker {
+	w.answersReachUs = false
+	return w
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -137,25 +147,29 @@ func (w *Worker) Run(ctx context.Context) {
 }
 
 func (w *Worker) pass(ctx context.Context) {
+	unreachable := map[uuid.UUID]bool{}
+
+	personal, err := w.queue.PendingPersonal(ctx, pendingLimit)
+	if err != nil {
+		w.log.Error("read the personal push queue", "error", err)
+	} else {
+		w.deliverPersonal(ctx, personal, unreachable)
+	}
+
 	pending, err := w.queue.Pending(ctx, pendingLimit)
 	if err != nil {
 		w.log.Error("read the push queue", "error", err)
 	} else {
-		var personal, aggregated []entity.Notification
+		var aggregated []entity.Notification
 		for _, row := range pending {
 			if row.Type.Aggregated() {
 				aggregated = append(aggregated, row)
-			} else {
-				personal = append(personal, row)
 			}
 		}
-
-		unreachable := map[uuid.UUID]bool{}
-		w.deliverPersonal(ctx, personal, unreachable)
 		w.deliverAggregates(ctx, aggregated, unreachable)
 	}
 
-	if w.now().Sub(w.lastScan) < scanEvery {
+	if !w.answersReachUs || w.now().Sub(w.lastScan) < scanEvery {
 		return
 	}
 	w.lastScan = w.now()
@@ -238,6 +252,10 @@ func (w *Worker) folded(ctx context.Context, row entity.Notification, chatID int
 
 	count := tail.Count + 1
 	if err := w.sender.EditPushText(ctx, chatID, tail.MessageID, LikedTailText(count), incomingButton()); err != nil {
+		if uneditable(err) {
+			w.log.Info("tail carrier is gone, sending the like as a fresh push", "user", row.UserID)
+			return false
+		}
 		if w.sendFailed(ctx, row.UserID, []entity.Notification{row}, err) {
 			unreachable[row.UserID] = true
 		}
@@ -474,6 +492,10 @@ func (w *Worker) sendFailed(ctx context.Context, userID uuid.UUID, rows []entity
 		return true
 	}
 
+	if transient(sendErr) {
+		w.log.Warn("could not deliver a push, transient — will retry without counting", "user", userID, "rows", len(rows), "error", sendErr)
+		return false
+	}
 	w.log.Warn("could not deliver a push, will retry", "user", userID, "rows", len(rows), "error", sendErr)
 	var dead []uuid.UUID
 	for _, row := range rows {
@@ -490,6 +512,24 @@ func (w *Worker) sendFailed(ctx context.Context, userID uuid.UUID, rows []entity
 		w.fail(ctx, dead)
 	}
 	return false
+}
+
+func uneditable(err error) bool {
+	var apiErr *tgbot.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	d := strings.ToLower(apiErr.Description)
+	return strings.Contains(d, "message to edit not found") || strings.Contains(d, "message can't be edited")
+}
+
+func transient(err error) bool {
+	var apiErr *tgbot.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code == 429
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func (w *Worker) giveUp(ctx context.Context, row entity.Notification, cause error) {

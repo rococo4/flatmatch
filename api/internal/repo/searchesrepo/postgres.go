@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
@@ -54,13 +55,9 @@ func (r *Repo) ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Searc
 	if err != nil {
 		return nil, fmt.Errorf("list searches of user %s: %w", userID, err)
 	}
-	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[searchRow])
+	out, err := collectSearches(rows)
 	if err != nil {
 		return nil, fmt.Errorf("list searches of user %s: %w", userID, err)
-	}
-	out := make([]entity.Search, 0, len(raw))
-	for _, row := range raw {
-		out = append(out, row.toEntity())
 	}
 	return out, nil
 }
@@ -166,6 +163,68 @@ func (r *Repo) MarkPoolSeen(ctx context.Context, userID uuid.UUID, zoneID string
 	return nil
 }
 
+func (r *Repo) Touch(ctx context.Context, userID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE searches SET last_active_at = now()
+		WHERE user_id = $1 AND status = 'active'
+		  AND last_active_at < now() - interval '1 hour'`, userID)
+	if err != nil {
+		return fmt.Errorf("touch searches of user %s: %w", userID, err)
+	}
+	return nil
+}
+
+func (r *Repo) StaleForTTL(ctx context.Context, quiet, afterMatch time.Duration) ([]entity.Search, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+searchColumns+`
+		FROM searches
+		WHERE status = 'active'
+		  AND (ttl_asked_at IS NULL OR ttl_asked_at < now() - make_interval(secs => $1))
+		  AND (
+		      last_active_at < now() - make_interval(secs => $1)
+		      OR EXISTS (
+		          SELECT 1 FROM matches m
+		          WHERE searches.user_id IN (m.a_id, m.b_id)
+		            AND m.created_at > searches.last_active_at
+		            AND m.created_at < now() - make_interval(secs => $2)))
+		ORDER BY last_active_at, id`, quiet.Seconds(), afterMatch.Seconds())
+	if err != nil {
+		return nil, fmt.Errorf("stale searches: %w", err)
+	}
+	out, err := collectSearches(rows)
+	if err != nil {
+		return nil, fmt.Errorf("stale searches: %w", err)
+	}
+	return out, nil
+}
+
+func (r *Repo) MarkTTLAsked(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE searches SET ttl_asked_at = now() WHERE id = $1 AND status = 'active'`, id)
+	if err != nil {
+		return fmt.Errorf("mark search %s asked: %w", id, err)
+	}
+	return nil
+}
+
+func (r *Repo) PauseUnanswered(ctx context.Context, olderThan time.Duration) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `
+		UPDATE searches SET status = 'paused', updated_at = now()
+		WHERE status = 'active'
+		  AND ttl_asked_at IS NOT NULL
+		  AND ttl_asked_at < now() - make_interval(secs => $1)
+		  AND last_active_at < ttl_asked_at
+		RETURNING id`, olderThan.Seconds())
+	if err != nil {
+		return nil, fmt.Errorf("pause unanswered searches: %w", err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, fmt.Errorf("pause unanswered searches: %w", err)
+	}
+	return ids, nil
+}
+
 func (r *Repo) one(ctx context.Context, query string, args ...any) (entity.Search, error) {
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -245,6 +304,18 @@ func collectSearch(rows pgx.Rows) (entity.Search, error) {
 		return entity.Search{}, err
 	}
 	return row.toEntity(), nil
+}
+
+func collectSearches(rows pgx.Rows) ([]entity.Search, error) {
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[searchRow])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]entity.Search, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
 }
 
 func termArg(t *entity.Term) *string {

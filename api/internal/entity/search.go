@@ -71,11 +71,13 @@ type Search struct {
 	ID     uuid.UUID
 	UserID uuid.UUID
 	SearchParams
-	Status      SearchStatus
-	CloseReason CloseReason // "" unless Status is closed
-	PoolSeenAt  time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Status       SearchStatus
+	CloseReason  CloseReason // "" unless Status is closed
+	PoolSeenAt   time.Time
+	LastActiveAt time.Time
+	TTLAskedAt   *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type PoolCandidate struct {

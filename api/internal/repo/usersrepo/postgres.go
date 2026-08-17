@@ -160,6 +160,16 @@ func (r *Repo) PendingModeration(ctx context.Context) ([]entity.User, error) {
 	return out, nil
 }
 
+func (r *Repo) MarkPushBlocked(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users SET push_blocked_at = now()
+		WHERE id = $1 AND push_blocked_at IS NULL`, id)
+	if err != nil {
+		return fmt.Errorf("mark pushes blocked for user %s: %w", id, err)
+	}
+	return nil
+}
+
 func (r *Repo) one(ctx context.Context, query string, args ...any) (entity.User, error) {
 	var user entity.User
 

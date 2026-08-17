@@ -11,11 +11,12 @@ import (
 
 const searchColumns = `id, user_id, zone_id, price_min, price_max, rooms_min,
 	rooms_max, move_in, term, has_stuff, status, close_reason, pool_seen_at,
-	created_at, updated_at`
+	last_active_at, ttl_asked_at, created_at, updated_at`
 
 const candidateColumns = `s.id, s.user_id, s.zone_id, s.price_min, s.price_max,
 	s.rooms_min, s.rooms_max, s.move_in, s.term, s.has_stuff, s.status,
-	s.close_reason, s.pool_seen_at, s.created_at, s.updated_at,
+	s.close_reason, s.pool_seen_at, s.last_active_at, s.ttl_asked_at,
+	s.created_at, s.updated_at,
 	u.id AS u_id, u.name AS u_name, u.age AS u_age, u.gender AS u_gender,
 	u.schedule AS u_schedule, u.smoking AS u_smoking,
 	u.pets_own AS u_pets_own, u.pets_ok AS u_pets_ok, u.noise AS u_noise,
@@ -24,21 +25,23 @@ const candidateColumns = `s.id, s.user_id, s.zone_id, s.price_min, s.price_max,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
 
 type searchRow struct {
-	ID          uuid.UUID  `db:"id"`
-	UserID      uuid.UUID  `db:"user_id"`
-	ZoneID      string     `db:"zone_id"`
-	PriceMin    *int       `db:"price_min"`
-	PriceMax    int        `db:"price_max"`
-	RoomsMin    *int       `db:"rooms_min"`
-	RoomsMax    *int       `db:"rooms_max"`
-	MoveIn      *time.Time `db:"move_in"`
-	Term        *string    `db:"term"`
-	HasStuff    []string   `db:"has_stuff"`
-	Status      string     `db:"status"`
-	CloseReason *string    `db:"close_reason"`
-	PoolSeenAt  time.Time  `db:"pool_seen_at"`
-	CreatedAt   time.Time  `db:"created_at"`
-	UpdatedAt   time.Time  `db:"updated_at"`
+	ID           uuid.UUID  `db:"id"`
+	UserID       uuid.UUID  `db:"user_id"`
+	ZoneID       string     `db:"zone_id"`
+	PriceMin     *int       `db:"price_min"`
+	PriceMax     int        `db:"price_max"`
+	RoomsMin     *int       `db:"rooms_min"`
+	RoomsMax     *int       `db:"rooms_max"`
+	MoveIn       *time.Time `db:"move_in"`
+	Term         *string    `db:"term"`
+	HasStuff     []string   `db:"has_stuff"`
+	Status       string     `db:"status"`
+	CloseReason  *string    `db:"close_reason"`
+	PoolSeenAt   time.Time  `db:"pool_seen_at"`
+	LastActiveAt time.Time  `db:"last_active_at"`
+	TTLAskedAt   *time.Time `db:"ttl_asked_at"`
+	CreatedAt    time.Time  `db:"created_at"`
+	UpdatedAt    time.Time  `db:"updated_at"`
 }
 
 // candidateRow carries exactly what a pool card needs, not a whole user: the
@@ -82,10 +85,12 @@ func (r searchRow) toEntity() entity.Search {
 			RoomsMax: r.RoomsMax,
 			MoveIn:   r.MoveIn,
 		},
-		Status:     entity.ParseSearchStatus(r.Status),
-		PoolSeenAt: r.PoolSeenAt,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
+		Status:       entity.ParseSearchStatus(r.Status),
+		PoolSeenAt:   r.PoolSeenAt,
+		LastActiveAt: r.LastActiveAt,
+		TTLAskedAt:   r.TTLAskedAt,
+		CreatedAt:    r.CreatedAt,
+		UpdatedAt:    r.UpdatedAt,
 	}
 	if r.Term != nil {
 		term := entity.ParseTerm(*r.Term)

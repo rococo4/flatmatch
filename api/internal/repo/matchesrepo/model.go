@@ -34,6 +34,14 @@ type MatchWithPeer struct {
 	Blocked bool
 }
 
+// PollTarget — кому и про кого задать пост-мэтч вопрос: опрос личный, у каждой
+// стороны мэтча свой.
+type PollTarget struct {
+	Match    entity.Match
+	UserID   uuid.UUID
+	PeerName string
+}
+
 type matchRow struct {
 	ID           uuid.UUID  `db:"id"`
 	AID          uuid.UUID  `db:"a_id"`
@@ -65,6 +73,13 @@ type peerRow struct {
 	UPhotoStatus string    `db:"u_photo_status"`
 	UStatus      string    `db:"u_status"`
 	ULastSeen    time.Time `db:"u_last_seen"`
+}
+
+type pollRow struct {
+	matchRow // m.* columns, unprefixed
+
+	UserID   uuid.UUID `db:"user_id"`
+	PeerName string    `db:"peer_name"`
 }
 
 type contactRow struct {
@@ -118,4 +133,12 @@ func (r contactRow) toEntity() MatchWithPeer {
 	out.Peer.Username = pointer.Get(r.UUsername)
 	out.Peer.TelegramID = r.UTelegramID
 	return out
+}
+
+func (r pollRow) toEntity() PollTarget {
+	return PollTarget{
+		Match:    r.matchRow.toEntity(),
+		UserID:   r.UserID,
+		PeerName: r.PeerName,
+	}
 }

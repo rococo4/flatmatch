@@ -1,4 +1,4 @@
-import { retrieveRawInitData } from '@telegram-apps/sdk-react';
+import { retrieveLaunchParams, retrieveRawInitData } from '@telegram-apps/sdk-react';
 
 /** Ответы анкеты (§4). Каждое поле — из закрытого набора, кроме возраста и «о себе». */
 export interface Questionnaire {
@@ -892,8 +892,22 @@ const BOT_USERNAME_FALLBACK = 'flatmatch_finder_bot';
 
 let botUsername = '';
 
-/** Префикс диплинка точки: `startapp=point_<uuid>` (§6, вирусная петля). */
+/* Словарь startapp: его пишут кнопки пушей и ссылка шеринга, читает приложение.
+   Значения общие с ботом (§2 дизайна пушей) — менять их можно только вместе. */
 const POINT_START_PARAM = 'point_';
+const POOL_START_PARAM = 'pool_';
+const MATCH_START_PARAM = 'match_';
+
+/** Куда открыть приложение по диплинку. */
+export type StartTarget =
+  | { kind: 'point'; id: string }
+  | { kind: 'pool'; zoneId: string }
+  | { kind: 'match'; id: string }
+  | { kind: 'incoming' }
+  | { kind: 'feed' }
+  | { kind: 'photo' }
+  | { kind: 'about' }
+  | { kind: 'mine' };
 
 /**
  * Ссылка «Позвать в пул — поделиться в чат»: открывает у гостя карточку точки.
@@ -913,10 +927,61 @@ export function pointShareUrl(pointId: string): string {
   return `https://t.me/share/url?url=${encodeURIComponent(app)}`;
 }
 
-/** Обратная сторона диплинка: `point_<uuid>` из start_param, иначе null. */
-export function startParamPoint(raw?: string): string | null {
-  if (!raw?.startsWith(POINT_START_PARAM)) return null;
-  return raw.slice(POINT_START_PARAM.length) || null;
+/** Обратная сторона диплинка: куда вести запуск, иначе null. */
+export function startParam(): StartTarget | null {
+  return parseStartParam(rawStartParam());
+}
+
+/**
+ * Сырой startapp запуска.
+ *
+ * Источника два, и порядок между ними не случаен: web_app-кнопка пуша открывает
+ * приложение адресом `APP_URL?startapp=…`, и параметр приезжает в query самой
+ * страницы; ссылка шеринга `t.me/{бот}?startapp=` — наоборот, только параметром
+ * запуска. Query первым: у кнопки пуша параметр точнее, а параметры запуска
+ * держатся у клиента и после перехода.
+ *
+ * retrieveLaunchParams умеет бросить — в браузере без мока их просто нет, и
+ * приложение обязано открыться обычным входом, а не упасть.
+ */
+function rawStartParam(): string | undefined {
+  const fromQuery = new URLSearchParams(window.location.search).get('startapp');
+  if (fromQuery) return fromQuery;
+  try {
+    return retrieveLaunchParams().tgWebAppStartParam;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseStartParam(raw?: string): StartTarget | null {
+  if (!raw) return null;
+  if (raw.startsWith(POINT_START_PARAM)) {
+    const id = raw.slice(POINT_START_PARAM.length);
+    return id ? { kind: 'point', id } : null;
+  }
+  if (raw.startsWith(POOL_START_PARAM)) {
+    const zoneId = raw.slice(POOL_START_PARAM.length);
+    return zoneId ? { kind: 'pool', zoneId } : null;
+  }
+  if (raw.startsWith(MATCH_START_PARAM)) {
+    const id = raw.slice(MATCH_START_PARAM.length);
+    return id ? { kind: 'match', id } : null;
+  }
+  switch (raw) {
+    case 'incoming':
+      return { kind: 'incoming' };
+    case 'feed':
+      return { kind: 'feed' };
+    case 'photo':
+      return { kind: 'photo' };
+    case 'about':
+      return { kind: 'about' };
+    case 'mine':
+      return { kind: 'mine' };
+    default:
+      return null;
+  }
 }
 
 /**

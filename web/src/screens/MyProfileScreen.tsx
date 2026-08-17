@@ -1,5 +1,6 @@
 /* Профиль свой — §6. Статус анкеты, вход в «Тебя лайкнули», верификация, мэтчи. */
 import type { CSSProperties } from 'react';
+import type { ModerationStatus, Profile } from '../api/client';
 import { Avatar, S } from '../ui/primitives';
 
 /**
@@ -20,13 +21,16 @@ export type MyMatch = {
   when: string; // «мэтч сегодня»
 };
 
-export type ProfileStatus = 'pending' | 'active' | 'no_photo';
+/** Что чинить по тапу в строку статуса: шаг анкеты решает оболочка. */
+export type FixTarget = 'photo' | 'about' | 'draft';
 
-const STATUS_TEXT: Record<ProfileStatus, { title: string; aside?: string }> = {
-  pending: { title: 'анкета на проверке', aside: 'обычно до 2 часов' },
-  no_photo: { title: 'фото не прошло — загрузи другое' },
-  active: { title: 'анкета одобрена' },
-};
+/** Строка статуса анкеты: что не так и куда это чинить. Пусто — всё в порядке. */
+type Notice = { title: string; aside?: string; fix?: FixTarget };
+
+/* Тексты вердиктов — те же, что в пушах (§2 дизайна пушей): человек читает
+   одно и то же в боте и на экране, иначе это выглядит как разные новости. */
+const PHOTO_REJECTED = 'Фото не подошло — загрузи другое, где видно лицо';
+const ABOUT_REJECTED = 'Текст „о себе" не подошёл — поправь его';
 
 const L = {
   screen: {
@@ -129,27 +133,38 @@ export function MyProfileScreen({
   name,
   age,
   occupation,
+  photoUrl,
   status,
+  photoStatus,
+  aboutStatus,
   emailKind,
   incomingLikes,
   matches,
   onEdit,
+  onFix,
   onOpenIncomingLikes,
   onOpenMatch,
 }: {
   name: string;
   age: number;
   occupation: string;
-  status: ProfileStatus;
+  /** Своё фото: показывается только одобренное, иначе заглушка (§5). */
+  photoUrl?: string;
+  status: Profile['status'];
+  photoStatus: ModerationStatus;
+  aboutStatus: ModerationStatus;
   /** «Учебная почта» студенту, «Рабочая почта» работающему */
   emailKind: string;
   incomingLikes: number;
   matches: MyMatch[];
   onEdit?: () => void;
+  /** Тап в строку статуса: увести чинить ровно то, что не прошло. */
+  onFix?: (target: FixTarget) => void;
   onOpenIncomingLikes?: () => void;
   onOpenMatch?: (id: string) => void;
 }) {
-  const st = STATUS_TEXT[status];
+  const notice = noticeOf(status, photoStatus, aboutStatus);
+  const fix = notice?.fix;
 
   return (
     <div style={L.screen}>
@@ -160,7 +175,7 @@ export function MyProfileScreen({
       <div style={L.body}>
         <div style={{ ...L.block, gap: 12, padding: '14px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Avatar name={name} size={72} />
+            <Avatar name={name} size={72} src={photoStatus === 'ok' ? photoUrl : undefined} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
               <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
                 {name}, {age}
@@ -171,14 +186,21 @@ export function MyProfileScreen({
             </div>
           </div>
 
-          {status !== 'active' && (
-            <div style={L.statusBanner}>
+          {notice && (
+            // Строка с правкой — кнопка, а не текст: реджект без дороги назад
+            // оставляет человека вне выдачи навсегда (§5).
+            <div
+              role={fix ? 'button' : undefined}
+              style={{ ...L.statusBanner, cursor: fix ? 'pointer' : 'default' }}
+              onClick={fix ? () => onFix?.(fix) : undefined}
+            >
               <span style={{ flex: '1 1 auto', fontSize: 13, fontWeight: 590, lineHeight: 1.35 }}>
-                {st.title}
+                {notice.title}
               </span>
-              {st.aside && (
-                <span style={{ flex: '0 0 auto', fontSize: 12, opacity: 0.85 }}>{st.aside}</span>
+              {notice.aside && (
+                <span style={{ flex: '0 0 auto', fontSize: 12, opacity: 0.85 }}>{notice.aside}</span>
               )}
+              {fix && <span style={{ flex: '0 0 auto', fontSize: 17, lineHeight: 1 }}>›</span>}
             </div>
           )}
 
@@ -266,4 +288,30 @@ export function MyProfileScreen({
       </div>
     </div>
   );
+}
+
+/**
+ * Правило строки статуса (§5, §6).
+ *
+ * Статус аккаунта и вердикты по фото и «о себе» ходят врозь, и схлопывать их в
+ * один нельзя: не прошедшего проверку реджект возвращает в draft, а одобренный
+ * остаётся active — с заглушкой вместо фото и той же строкой. Порядок веток —
+ * по цене правки: фото обязательно (§4), без него человека не видно нигде.
+ */
+function noticeOf(
+  status: Profile['status'],
+  photo: ModerationStatus,
+  about: ModerationStatus,
+): Notice | null {
+  if (photo === 'rejected') return { title: PHOTO_REJECTED, fix: 'photo' };
+  if (about === 'rejected') return { title: ABOUT_REJECTED, fix: 'about' };
+  if (status === 'draft') return { title: 'заполни анкету', fix: 'draft' };
+  if (status === 'pending') return { title: 'анкета на проверке', aside: 'обычно до 2 часов' };
+  if (status === 'active') {
+    // Перезалитое фото и переписанный текст ждут перепроверки поодиночке —
+    // статус у человека при этом не меняется (§5).
+    if (photo === 'pending') return { title: 'новое фото на проверке' };
+    if (about === 'pending') return { title: 'текст на проверке' };
+  }
+  return null;
 }

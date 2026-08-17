@@ -12,12 +12,7 @@
    считается по одному списку, который перечитывается после каждого лайка,
    откуда бы его ни поставили. */
 import { useCallback, useEffect, useState } from 'react';
-import {
-  isMiniAppDark,
-  openTelegramLink,
-  retrieveLaunchParams,
-  useSignal,
-} from '@telegram-apps/sdk-react';
+import { isMiniAppDark, openTelegramLink, useSignal } from '@telegram-apps/sdk-react';
 
 import {
   ApiError,
@@ -37,7 +32,7 @@ import {
   pointShareUrl,
   postLike,
   reactivateSearch,
-  startParamPoint,
+  startParam,
   updateSearch,
   type CloseReason,
   type FeedPromo,
@@ -48,6 +43,7 @@ import {
   type PointDTO,
   type Profile,
   type SearchResponse,
+  type StartTarget,
   type Zone,
 } from './api/client';
 import {
@@ -65,7 +61,7 @@ import {
 import { launchedByTelegram } from './telegram/mockEnv';
 import { TabBar, type Tab } from './ui/TabBar';
 import type { PromoState } from './ui/PoolPromoBlock';
-import { OnboardingFlow } from './screens/OnboardingFlow';
+import { ABOUT_STEP, OnboardingFlow, PHOTO_STEP } from './screens/OnboardingFlow';
 import { FeedScreen } from './screens/FeedScreen';
 import { FeedEntryScreen } from './screens/FeedEntryScreen';
 import {
@@ -82,7 +78,7 @@ import { MatchView } from './screens/MatchView';
 import { FlatPoolView } from './screens/FlatPoolView';
 import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
 import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
-import { MyProfileScreen, type MyMatch } from './screens/MyProfileScreen';
+import { MyProfileScreen, type FixTarget, type MyMatch } from './screens/MyProfileScreen';
 import { FlatLinkFormScreen, HomePointFormScreen } from './screens/PointFormScreens';
 import { PointCreatedScreen } from './screens/PointCreatedScreen';
 import { CloseSearchSheet } from './screens/EdgeStates';
@@ -184,6 +180,20 @@ export function App() {
   // Держит финальную развилку §4 на экране после отправки: статус к этому
   // моменту уже не draft, и без флага оболочка увела бы в ленту сразу.
   const [finishing, setFinishing] = useState(false);
+  /**
+   * С какого шага открыть анкету. Пусто — с брошенного.
+   *
+   * Правку зовут точечно: вердикт модератора отклоняет фото или «о себе», и
+   * человека надо привести ровно туда, а не прогонять анкету заново (§5).
+   */
+  const [editStep, setEditStep] = useState<number | null>(null);
+  /**
+   * Диплинк запуска: кнопка пуша или ссылка шеринга (§5 дизайна пушей).
+   *
+   * Разбирается один раз при старте и гасится сразу после перехода: второй раз
+   * он увёл бы человека с экрана, куда тот уже ушёл сам.
+   */
+  const [startTarget, setStartTarget] = useState<StartTarget | null>(() => startParam());
 
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [searches, setSearches] = useState<SearchResponse[] | null>(null);
@@ -317,22 +327,6 @@ export function App() {
         // лайке узнают только те, кто сам зашёл в раздел.
         reloadLikes();
         reloadPoints();
-
-        // Диплинк «Позвать в пул»: startapp=point_<id> (§6). Тип решает, куда
-        // вести — у квартиры есть свой экран, а карточка «к себе» живёт в
-        // ленте, отдельного экрана у неё нет (§2.2). Отказ переживаем молча:
-        // точку могли закрыть или она ещё на проверке — приложение всё равно
-        // открывается, просто с обычного входа.
-        const shared = sharedPointId();
-        if (shared) {
-          void fetchPoint(shared)
-            .then((point) => {
-              if (cancelled || point.type !== 'flat') return;
-              setFlatPoint(point.id);
-              setView('flatPool');
-            })
-            .catch(() => undefined);
-        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -348,6 +342,43 @@ export function App() {
 
   const setProfile = useCallback((profile: Profile) => setState({ kind: 'ready', profile }), []);
 
+  /**
+   * Перечитывает поиски целиком: счётчики и номера слотов считает только сервер.
+   *
+   * Живёт выше экранов — и выше ранних возвратов оболочки: её зовут и
+   * переключение табов, и разбор диплинка, то есть замыкания, созданные в
+   * рендере, который до тела экранов не дошёл.
+   */
+  const reloadSearches = useCallback(async (): Promise<SearchResponse[]> => {
+    const list = await fetchSearches();
+    setSearches(list);
+    // Слот освободился (закрыли поиск) — снимаем отказ, иначе промо-блок
+    // продолжал бы врать «поиски заняты» до следующего запроса ленты.
+    setFeed((f) => {
+      const total = f.data?.promo.slots_total ?? 3;
+      const used = list.filter((s) => s.status === 'active').length;
+      return f.slotsFull && used < total ? { ...f, slotsFull: false } : f;
+    });
+    return list;
+  }, []);
+
+  /** Форма параметров просмотра: «Найти» с входа, «Изменить» с выдачи, диплинк пула. */
+  const openLookForm = useCallback((draft: SearchDraft) => {
+    setFeed((f) => ({
+      ...f,
+      mode: 'form',
+      draft,
+      // Снимок на случай, если форму бросят: «+ поиск» и «Найти» приходят с
+      // пустым черновиком, а выдача на экране осталась прежней.
+      shownDraft: f.draft,
+      error: null,
+      invalidFields: [],
+    }));
+    setFormMode({ kind: 'look' });
+    setTab('feed');
+    setView('searchForm');
+  }, []);
+
   const toTab = useCallback(
     (next: Tab) => {
       setTab(next);
@@ -359,7 +390,7 @@ export function App() {
         void reloadSearches().catch(() => undefined);
       }
     },
-    [reloadPoints],
+    [reloadPoints, reloadSearches],
   );
 
   // Стабильная ссылка: форма подписывает её на родную кнопку «назад».
@@ -383,6 +414,84 @@ export function App() {
     }));
   }, []);
 
+  /**
+   * Диплинк запуска: куда открыть приложение (§5 дизайна пушей).
+   *
+   * Переход откладывается до данных, от которых он зависит: пул зоны ждёт
+   * списка поисков — без него не решить, свой ли это пул. Сработавшая цель
+   * гасится, второй раз она увела бы человека с экрана, куда он ушёл сам.
+   *
+   * Эффект живёт выше ранних возвратов оболочки и потому ходит только через
+   * setState и стабильные колбэки — тела экранов ниже в этом рендере может и
+   * не быть (draft, редактор анкеты).
+   */
+  useEffect(() => {
+    if (!startTarget || state.kind !== 'ready') return;
+
+    // Правка анкеты открывается при любом статусе: реджект возвращает
+    // непроверенного в draft, а у одобренного статус не меняется (§5) —
+    // экран правки один и тот же.
+    if (startTarget.kind === 'photo' || startTarget.kind === 'about') {
+      setEditStep(startTarget.kind === 'photo' ? PHOTO_STEP : ABOUT_STEP);
+      setView('editProfile');
+      setStartTarget(null);
+      return;
+    }
+    // Остальные цели ведут в продукт, а незаполненная анкета его не показывает.
+    if (state.profile.status === 'draft') {
+      setStartTarget(null);
+      return;
+    }
+
+    switch (startTarget.kind) {
+      case 'point': {
+        // Тип решает, куда вести: у квартиры есть свой экран, а карточка «к
+        // себе» живёт в ленте, отдельного экрана у неё нет (§2.2). Отказ
+        // переживаем молча — точку могли закрыть или она ещё на проверке, и
+        // приложение всё равно открывается, просто с обычного входа.
+        const pointId = startTarget.id;
+        void fetchPoint(pointId)
+          .then((point) => {
+            if (point.type !== 'flat') return;
+            setFlatPoint(point.id);
+            setView('flatPool');
+          })
+          .catch(() => undefined);
+        break;
+      }
+      case 'pool': {
+        // Пул отдаётся только со своим активным поиском этой зоны (§2.3):
+        // ждём список, иначе решение было бы гаданием.
+        if (!searches) return;
+        const zoneId = startTarget.zoneId;
+        if (searches.some((s) => s.status === 'active' && s.zone.id === zoneId)) {
+          setPoolZone(zoneId);
+          setView('zonePool');
+          break;
+        }
+        // Поиска на эту зону больше нет (закрыл, пока пуш шёл) — ведём в ленту
+        // с предзаполненной зоной: отказом на кнопку пуша отвечать нечем.
+        openLookForm({ ...EMPTY_DRAFT, zoneId });
+        break;
+      }
+      case 'match':
+        setMatchId(startTarget.id);
+        setView('match');
+        break;
+      case 'incoming':
+        setIncomingError(null);
+        setView('incoming');
+        break;
+      case 'mine':
+        toTab('searches');
+        break;
+      case 'feed':
+        toTab('feed');
+        break;
+    }
+    setStartTarget(null);
+  }, [startTarget, state, searches, openLookForm, toTab]);
+
   if (state.kind === 'loading') return <Centered>Секунду…</Centered>;
   if (state.kind === 'failed') return <Failure error={state.error} />;
 
@@ -390,14 +499,20 @@ export function App() {
 
   // Анкета не дозаполнена — весь остальной продукт подождёт. В draft можно
   // листать ленту, но входом по умолчанию должен быть онбординг (§5).
-  if (profile.status === 'draft' || view === 'editProfile' || finishing) {
+  // Исключение — вернувшийся в draft реджектом: анкета у него заполнена, ему
+  // нужна одна правка, и держать его в онбординге значило бы прятать строку
+  // «что не так» вместе со всем продуктом (§5, две ветки реджекта).
+  const rejected = profile.photo_status === 'rejected' || profile.about_status === 'rejected';
+  if ((profile.status === 'draft' && !rejected) || view === 'editProfile' || finishing) {
     return (
       <OnboardingFlow
         profile={profile}
+        initialStep={editStep ?? undefined}
         onProfile={setProfile}
         onSubmitted={() => setFinishing(true)}
         onFinished={() => {
           setFinishing(false);
+          setEditStep(null);
           setView('tab');
           setTab('feed');
         }}
@@ -411,19 +526,6 @@ export function App() {
   const active = (searches ?? []).filter((s) => s.status === 'active');
   const archived = (searches ?? []).filter((s) => s.status !== 'active');
   const hasNewInSearches = active.some((s) => s.new_count > 0);
-
-  const reloadSearches = async (): Promise<SearchResponse[]> => {
-    const list = await fetchSearches();
-    setSearches(list);
-    // Слот освободился (закрыли поиск) — снимаем отказ, иначе промо-блок
-    // продолжал бы врать «поиски заняты» до следующего запроса ленты.
-    setFeed((f) => {
-      const total = f.data?.promo.slots_total ?? 3;
-      const used = list.filter((s) => s.status === 'active').length;
-      return f.slotsFull && used < total ? { ...f, slotsFull: false } : f;
-    });
-    return list;
-  };
 
   /** Перечитывает выдачу текущих параметров: счётчики пулов считает сервер. */
   const refreshFeed = async () => {
@@ -449,23 +551,6 @@ export function App() {
         error: asApiError(e).message,
       }));
     }
-  };
-
-  /** Форма параметров просмотра: «Найти» с входа и «Изменить» с выдачи. */
-  const openLookForm = (draft: SearchDraft) => {
-    setFeed((f) => ({
-      ...f,
-      mode: 'form',
-      draft,
-      // Снимок на случай, если форму бросят: «+ поиск» и «Найти» приходят с
-      // пустым черновиком, а выдача на экране осталась прежней.
-      shownDraft: f.draft,
-      error: null,
-      invalidFields: [],
-    }));
-    setFormMode({ kind: 'look' });
-    setTab('feed');
-    setView('searchForm');
   };
 
   /** «Показать» — просмотр выдачи. Поиск этим НЕ создаётся (§3). */
@@ -643,6 +728,19 @@ export function App() {
     setMatchId(id);
     setView('match');
   };
+
+  /**
+   * Редактор анкеты. Шаг задаётся, когда ведут в конкретную правку: реджект
+   * зовёт чинить фото или «о себе», а не проходить анкету заново (§5).
+   */
+  const openEditor = (step?: number) => {
+    setEditStep(step ?? null);
+    setView('editProfile');
+  };
+
+  /** Куда ведёт тап в строку статуса профиля. */
+  const fixProfile = (target: FixTarget) =>
+    openEditor(target === 'photo' ? PHOTO_STEP : target === 'about' ? ABOUT_STEP : undefined);
 
   const openIncoming = () => {
     // Отказ прошлого ответа не должен встречать на входе: он уже рассказан.
@@ -853,11 +951,17 @@ export function App() {
             name={profile.name}
             age={profile.age ?? 0}
             occupation={occupationLabel(profile.occupation)}
-            status={profile.status === 'active' ? 'active' : 'pending'}
+            photoUrl={profile.photo_url}
+            // Статус и вердикты по фото и «о себе» едут врозь: сворачивать их
+            // в один — значит потерять петлю реджекта (§5).
+            status={profile.status}
+            photoStatus={profile.photo_status}
+            aboutStatus={profile.about_status}
             emailKind={profile.occupation === 'study' ? 'Учебная почта' : 'Рабочая почта'}
             incomingLikes={unreadLikes}
             matches={matches.map(toMyMatch)}
-            onEdit={() => setView('editProfile')}
+            onEdit={() => openEditor()}
+            onFix={fixProfile}
             onOpenIncomingLikes={openIncoming}
             onOpenMatch={openMatch}
           />
@@ -1087,21 +1191,6 @@ export function App() {
       )}
     </div>
   );
-}
-
-/**
- * Точка из диплинка: `startapp=point_<uuid>` (§6).
- *
- * Параметры запуска у настоящего клиента есть всегда, но retrieveLaunchParams
- * умеет бросить — в браузере без мока их просто нет, и приложение обязано
- * открыться обычным входом, а не упасть.
- */
-function sharedPointId(): string | null {
-  try {
-    return startParamPoint(retrieveLaunchParams().tgWebAppStartParam);
-  } catch {
-    return null;
-  }
 }
 
 /**

@@ -78,3 +78,59 @@ func TestVisibleByID(t *testing.T) {
 		})
 	}
 }
+
+func TestVisibleBetween(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanVisibilityUsers(t, pool)
+	repo := New(pool)
+
+	viewer := seedVisibilityUser(t, pool, 11, "active", "male", "any")
+
+	tests := []struct {
+		name string
+		id   uuid.UUID
+		want bool
+	}{
+		{"visible", seedVisibilityUser(t, pool, 12, "active", "female", "any"), true},
+		// Пол обоюден: она хочет только женщин — её нет ни в пулах, ни в пушах (§4).
+		{"gender mismatch", seedVisibilityUser(t, pool, 13, "active", "female", "same"), false},
+		{"not approved yet", seedVisibilityUser(t, pool, 14, "pending", "male", "any"), false},
+		{"banned", seedVisibilityUser(t, pool, 15, "banned", "male", "any"), false},
+		{"myself", viewer, false},
+		{"nobody", uuid.New(), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := repo.VisibleBetween(t.Context(), viewer, tt.id)
+			if err != nil {
+				t.Fatalf("VisibleBetween() failed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("VisibleBetween() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	// Блок обоюден, и вопрос «видит ли a b» отвечает одинаково с любой стороны.
+	blocked := seedVisibilityUser(t, pool, 16, "active", "male", "any")
+	if _, err := pool.Exec(t.Context(),
+		`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, blocked, viewer); err != nil {
+		t.Fatalf("seed block: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(),
+			`DELETE FROM blocks WHERE blocker_id = $1`, blocked); err != nil {
+			t.Errorf("clean up the block: %v", err)
+		}
+	})
+
+	for _, pair := range [][2]uuid.UUID{{viewer, blocked}, {blocked, viewer}} {
+		got, err := repo.VisibleBetween(t.Context(), pair[0], pair[1])
+		if err != nil {
+			t.Fatalf("VisibleBetween() failed: %v", err)
+		}
+		if got {
+			t.Errorf("VisibleBetween(%s, %s) = true, want false after a block", pair[0], pair[1])
+		}
+	}
+}

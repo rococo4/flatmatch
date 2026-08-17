@@ -27,3 +27,29 @@ func TestGenitiveFirstName(t *testing.T) {
 		}
 	}
 }
+
+func TestInstrumentalFirstName(t *testing.T) {
+	cases := map[string]string{
+		"Катя":   "Катей",
+		"Ира":    "Ирой",
+		"Марк":   "Марком",
+		"Женя":   "Женей",
+		"Настя":  "Настей",
+		"Игорь":  "Игорем",
+		"Андрей": "Андреем",
+		"Лена":   "Леной",
+		"Никита": "Никитой",
+		// Шипящая перед -а: «Сашей», не «Сашой»; г/к/х — обычная согласная.
+		"Саша":  "Сашей",
+		"Ольга": "Ольгой",
+		"Али":   "Али",
+		"Bob":   "Bob",
+		"":      "",
+	}
+
+	for name, want := range cases {
+		if got := InstrumentalFirstName(name); got != want {
+			t.Errorf("InstrumentalFirstName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}

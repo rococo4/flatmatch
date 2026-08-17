@@ -148,6 +148,24 @@ func (r *Repo) PoolMembers(ctx context.Context, viewerID, pointID uuid.UUID) ([]
 	return out, nil
 }
 
+func (r *Repo) PoolMemberIDs(ctx context.Context, viewerID, pointID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT lp.user_id
+		FROM likes_points lp
+		JOIN visible_people($1) vp ON vp = lp.user_id
+		WHERE lp.point_id = $2
+		  AND `+notMatchedWith("lp.user_id")+`
+		ORDER BY lp.created_at, lp.user_id`, viewerID, pointID)
+	if err != nil {
+		return nil, fmt.Errorf("pool member ids of point %s: %w", pointID, err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, fmt.Errorf("pool member ids of point %s: %w", pointID, err)
+	}
+	return ids, nil
+}
+
 func (r *Repo) CountActiveIn(ctx context.Context, zoneIDs []string) (int, error) {
 	var n int
 	err := r.pool.QueryRow(ctx,

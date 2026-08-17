@@ -208,7 +208,11 @@ func (r *Repo) PendingModeration(ctx context.Context) ([]entity.Point, error) {
 	return out, nil
 }
 
-func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
+// Enter отвечает, вошёл ли человек ИМЕННО СЕЙЧАС: повторный тап по кнопке
+// ошибкой не является (§2.2), но и пуша пулу не заказывает — новичка в нём не
+// прибавилось.
+func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) (bool, error) {
+	var entered bool
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		open, err := exists(ctx, tx, `
 			SELECT 1 FROM points
@@ -219,15 +223,16 @@ func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
 		if !open {
 			return entity.ErrNotFound
 		}
-		_, err = tx.Exec(ctx, `
+		tag, err := tx.Exec(ctx, `
 			INSERT INTO likes_points (user_id, point_id) VALUES ($1, $2)
 			ON CONFLICT DO NOTHING`, userID, pointID)
+		entered = tag.RowsAffected() > 0
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("enter pool of point %s: %w", pointID, err)
+		return false, fmt.Errorf("enter pool of point %s: %w", pointID, err)
 	}
-	return nil
+	return entered, nil
 }
 
 // Close снимает точку по воле создателя: квартира снята, соседа нашли,

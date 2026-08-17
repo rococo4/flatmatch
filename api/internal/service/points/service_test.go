@@ -50,6 +50,10 @@ type fakeRepo struct {
 	inPool       bool
 	members      []pointsrepo.Member
 	membersCalls int
+
+	entered    bool
+	enterErr   error
+	enterCalls int
 }
 
 type fakeSearches struct {
@@ -128,7 +132,10 @@ func (f *fakeRepo) CountActiveIn(_ context.Context, zoneIDs []string) (int, erro
 	return len(zoneIDs), nil
 }
 
-func (f *fakeRepo) Enter(context.Context, uuid.UUID, uuid.UUID) error { return nil }
+func (f *fakeRepo) Enter(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	f.enterCalls++
+	return f.entered, f.enterErr
+}
 
 func (f *fakeRepo) Leave(context.Context, uuid.UUID, uuid.UUID) error { return nil }
 
@@ -147,7 +154,7 @@ func (f *fakeNotifier) PointPending(ctx context.Context, p entity.Point) {
 
 func newService(t *testing.T, repo *fakeRepo, searches *fakeSearches, notify Notifier) *Service {
 	t.Helper()
-	return New(repo, searches, &fakePhotos{}, mustDir(t), notify)
+	return New(repo, searches, &fakePhotos{}, mustDir(t), notify, nil)
 }
 
 func mustDir(t *testing.T) *zones.Directory {
@@ -708,7 +715,7 @@ func TestFeedAndCountUseIntersectingZones(t *testing.T) {
 // ещё нет, и получает ключ, который приложит к ней при сабмите.
 func TestSavePhotoStoresUnderItsOwnKey(t *testing.T) {
 	photos := &fakePhotos{}
-	s := New(&fakeRepo{}, &fakeSearches{}, photos, mustDir(t), nil)
+	s := New(&fakeRepo{}, &fakeSearches{}, photos, mustDir(t), nil, nil)
 
 	key, err := s.SavePhoto(t.Context(), bytes.NewReader([]byte("\xff\xd8\xff\xe0 jpeg body")))
 	if err != nil {

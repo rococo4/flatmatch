@@ -424,7 +424,7 @@ func TestPoolMembershipIsPerPoint(t *testing.T) {
 		return in
 	}
 
-	if err := repo.Enter(t.Context(), guest, first.ID); err != nil {
+	if _, err := repo.Enter(t.Context(), guest, first.ID); err != nil {
 		t.Fatalf("Enter() failed: %v", err)
 	}
 	if !inPool(first.ID) || inPool(second.ID) {
@@ -433,7 +433,7 @@ func TestPoolMembershipIsPerPoint(t *testing.T) {
 	}
 
 	// Выход из второй квартиры не выносит человека из первой.
-	if err := repo.Enter(t.Context(), guest, second.ID); err != nil {
+	if _, err := repo.Enter(t.Context(), guest, second.ID); err != nil {
 		t.Fatalf("Enter() failed: %v", err)
 	}
 	if err := repo.Leave(t.Context(), guest, second.ID); err != nil {
@@ -473,7 +473,7 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 	}
 	for _, tt := range refused {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := repo.Enter(t.Context(), guest, tt.point); !errors.Is(err, entity.ErrNotFound) {
+			if _, err := repo.Enter(t.Context(), guest, tt.point); !errors.Is(err, entity.ErrNotFound) {
 				t.Errorf("Enter() = %v, want ErrNotFound", err)
 			}
 			if in, err := repo.InPool(t.Context(), guest, tt.point); err != nil || in {
@@ -490,10 +490,15 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(active flat) failed: %v", err)
 	}
-	// Вход безлимитный и в один тап — повторный тап не должен быть ошибкой (§2.2).
-	for range 2 {
-		if err := repo.Enter(t.Context(), guest, flat.ID); err != nil {
+	// Вход безлимитный и в один тап — повторный тап не должен быть ошибкой (§2.2),
+	// но и вошедшим второй раз человек не становится: пуш пулу заказывает первый.
+	for i := range 2 {
+		entered, err := repo.Enter(t.Context(), guest, flat.ID)
+		if err != nil {
 			t.Fatalf("Enter() failed: %v", err)
+		}
+		if want := i == 0; entered != want {
+			t.Errorf("Enter() #%d entered = %v, want %v", i+1, entered, want)
 		}
 	}
 	if in, err := repo.InPool(t.Context(), guest, flat.ID); err != nil || !in {

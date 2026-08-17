@@ -17,18 +17,28 @@ type Repository interface {
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
 
+// Pushes — лог уведомлений (§7): «тебя лайкнул N» адресату и «у тебя мэтч»
+// обоим. nil молча ничего не делает — пуш не часть лайка.
+type Pushes interface {
+	Liked(ctx context.Context, toID, fromID uuid.UUID, fromName string, fromGender entity.Gender)
+	Matched(ctx context.Context, match entity.Match)
+}
+
 type Service struct {
-	repo Repository
-	dir  *zones.Directory
+	repo   Repository
+	dir    *zones.Directory
+	pushes Pushes
 }
 
 var ErrInvalidParams = errors.New("like params are invalid")
 
-func New(repo Repository, dir *zones.Directory) *Service {
-	return &Service{repo: repo, dir: dir}
+func New(repo Repository, dir *zones.Directory, pushes Pushes) *Service {
+	return &Service{repo: repo, dir: dir, pushes: pushes}
 }
 
-func (s *Service) Like(ctx context.Context, fromID, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
+// Like принимает лайкающего целиком: имя и род нужны пушу адресату (§7), и
+// анкету, только что прочитанную аутентификацией, незачем читать второй раз.
+func (s *Service) Like(ctx context.Context, from entity.User, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
 	// Один лайк — один контекст: мэтч потом рассказывает, ГДЕ пересеклись, и на
 	// два места сразу этот рассказ не делится (§6).
 	if zoneID != "" && pointID != nil {
@@ -46,8 +56,29 @@ func (s *Service) Like(ctx context.Context, fromID, toID uuid.UUID, zoneID strin
 	}
 	// Точку валидирует транзакция: активность, тип и отношение к ней читаются
 	// там же, где решается трата слота.
-	return s.repo.Create(ctx, fromID, toID,
+	res, err := s.repo.Create(ctx, from.ID, toID,
 		likesrepo.LikeContext{ZoneID: zoneID, ContextZones: contextZones, PointID: pointID})
+	if err != nil {
+		return entity.LikeResult{}, err
+	}
+	s.announce(ctx, from, toID, res)
+	return res, nil
+}
+
+func (s *Service) announce(ctx context.Context, from entity.User, toID uuid.UUID, res entity.LikeResult) {
+	if s.pushes == nil {
+		return
+	}
+	// Повторный тап ничего не создал, а ответный лайк адресату не новость: он
+	// сам его и вызвал, и следом идёт «у тебя мэтч».
+	if !res.Already && res.Like.Spent {
+		s.pushes.Liked(ctx, toID, from.ID, from.Name, from.Profile.Gender)
+	}
+	// Гонка встречных лайков приводит сюда обе стороны — строка всё равно одна:
+	// её актор сам мэтч, и вторую отбивает уникальный индекс.
+	if res.Match != nil {
+		s.pushes.Matched(ctx, *res.Match)
+	}
 }
 
 func (s *Service) Incoming(ctx context.Context, userID uuid.UUID) ([]likesrepo.IncomingLike, error) {

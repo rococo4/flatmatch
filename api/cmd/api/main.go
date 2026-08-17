@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 
 	"flatmatch/api/internal/api/http/authmw"
 	"flatmatch/api/internal/api/http/likesapi"
@@ -29,12 +30,14 @@ import (
 	"flatmatch/api/internal/postgres"
 	"flatmatch/api/internal/repo/likesrepo"
 	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/repo/notificationsrepo"
 	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
 	"flatmatch/api/internal/service/likes"
 	"flatmatch/api/internal/service/matches"
 	"flatmatch/api/internal/service/moderation"
+	"flatmatch/api/internal/service/notifications"
 	"flatmatch/api/internal/service/points"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/searches"
@@ -51,6 +54,14 @@ const shutdownGrace = 15 * time.Second
 // mediaPrefix is where uploaded photos are addressed, both in the URL the API
 // hands out and in the route that serves them.
 const mediaPrefix = "/media"
+
+// people собирает вопрос «существует ли актор для адресата» из двух кладовых:
+// правило видимости (§4) живёт в users, мэтчи — в matches, а фан-ауту пушей
+// нужен один собеседник.
+type people struct {
+	visibility *usersrepo.Repo
+	matches    *matchesrepo.Repo
+}
 
 // deps are the wired components the routes are built from — a struct rather
 // than a dozen positional parameters.
@@ -79,6 +90,14 @@ type deps struct {
 	// bot is asked for one thing only: its own @name, which the Mini App needs
 	// to build share links back into the same bot.
 	bot *tgbot.Bot
+}
+
+func (p people) VisibleBetween(ctx context.Context, a, b uuid.UUID) (bool, error) {
+	return p.visibility.VisibleBetween(ctx, a, b)
+}
+
+func (p people) IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error) {
+	return p.matches.IsMatched(ctx, a, b)
 }
 
 func main() {
@@ -128,12 +147,18 @@ func run() error {
 	searchesRepo := searchesrepo.New(pool)
 	likesRepo := likesrepo.New(pool)
 	pointsRepo := pointsrepo.New(pool)
+	matchesRepo := matchesrepo.New(pool)
+
+	// Лог уведомлений (§7): доменные сервисы пишут в него события, воркер шлёт.
+	// Пуш не часть операции — ошибка записи остаётся внутри сервиса.
+	pushes := notifications.New(notificationsrepo.New(pool), searchesRepo, pointsRepo,
+		people{visibility: usersRepo, matches: matchesRepo}, dir, log)
 
 	// The bot client is built before the services because moderation sends
 	// through it, and the polling bot in turn routes taps back into moderation.
 	botClient := tgbot.NewClient(cfg.BotToken)
 	moderator := moderation.New(tgbot.NewModerationSender(botClient),
-		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir)
+		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir, pushes)
 
 	// The bot is built even with polling off: /me hands its @name to the Mini
 	// App for share links, and without a poll that name is simply empty.
@@ -141,13 +166,13 @@ func run() error {
 
 	wired := deps{
 		accounts: users.New(usersRepo, photos, moderator),
-		searches: searches.New(searchesRepo, dir),
+		searches: searches.New(searchesRepo, dir, pushes),
 		pools:    pools.New(searchesRepo, dir, photos),
-		likes:    likes.New(likesRepo, dir),
-		matches:  matches.New(matchesrepo.New(pool), searchesRepo, usersRepo, pointsRepo, dir),
+		likes:    likes.New(likesRepo, dir, pushes),
+		matches:  matches.New(matchesRepo, searchesRepo, usersRepo, pointsRepo, dir),
 		// Модератор обязателен: точка создаётся в pending и без сообщения в чат
 		// осталась бы ждать вечно (§5).
-		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator),
+		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator, pushes),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,
@@ -234,7 +259,9 @@ func router(
 		http.FileServer(http.Dir(d.photos.Root()))))
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(authmw.New(validator, d.accounts))
+		// Поиски трогает та же кладовая, что их и хранит: открытое приложение —
+		// молчаливый ответ на «ещё ищешь?» (§3).
+		r.Use(authmw.New(validator, d.accounts, d.pairSearches))
 		r.Mount("/", usersapi.New(d.accounts, d.bot).Routes())
 		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
 		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.points, d.dir).Routes())

@@ -46,7 +46,7 @@ type Repository interface {
 	Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []pointsrepo.FeedPoint, err error)
 	PoolMembers(ctx context.Context, viewerID, pointID uuid.UUID) ([]pointsrepo.Member, error)
 	CountActiveIn(ctx context.Context, zoneIDs []string) (int, error)
-	Enter(ctx context.Context, userID, pointID uuid.UUID) error
+	Enter(ctx context.Context, userID, pointID uuid.UUID) (entered bool, err error)
 	Leave(ctx context.Context, userID, pointID uuid.UUID) error
 	InPool(ctx context.Context, userID, pointID uuid.UUID) (bool, error)
 }
@@ -61,6 +61,12 @@ type Searches interface {
 // отменяет: очередь всегда можно дослать командой /queue.
 type Notifier interface {
 	PointPending(ctx context.Context, p entity.Point)
+}
+
+// Pushes — лог уведомлений (§7): пул квартиры узнаёт о каждом новом
+// присмотревшемся. nil молча ничего не делает — пуш не часть входа.
+type Pushes interface {
+	PoolNew(ctx context.Context, pointID, enteredUserID uuid.UUID)
 }
 
 // PhotoStore keeps the picture the form uploads before the point exists: скрин
@@ -116,10 +122,12 @@ type Service struct {
 	photos   PhotoStore
 	dir      *zones.Directory
 	notify   Notifier
+	pushes   Pushes
 }
 
-func New(repo Repository, searches Searches, photos PhotoStore, dir *zones.Directory, notify Notifier) *Service {
-	return &Service{repo: repo, searches: searches, photos: photos, dir: dir, notify: notify}
+func New(repo Repository, searches Searches, photos PhotoStore, dir *zones.Directory,
+	notify Notifier, pushes Pushes) *Service {
+	return &Service{repo: repo, searches: searches, photos: photos, dir: dir, notify: notify, pushes: pushes}
 }
 
 func (e *ErrDuplicateURL) Error() string {
@@ -186,7 +194,16 @@ func (s *Service) SavePhoto(ctx context.Context, file io.ReadSeeker) (string, er
 }
 
 func (s *Service) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
-	return s.repo.Enter(ctx, userID, pointID)
+	entered, err := s.repo.Enter(ctx, userID, pointID)
+	if err != nil {
+		return err
+	}
+	// Повторный тап по кнопке никого в пул не добавил — и рассказывать о нём
+	// пулу нечего.
+	if entered && s.pushes != nil {
+		s.pushes.PoolNew(ctx, pointID, userID)
+	}
+	return nil
 }
 
 // Close is «закрыть» из «Моих поисков»: квартиру сдали, сосед нашёлся,

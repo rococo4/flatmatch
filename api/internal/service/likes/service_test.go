@@ -16,6 +16,9 @@ import (
 
 type fakeRepo struct {
 	err error
+	// result подменяет исход транзакции: ответный лайк, повторный тап и мэтч
+	// решаются в ней, а сервису они приходят готовыми.
+	result *entity.LikeResult
 
 	ctx           likesrepo.LikeContext
 	createCalls   int
@@ -32,6 +35,9 @@ func (f *fakeRepo) Create(_ context.Context, _, _ uuid.UUID, lc likesrepo.LikeCo
 	f.ctx = lc
 	if f.err != nil {
 		return entity.LikeResult{}, f.err
+	}
+	if f.result != nil {
+		return *f.result, nil
 	}
 	return entity.LikeResult{Like: entity.Like{ZoneID: lc.ZoneID, PointID: lc.PointID, Spent: true}}, nil
 }
@@ -63,9 +69,9 @@ func testDir(t *testing.T) *zones.Directory {
 // stored as it came and resurface as the context of the match.
 func TestLikeRejectsUnknownZone(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
-	_, err := svc.Like(t.Context(), uuid.New(), uuid.New(), "d-atlantis", nil)
+	_, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-atlantis", nil)
 
 	var fields *entity.FieldsError
 	if !errors.As(err, &fields) || !errors.Is(err, ErrInvalidParams) ||
@@ -80,9 +86,9 @@ func TestLikeRejectsUnknownZone(t *testing.T) {
 // A reply carries no context (§2.3), and that is not a missing field.
 func TestLikeWithoutZoneIsLegal(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
-	got, err := svc.Like(t.Context(), uuid.New(), uuid.New(), "", nil)
+	got, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", nil)
 	if err != nil {
 		t.Fatalf("Like() failed: %v", err)
 	}
@@ -97,9 +103,9 @@ func TestLikeWithoutZoneIsLegal(t *testing.T) {
 
 func TestLikeKnownZoneReachesRepo(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
-	if _, err := svc.Like(t.Context(), uuid.New(), uuid.New(), "d-khamovniki", nil); err != nil {
+	if _, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-khamovniki", nil); err != nil {
 		t.Fatalf("Like() failed: %v", err)
 	}
 	if repo.ctx.ZoneID != "d-khamovniki" {
@@ -116,10 +122,10 @@ func TestLikeKnownZoneReachesRepo(t *testing.T) {
 // к ней читаются в транзакции, рядом с решением о трате слота.
 func TestLikePointReachesRepoUntouched(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 	point := uuid.New()
 
-	got, err := svc.Like(t.Context(), uuid.New(), uuid.New(), "", &point)
+	got, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", &point)
 	if err != nil {
 		t.Fatalf("Like() failed: %v", err)
 	}
@@ -135,10 +141,10 @@ func TestLikePointReachesRepoUntouched(t *testing.T) {
 // рассказ надвое нельзя (§6).
 func TestLikeRefusesTwoContexts(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 	point := uuid.New()
 
-	_, err := svc.Like(t.Context(), uuid.New(), uuid.New(), "d-khamovniki", &point)
+	_, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-khamovniki", &point)
 
 	var fields *entity.FieldsError
 	if !errors.As(err, &fields) || !errors.Is(err, ErrInvalidParams) ||
@@ -157,9 +163,9 @@ func TestLikePassesRepoErrorsThrough(t *testing.T) {
 		entity.ErrLikeLimit, entity.ErrNeedSearch, entity.ErrNotApproved, entity.ErrNotFound,
 	} {
 		t.Run(want.Error(), func(t *testing.T) {
-			svc := New(&fakeRepo{err: want}, testDir(t))
+			svc := New(&fakeRepo{err: want}, testDir(t), nil)
 
-			_, err := svc.Like(t.Context(), uuid.New(), uuid.New(), "line-1", nil)
+			_, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "line-1", nil)
 			if !errors.Is(err, want) {
 				t.Errorf("Like() = %v, want %v", err, want)
 			}
@@ -169,7 +175,7 @@ func TestLikePassesRepoErrorsThrough(t *testing.T) {
 
 func TestIncomingAndBudgetReachRepo(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	if _, err := svc.Incoming(t.Context(), uuid.New()); err != nil {
 		t.Fatalf("Incoming() failed: %v", err)

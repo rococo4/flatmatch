@@ -210,7 +210,7 @@ func newRouter(h *Handler, viewerID uuid.UUID) chi.Router {
 	r := chi.NewRouter()
 	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: viewerID, Status: entity.StatusActive},
-	}))
+	}, nil))
 	r.Get("/people/{id}", h.Profile)
 	return r
 }

@@ -136,9 +136,6 @@ func (r *Repo) Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Sea
 		if err := lockAndCheckSlots(ctx, tx, userID); err != nil {
 			return err
 		}
-		// Свежесть и метка вопроса обнуляются вместе со статусом: иначе поиск,
-		// поднятый из паузы, сразу считается молчащим — и тем же вечером гаснет
-		// обратно по неотвеченному вопросу, заданному до паузы.
 		rows, err := tx.Query(ctx, `
 			UPDATE searches SET status = 'active', close_reason = NULL,
 				pool_seen_at = now(), last_active_at = now(), ttl_asked_at = NULL,

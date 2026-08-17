@@ -26,8 +26,17 @@ type UsersMod interface {
 }
 
 type PointsMod interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status entity.PointStatus, closeReason *string) (bool, error)
 	PendingModeration(ctx context.Context) ([]entity.Point, error)
+}
+
+// Pushes — лог уведомлений (§7): вердикт человек узнаёт из бота, и пуш «загрузи
+// другое» — единственная дорога назад из реджекта фото (§5). nil молча ничего
+// не делает.
+type Pushes interface {
+	ProfileVerdict(ctx context.Context, userID uuid.UUID, typ entity.NotificationType)
+	PointVerdict(ctx context.Context, point entity.Point, ok bool)
 }
 
 // PhotoURLs resolves a stored key to a local file: в базе лежит ключ, адрес
@@ -43,10 +52,13 @@ type Service struct {
 	points PointsMod
 	photos PhotoURLs
 	dir    *zones.Directory
+	pushes Pushes
 }
 
-func New(bot Sender, chatID int64, users UsersMod, points PointsMod, photos PhotoURLs, dir *zones.Directory) *Service {
-	return &Service{bot: bot, chatID: chatID, users: users, points: points, photos: photos, dir: dir}
+func New(bot Sender, chatID int64, users UsersMod, points PointsMod, photos PhotoURLs,
+	dir *zones.Directory, pushes Pushes) *Service {
+	return &Service{bot: bot, chatID: chatID, users: users, points: points,
+		photos: photos, dir: dir, pushes: pushes}
 }
 
 // UserPending shows a questionnaire to the moderator: фото и «о себе» — ровно

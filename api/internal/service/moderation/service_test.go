@@ -50,6 +50,8 @@ type fakePoints struct {
 	pending []entity.Point
 	sets    []statusCall
 	changed bool
+	point   entity.Point
+	byIDErr error
 }
 
 type fakePhotos struct{}
@@ -70,6 +72,10 @@ func (f *fakeUsers) SetModeration(_ context.Context, id uuid.UUID, status *entit
 
 func (f *fakeUsers) PendingModeration(context.Context) ([]entity.User, error) {
 	return f.pending, nil
+}
+
+func (f *fakePoints) ByID(context.Context, uuid.UUID) (entity.Point, error) {
+	return f.point, f.byIDErr
 }
 
 func (f *fakePoints) SetStatus(_ context.Context, id uuid.UUID, status entity.PointStatus, reason *string) (bool, error) {
@@ -94,7 +100,7 @@ func newService(t *testing.T, chatID int64, bot Sender, users UsersMod, points P
 	if err != nil {
 		t.Fatalf("load zones: %v", err)
 	}
-	return New(bot, chatID, users, points, fakePhotos{}, dir)
+	return New(bot, chatID, users, points, fakePhotos{}, dir, nil)
 }
 
 func submitted() entity.User {

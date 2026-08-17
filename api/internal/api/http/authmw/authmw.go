@@ -22,7 +22,9 @@ type Accounts interface {
 	EnsureFromTelegram(ctx context.Context, tg entity.TelegramIdentity) (entity.User, error)
 }
 
-func New(validator Validator, accounts Accounts) func(http.Handler) http.Handler {
+func New(validator Validator, accounts Accounts, touches Touches) func(http.Handler) http.Handler {
+	recent := &throttle{every: touchEvery}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, ok := initDataFromHeader(r)
@@ -54,6 +56,8 @@ func New(validator Validator, accounts Accounts) func(http.Handler) http.Handler
 			ctx := newContext(r.Context(), user)
 
 			ctx = logctx.With(ctx, logctx.From(ctx).With("user_id", user.ID, "tg_id", user.TelegramID))
+
+			touch(ctx, touches, recent, user.ID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

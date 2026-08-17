@@ -89,7 +89,7 @@ func feed(t *testing.T, points *fakePoints, path string) *httptest.ResponseRecor
 	r := chi.NewRouter()
 	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
-	}))
+	}, nil))
 	r.Get("/feed", New(fakePools{}, fakeSearches{}, points, fakePhotos{}, fakeDir{}).Feed)
 
 	req := httptest.NewRequest(http.MethodGet, path, nil)

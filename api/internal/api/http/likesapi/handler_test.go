@@ -159,12 +159,12 @@ func newRouter(likes *fakeLikes, points fakePoints, viewer uuid.UUID) chi.Router
 	r := chi.NewRouter()
 	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: viewer, Status: entity.StatusActive},
-	}))
+	}, nil))
 	r.Mount("/likes", New(likes, fakePhotos{}, points, fakeDir{}).Routes())
 	return r
 }
 
-func (f *fakeLikes) Like(_ context.Context, _, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
+func (f *fakeLikes) Like(_ context.Context, _ entity.User, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
 	f.calls++
 	f.toID, f.zoneID, f.pointID = toID, zoneID, pointID
 	// Правило сервиса, повторённое здесь: контекст у лайка один (§2.3).

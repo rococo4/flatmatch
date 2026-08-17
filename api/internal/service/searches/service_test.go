@@ -16,9 +16,10 @@ import (
 )
 
 type fakeRepo struct {
-	existing *entity.Search // what ByID answers; nil → ErrNotFound
-	created  *entity.SearchParams
-	updated  *entity.SearchParams
+	existing  *entity.Search // what ByID answers; nil → ErrNotFound
+	created   *entity.SearchParams
+	updated   *entity.SearchParams
+	createErr error
 
 	listCalls       int
 	closeCalls      int
@@ -30,6 +31,9 @@ type fakeRepo struct {
 var _ Repository = (*searchesrepo.Repo)(nil)
 
 func (f *fakeRepo) Create(_ context.Context, _ uuid.UUID, p entity.SearchParams) (entity.Search, error) {
+	if f.createErr != nil {
+		return entity.Search{}, f.createErr
+	}
 	f.created = &p
 	return entity.Search{SearchParams: p, Status: entity.SearchActive}, nil
 }
@@ -71,7 +75,7 @@ func testDir(t *testing.T) *zones.Directory {
 
 func TestCreateRejectsUnknownZone(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	_, err := svc.Create(t.Context(), uuid.New(),
 		entity.SearchParams{ZoneID: "d-atlantis", PriceMax: 40000})
@@ -88,7 +92,7 @@ func TestCreateRejectsUnknownZone(t *testing.T) {
 
 func TestCreateRejectsBadParams(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	_, err := svc.Create(t.Context(), uuid.New(),
 		entity.SearchParams{ZoneID: "d-khamovniki", PriceMax: 0})
@@ -103,7 +107,7 @@ func TestCreateRejectsBadParams(t *testing.T) {
 // pile a second "zone_id" onto the same list.
 func TestCreateEmptyZoneReportsOnce(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	_, err := svc.Create(t.Context(), uuid.New(),
 		entity.SearchParams{ZoneID: "", PriceMax: 40000})
@@ -125,7 +129,7 @@ func TestCreateEmptyZoneReportsOnce(t *testing.T) {
 
 func TestCreateNormalisesMoveInToMonthStart(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	mid := time.Date(2026, 9, 17, 13, 45, 0, 0, time.UTC)
 	_, err := svc.Create(t.Context(), uuid.New(),
@@ -141,7 +145,7 @@ func TestCreateNormalisesMoveInToMonthStart(t *testing.T) {
 
 func TestCreateValidPassesThrough(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	got, err := svc.Create(t.Context(), uuid.New(),
 		entity.SearchParams{ZoneID: "line-1", PriceMax: 40000})
@@ -158,7 +162,7 @@ func TestUpdateValidatesLikeCreate(t *testing.T) {
 		SearchParams: entity.SearchParams{ZoneID: "d-atlantis", PriceMax: 40000},
 		Status:       entity.SearchActive,
 	}}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	_, err := svc.Update(t.Context(), uuid.New(), uuid.New(),
 		entity.SearchParams{ZoneID: "d-atlantis", PriceMax: 40000})
@@ -180,7 +184,7 @@ func TestUpdateRejectsZoneChange(t *testing.T) {
 		SearchParams: entity.SearchParams{ZoneID: "d-khamovniki", PriceMax: 45000},
 		Status:       entity.SearchActive,
 	}}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	_, err := svc.Update(t.Context(), uuid.New(), uuid.New(),
 		entity.SearchParams{ZoneID: "line-1", PriceMax: 45000})
@@ -197,7 +201,7 @@ func TestUpdateRejectsZoneChange(t *testing.T) {
 
 func TestUpdateMissingSearchIsNotFound(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	_, err := svc.Update(t.Context(), uuid.New(), uuid.New(),
 		entity.SearchParams{ZoneID: "d-khamovniki", PriceMax: 45000})
@@ -211,7 +215,7 @@ func TestUpdateNormalisesAndPassesThrough(t *testing.T) {
 		SearchParams: entity.SearchParams{ZoneID: "line-1", PriceMax: 40000},
 		Status:       entity.SearchActive,
 	}}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	mid := time.Date(2026, 9, 17, 13, 45, 0, 0, time.UTC)
 	_, err := svc.Update(t.Context(), uuid.New(), uuid.New(),
@@ -240,7 +244,7 @@ func TestCloseRejectsBadReasons(t *testing.T) {
 	for name, reason := range bad {
 		t.Run(name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			svc := New(repo, testDir(t))
+			svc := New(repo, testDir(t), nil)
 
 			_, err := svc.Close(t.Context(), uuid.New(), uuid.New(), reason)
 
@@ -260,7 +264,7 @@ func TestCloseRejectsBadReasons(t *testing.T) {
 
 func TestCloseValidReasonReachesRepo(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	got, err := svc.Close(t.Context(), uuid.New(), uuid.New(), entity.CloseFoundHere)
 	if err != nil {
@@ -276,7 +280,7 @@ func TestCloseValidReasonReachesRepo(t *testing.T) {
 
 func TestListAndReactivateReachRepo(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t))
+	svc := New(repo, testDir(t), nil)
 
 	if _, err := svc.List(t.Context(), uuid.New()); err != nil {
 		t.Fatalf("List() failed: %v", err)

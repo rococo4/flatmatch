@@ -111,7 +111,7 @@ func seedSearch(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, status strin
 
 func enterPool(t *testing.T, repo *Repo, userID, pointID uuid.UUID) {
 	t.Helper()
-	if err := repo.Enter(t.Context(), userID, pointID); err != nil {
+	if _, err := repo.Enter(t.Context(), userID, pointID); err != nil {
 		t.Fatalf("Enter() failed: %v", err)
 	}
 }

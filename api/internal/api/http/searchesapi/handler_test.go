@@ -77,7 +77,7 @@ func get(t *testing.T, searches *fakeSearches, points *fakePoints) *httptest.Res
 	r := chi.NewRouter()
 	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
-	}))
+	}, nil))
 	r.Mount("/searches", New(searches, fakePools{}, points, fakeDir{}).Routes())
 
 	req := httptest.NewRequest(http.MethodGet, "/searches", nil)

@@ -302,7 +302,7 @@ func do(t *testing.T, service *fakePoints, viewer uuid.UUID, method, path, body 
 	router := chi.NewRouter()
 	router.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: viewer, Status: entity.StatusActive},
-	}))
+	}, nil))
 	router.Mount("/points", New(service, stubPhotos{}, fakeDir{}).Routes())
 
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -467,7 +467,7 @@ func upload(t *testing.T, service *fakePoints, contentType, body string) *httpte
 	router := chi.NewRouter()
 	router.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
-	}))
+	}, nil))
 	router.Mount("/points", New(service, stubPhotos{}, fakeDir{}).Routes())
 
 	req := httptest.NewRequest(http.MethodPost, "/points/photo", strings.NewReader(body))

@@ -26,7 +26,7 @@ func TestPoolMemberIDs(t *testing.T) {
 		t.Fatalf("Create() failed: %v", err)
 	}
 	for _, u := range []uuid.UUID{entrant, mate, matched, hidden} {
-		if err := repo.Enter(context.Background(), u, point.ID); err != nil {
+		if _, err := repo.Enter(context.Background(), u, point.ID); err != nil {
 			t.Fatalf("Enter() failed: %v", err)
 		}
 	}

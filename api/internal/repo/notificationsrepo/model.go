@@ -12,9 +12,13 @@ import (
 const notificationColumns = `n.id, n.user_id, n.type, n.actor_key, n.context_key,
 	n.payload, n.created_at, n.sent_at, n.failed_at, n.attempts`
 
+// Заблокировавший бота не получает даже строки (§3 спеки): проверка стоит
+// внутри вставки — отдельным чтением адресата фан-аут ошибался бы на гонке.
 const insertQuery = `
 	INSERT INTO notifications (user_id, type, actor_key, context_key, payload)
-	VALUES ($1, $2, $3, $4, $5)
+	SELECT $1::uuid, $2::text, $3::text, $4::text, $5::jsonb
+	WHERE EXISTS (
+	    SELECT 1 FROM users WHERE id = $1::uuid AND push_blocked_at IS NULL)
 	ON CONFLICT DO NOTHING`
 
 type TailMessage struct {

@@ -136,9 +136,13 @@ func (r *Repo) Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Sea
 		if err := lockAndCheckSlots(ctx, tx, userID); err != nil {
 			return err
 		}
+		// Свежесть и метка вопроса обнуляются вместе со статусом: иначе поиск,
+		// поднятый из паузы, сразу считается молчащим — и тем же вечером гаснет
+		// обратно по неотвеченному вопросу, заданному до паузы.
 		rows, err := tx.Query(ctx, `
 			UPDATE searches SET status = 'active', close_reason = NULL,
-				pool_seen_at = now(), updated_at = now()
+				pool_seen_at = now(), last_active_at = now(), ttl_asked_at = NULL,
+				updated_at = now()
 			WHERE id = $1 AND user_id = $2 AND status <> 'active'
 			RETURNING `+searchColumns, id, userID)
 		if err != nil {
@@ -196,6 +200,19 @@ func (r *Repo) StaleForTTL(ctx context.Context, quiet, afterMatch time.Duration)
 		return nil, fmt.Errorf("stale searches: %w", err)
 	}
 	return out, nil
+}
+
+// ClearTTLAsked — ответ «Да, ищу»: свежесть проставляется в обход часового
+// гейта Touch, иначе поиск того, кто заходил в приложение меньше часа назад,
+// остался бы с активностью старше вопроса и попал под PauseUnanswered.
+func (r *Repo) ClearTTLAsked(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE searches SET last_active_at = now(), ttl_asked_at = NULL
+		WHERE id = $1 AND status = 'active'`, id)
+	if err != nil {
+		return fmt.Errorf("clear the ttl question of search %s: %w", id, err)
+	}
+	return nil
 }
 
 func (r *Repo) MarkTTLAsked(ctx context.Context, id uuid.UUID) error {

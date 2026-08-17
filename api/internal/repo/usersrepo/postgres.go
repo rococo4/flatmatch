@@ -170,6 +170,16 @@ func (r *Repo) MarkPushBlocked(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ClearPushBlocked — /start в боте: человек вернулся, очередь снова его берёт.
+func (r *Repo) ClearPushBlocked(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET push_blocked_at = NULL WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("clear the push block of user %s: %w", id, err)
+	}
+	return nil
+}
+
 func (r *Repo) one(ctx context.Context, query string, args ...any) (entity.User, error) {
 	var user entity.User
 

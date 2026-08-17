@@ -247,6 +247,44 @@ func TestPendingSkipsUnreachableAddressees(t *testing.T) {
 	}
 }
 
+// Заблокировавший бота не получает и строки (§3 спеки): очередь незачем копить
+// тому, кому её не доставить.
+func TestInsertSkipsBlockedAddressees(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	live := seedUser(t, pool, 1, "active")
+	blocked := seedUser(t, pool, 2, "active")
+	blockBot(t, pool, blocked)
+
+	if mustInsert(t, repo, notif(blocked, entity.NotifLiked, uuid.NewString(), "")) {
+		t.Error("Insert() reported a new row for a blocked addressee")
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM notifications WHERE user_id = $1`, blocked); n != 0 {
+		t.Errorf("database holds %d rows for a blocked addressee, want 0", n)
+	}
+
+	inserted, err := repo.InsertMany(t.Context(), []entity.Notification{
+		notif(blocked, entity.NotifZoneNew, uuid.NewString(), "d-khamovniki"),
+		notif(live, entity.NotifZoneNew, uuid.NewString(), "d-khamovniki"),
+	})
+	if err != nil {
+		t.Fatalf("InsertMany() failed: %v", err)
+	}
+	if inserted != 1 {
+		t.Errorf("InsertMany() inserted %d rows, want 1 — заблокировавший в фан-аут не входит", inserted)
+	}
+
+	// Вернулся к боту — очередь снова его берёт.
+	if _, err := pool.Exec(t.Context(),
+		`UPDATE users SET push_blocked_at = NULL WHERE id = $1`, blocked); err != nil {
+		t.Fatalf("unblock the bot: %v", err)
+	}
+	if !mustInsert(t, repo, notif(blocked, entity.NotifLiked, uuid.NewString(), "")) {
+		t.Error("Insert() refused a row after the block was lifted")
+	}
+}
+
 func TestPendingOrdersOldestFirst(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

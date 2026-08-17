@@ -40,4 +40,16 @@ func TestMarkPushBlockedKeepsTheFirstMark(t *testing.T) {
 	if got := blockedAt(); got == nil || !got.Equal(*first) {
 		t.Errorf("push_blocked_at moved to %v, want it kept at %v", got, first)
 	}
+
+	// /start в боте: человек вернулся, и очередь снова его берёт.
+	if err := repo.ClearPushBlocked(t.Context(), user.ID); err != nil {
+		t.Fatalf("ClearPushBlocked() failed: %v", err)
+	}
+	if got := blockedAt(); got != nil {
+		t.Errorf("push_blocked_at = %v after unblocking, want nil", got)
+	}
+	// Повтор «/start» у незаблокированного — ничего не делает и не ошибка.
+	if err := repo.ClearPushBlocked(t.Context(), user.ID); err != nil {
+		t.Errorf("second ClearPushBlocked() = %v, want nil", err)
+	}
 }

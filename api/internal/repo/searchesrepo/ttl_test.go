@@ -93,6 +93,17 @@ func TestTouchMovesFreshnessAtMostHourly(t *testing.T) {
 		t.Errorf("Touch() rewrote a fresh mark: %v -> %v", fresh, got)
 	}
 
+	// Полчаса — всё ещё внутри гейта: запись на каждый запрос стоила бы дороже,
+	// чем даёт точность отметки.
+	backdate(t, pool, mine.ID, "last_active_at", 30*time.Minute)
+	halfHourAgo := lastActiveAt(t, pool, mine.ID)
+	if err := repo.Touch(t.Context(), me); err != nil {
+		t.Fatalf("Touch() failed: %v", err)
+	}
+	if got := lastActiveAt(t, pool, mine.ID); !got.Equal(halfHourAgo) {
+		t.Errorf("Touch() wrote inside the hourly gate: %v -> %v", halfHourAgo, got)
+	}
+
 	backdate(t, pool, mine.ID, "last_active_at", 90*time.Minute)
 	if err := repo.Touch(t.Context(), me); err != nil {
 		t.Fatalf("Touch() failed: %v", err)
@@ -137,7 +148,8 @@ func TestStaleForTTLBranches(t *testing.T) {
 	longAsked := seedUser(t, pool, 4, "active", "male", "any")
 	matched := seedUser(t, pool, 5, "active", "male", "any")
 	justMatched := seedUser(t, pool, 6, "active", "male", "any")
-	peer := seedUser(t, pool, 7, "active", "male", "any")
+	visited := seedUser(t, pool, 7, "active", "male", "any")
+	peer := seedUser(t, pool, 8, "active", "male", "any")
 
 	create := func(userID uuid.UUID) entity.Search {
 		t.Helper()
@@ -147,7 +159,7 @@ func TestStaleForTTLBranches(t *testing.T) {
 		}
 		return s
 	}
-	owners := []uuid.UUID{fresh, quiet, asked, longAsked, matched, justMatched}
+	owners := []uuid.UUID{fresh, quiet, asked, longAsked, matched, justMatched, visited}
 
 	// Свежий поиск спрашивать не о чем.
 	create(fresh)
@@ -174,6 +186,11 @@ func TestStaleForTTLBranches(t *testing.T) {
 	justMatchedSearch := create(justMatched)
 	backdate(t, pool, justMatchedSearch.ID, "last_active_at", ttlAfterMatch)
 	seedMatch(t, pool, justMatched, peer, time.Hour)
+	// А старый мэтч, после которого человек заходил, вопроса не стоит: на него
+	// уже ответили ногами.
+	visitedSearch := create(visited)
+	backdate(t, pool, visitedSearch.ID, "last_active_at", 24*time.Hour)
+	seedMatch(t, pool, visited, peer, ttlAfterMatch+2*24*time.Hour)
 
 	want := []uuid.UUID{quietSearch.ID, longAskedSearch.ID, matchedSearch.ID}
 	got := staleIDs(t, repo, owners...)
@@ -279,5 +296,96 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 	}
 	if slices.Contains(again, silentSearch.ID) {
 		t.Errorf("PauseUnanswered() paused %s twice", silentSearch.ID)
+	}
+}
+
+// Ответ «Да, ищу» снимает вопрос и обновляет свежесть в обход часового гейта:
+// иначе тот, кто заходил в приложение полчаса назад, остался бы с активностью
+// старше вопроса — и погас бы по молчанию, ответив.
+func TestClearTTLAskedAnswersTheQuestion(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	me := seedUser(t, pool, 1, "active", "male", "any")
+
+	search, err := repo.Create(t.Context(), me, testParams("d-khamovniki"))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	backdate(t, pool, search.ID, "last_active_at", 2*ttlAnswer)
+	backdate(t, pool, search.ID, "ttl_asked_at", ttlAnswer+time.Hour)
+
+	if err := repo.ClearTTLAsked(t.Context(), search.ID); err != nil {
+		t.Fatalf("ClearTTLAsked() failed: %v", err)
+	}
+	got, err := repo.ByID(t.Context(), me, search.ID)
+	if err != nil {
+		t.Fatalf("ByID() failed: %v", err)
+	}
+	if got.TTLAskedAt != nil {
+		t.Errorf("ttl_asked_at = %v, want nil", got.TTLAskedAt)
+	}
+	if time.Since(got.LastActiveAt) > time.Minute {
+		t.Errorf("last_active_at = %v, want now", got.LastActiveAt)
+	}
+
+	paused, err := repo.PauseUnanswered(t.Context(), ttlAnswer)
+	if err != nil {
+		t.Fatalf("PauseUnanswered() failed: %v", err)
+	}
+	if slices.Contains(paused, search.ID) {
+		t.Error("an answered search was paused for silence")
+	}
+	if got := staleIDs(t, repo, me); len(got) != 0 {
+		t.Errorf("an answered search is still stale: %v", got)
+	}
+}
+
+// Реактивация — это «ищу снова»: старый неотвеченный вопрос вместе с ней не
+// воскресает, иначе поднятый из паузы поиск гаснет обратно первым же проходом.
+func TestReactivateResetsTheTTLQuestion(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	me := seedUser(t, pool, 1, "active", "male", "any")
+
+	search, err := repo.Create(t.Context(), me, testParams("d-khamovniki"))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	backdate(t, pool, search.ID, "last_active_at", 10*24*time.Hour)
+	backdate(t, pool, search.ID, "ttl_asked_at", 4*24*time.Hour)
+
+	paused, err := repo.PauseUnanswered(t.Context(), ttlAnswer)
+	if err != nil {
+		t.Fatalf("PauseUnanswered() failed: %v", err)
+	}
+	if !slices.Contains(paused, search.ID) {
+		t.Fatalf("PauseUnanswered() = %v, want it to hold the silent search", paused)
+	}
+
+	back, err := repo.Reactivate(t.Context(), me, search.ID)
+	if err != nil {
+		t.Fatalf("Reactivate() failed: %v", err)
+	}
+	if back.Status != entity.SearchActive {
+		t.Fatalf("reactivated search is %s, want active", back.Status)
+	}
+	if back.TTLAskedAt != nil {
+		t.Errorf("ttl_asked_at = %v, want nil", back.TTLAskedAt)
+	}
+	if time.Since(back.LastActiveAt) > time.Minute {
+		t.Errorf("last_active_at = %v, want now", back.LastActiveAt)
+	}
+
+	again, err := repo.PauseUnanswered(t.Context(), ttlAnswer)
+	if err != nil {
+		t.Fatalf("PauseUnanswered() failed: %v", err)
+	}
+	if slices.Contains(again, search.ID) {
+		t.Error("a reactivated search was paused right back")
+	}
+	if got := staleIDs(t, repo, me); len(got) != 0 {
+		t.Errorf("a reactivated search is already stale: %v", got)
 	}
 }

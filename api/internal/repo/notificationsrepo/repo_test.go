@@ -2,6 +2,7 @@ package notificationsrepo
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -554,8 +555,6 @@ func TestLikedTailLivesInTheSentRow(t *testing.T) {
 	}
 }
 
-// PendingPersonal — отдельная страница личных: агрегат, стоящий первым в
-// очереди, в неё не попадает.
 func TestPendingPersonalSkipsAggregates(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -565,24 +564,38 @@ func TestPendingPersonalSkipsAggregates(t *testing.T) {
 	for _, n := range []entity.Notification{
 		{UserID: me, Type: entity.NotifZoneNew, ActorKey: "a1", ContextKey: "z"},
 		{UserID: me, Type: entity.NotifLiked, ActorKey: "a2"},
+		{UserID: me, Type: entity.NotifStillSearching, ActorKey: "s1:1", ContextKey: "z"},
+		{UserID: me, Type: entity.NotifPostMatch, ActorKey: "m1"},
 	} {
 		if _, err := repo.Insert(t.Context(), n); err != nil {
 			t.Fatalf("Insert() failed: %v", err)
 		}
 	}
 
-	personal, err := repo.PendingPersonal(t.Context(), 1)
+	personal, err := repo.PendingPersonal(t.Context(), 1000)
 	if err != nil {
 		t.Fatalf("PendingPersonal() failed: %v", err)
 	}
-	if len(personal) != 1 || personal[0].Type != entity.NotifLiked {
-		t.Errorf("PendingPersonal(1) = %+v, want the liked row past the older aggregate", personal)
+	if got := typesOf(personal, me); !slices.Equal(got, []entity.NotificationType{
+		entity.NotifLiked, entity.NotifStillSearching, entity.NotifPostMatch,
+	}) {
+		t.Errorf("PendingPersonal() = %v, want every non-aggregate in queue order", got)
 	}
-	all, err := repo.Pending(t.Context(), 1)
+	all, err := repo.Pending(t.Context(), 1000)
 	if err != nil {
 		t.Fatalf("Pending() failed: %v", err)
 	}
-	if len(all) != 1 || all[0].Type != entity.NotifZoneNew {
-		t.Errorf("Pending(1) = %+v, want the older aggregate first", all)
+	if got := typesOf(all, me); len(got) != 4 || got[0] != entity.NotifZoneNew {
+		t.Errorf("Pending() = %v, want the aggregate first among four", got)
 	}
+}
+
+func typesOf(ns []entity.Notification, user uuid.UUID) []entity.NotificationType {
+	var out []entity.NotificationType
+	for _, n := range ns {
+		if n.UserID == user {
+			out = append(out, n.Type)
+		}
+	}
+	return out
 }

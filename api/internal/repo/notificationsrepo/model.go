@@ -65,6 +65,10 @@ func insertArgs(n entity.Notification) []any {
 	}
 }
 
+func aggregatedTypes() []string {
+	return []string{string(entity.NotifZoneNew), string(entity.NotifPoolNew)}
+}
+
 func personalTypes() []string {
 	types := entity.PersonalPushTypes()
 	out := make([]string, 0, len(types))

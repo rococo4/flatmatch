@@ -55,9 +55,6 @@ func (r *Repo) Pending(ctx context.Context, limit int) ([]entity.Notification, e
 	return r.pending(ctx, limit, false)
 }
 
-// PendingPersonal — только личные типы: агрегаты, ждущие своё окно, самые
-// старые в очереди и иначе занимали бы всю страницу, а «у тебя мэтч» ждал бы
-// за ними часами.
 func (r *Repo) PendingPersonal(ctx context.Context, limit int) ([]entity.Notification, error) {
 	return r.pending(ctx, limit, true)
 }
@@ -70,9 +67,9 @@ func (r *Repo) pending(ctx context.Context, limit int, personalOnly bool) ([]ent
 		WHERE n.sent_at IS NULL AND n.failed_at IS NULL
 		  AND u.push_blocked_at IS NULL
 		  AND u.status <> 'banned'
-		  AND (NOT $2 OR n.type = ANY($3))
+		  AND (NOT $2 OR n.type <> ALL($3))
 		ORDER BY n.created_at, n.id
-		LIMIT $1`, limit, personalOnly, personalTypes())
+		LIMIT $1`, limit, personalOnly, aggregatedTypes())
 	if err != nil {
 		return nil, fmt.Errorf("read the push queue: %w", err)
 	}

@@ -71,15 +71,7 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Prof
 	if bad := p.InvalidFields(); len(bad) > 0 {
 		return entity.User{}, &entity.FieldsError{Err: ErrInvalidPatch, Fields: bad}
 	}
-	user, err := s.repo.UpdateProfile(ctx, id, p)
-	if err != nil {
-		return entity.User{}, err
-	}
-
-	if p.About != nil && user.Status == entity.StatusActive {
-		s.enqueue(ctx, user)
-	}
-	return user, nil
+	return s.repo.UpdateProfile(ctx, id, p)
 }
 
 func (s *Service) SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error) {
@@ -93,15 +85,7 @@ func (s *Service) SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker
 	if err := s.photos.Put(ctx, key, file, contentType); err != nil {
 		return entity.User{}, fmt.Errorf("store photo of user %s: %w", id, err)
 	}
-	user, err := s.repo.SetPhoto(ctx, id, key)
-	if err != nil {
-		return entity.User{}, err
-	}
-
-	if user.Status == entity.StatusActive {
-		s.enqueue(ctx, user)
-	}
-	return user, nil
+	return s.repo.SetPhoto(ctx, id, key)
 }
 
 func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error) {
@@ -116,6 +100,9 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error)
 	}
 
 	if user.Status == entity.StatusActive {
+		if user.PhotoStatus == entity.ModerationPending || user.AboutStatus == entity.ModerationPending {
+			s.enqueue(ctx, user)
+		}
 		return user, nil
 	}
 	submitted, err := s.repo.SetStatus(ctx, id, entity.StatusPending)

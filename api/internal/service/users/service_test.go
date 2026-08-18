@@ -230,6 +230,56 @@ func TestSubmitLeavesAnApprovedAccountActive(t *testing.T) {
 	}
 }
 
+func TestEditsOfAnApprovedAccountReachModerationOnSubmitOnly(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Status:      entity.StatusActive,
+		Profile:     completeProfile(),
+		PhotoKey:    "photos/x.jpg",
+		PhotoStatus: entity.ModerationPending,
+		AboutStatus: entity.ModerationPending,
+	}}
+	svc, notifier := newModeratedService(repo)
+
+	about := "новый текст"
+	if _, err := svc.UpdateProfile(t.Context(), uuid.New(), entity.ProfilePatch{About: &about}); err != nil {
+		t.Fatalf("UpdateProfile() failed: %v", err)
+	}
+	if _, err := svc.SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("SetPhoto() failed: %v", err)
+	}
+	if len(notifier.queued) != 0 {
+		t.Fatalf("moderation got %d cards before the button, want none", len(notifier.queued))
+	}
+
+	if _, err := svc.Submit(t.Context(), uuid.New()); err != nil {
+		t.Fatalf("Submit() failed: %v", err)
+	}
+	if len(notifier.queued) != 1 {
+		t.Errorf("moderation got %d cards on submit, want one for photo and text together", len(notifier.queued))
+	}
+	if repo.statusCall {
+		t.Errorf("status was moved to %q, want it left alone", repo.setStatus)
+	}
+}
+
+func TestSubmitOfAnUntouchedApprovedAccountIsSilent(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Status:      entity.StatusActive,
+		Profile:     completeProfile(),
+		PhotoKey:    "photos/x.jpg",
+		PhotoStatus: entity.ModerationOK,
+		AboutStatus: entity.ModerationOK,
+	}}
+	svc, notifier := newModeratedService(repo)
+
+	if _, err := svc.Submit(t.Context(), uuid.New()); err != nil {
+		t.Fatalf("Submit() failed: %v", err)
+	}
+	if len(notifier.queued) != 0 {
+		t.Errorf("moderation got %d cards for an untouched profile, want none", len(notifier.queued))
+	}
+}
+
 func TestSetPhotoKeepsOneObjectPerUser(t *testing.T) {
 	store := &fakeStore{}
 	repo := &fakeRepo{}
@@ -319,18 +369,6 @@ func TestResubmitDoesNotDuplicateTheCard(t *testing.T) {
 	}
 }
 
-func TestPhotoEditOfAnApprovedProfileGoesBackToTheModerator(t *testing.T) {
-	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
-	svc, notifier := newModeratedService(repo)
-
-	if _, err := svc.SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
-		t.Fatalf("SetPhoto() failed: %v", err)
-	}
-	if len(notifier.queued) != 1 {
-		t.Errorf("queued %d questionnaires, want 1", len(notifier.queued))
-	}
-}
-
 func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{Status: entity.StatusDraft}}
 	svc, notifier := newModeratedService(repo)
@@ -340,29 +378,6 @@ func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
 	}
 	if len(notifier.queued) != 0 {
 		t.Errorf("queued %d questionnaires, want none", len(notifier.queued))
-	}
-}
-
-func TestOnlyAboutSendsAnApprovedProfileBackToTheModerator(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		patch entity.ProfilePatch
-		want  int
-	}{
-		{"about", entity.ProfilePatch{About: pointer.To("Люблю тишину")}, 1},
-		{"habits", entity.ProfilePatch{Schedule: pointer.To(entity.ScheduleLark)}, 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
-			svc, notifier := newModeratedService(repo)
-
-			if _, err := svc.UpdateProfile(t.Context(), uuid.New(), tc.patch); err != nil {
-				t.Fatalf("UpdateProfile() failed: %v", err)
-			}
-			if len(notifier.queued) != tc.want {
-				t.Errorf("queued %d questionnaires, want %d", len(notifier.queued), tc.want)
-			}
-		})
 	}
 }
 

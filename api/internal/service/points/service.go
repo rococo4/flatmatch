@@ -43,6 +43,8 @@ type Repository interface {
 	Enter(ctx context.Context, userID, pointID uuid.UUID) (entered bool, err error)
 	Leave(ctx context.Context, userID, pointID uuid.UUID) error
 	InPool(ctx context.Context, userID, pointID uuid.UUID) (bool, error)
+	Vote(ctx context.Context, userID, pointID uuid.UUID, alive bool) (pointsrepo.VoteOutcome, error)
+	Restore(ctx context.Context, userID, pointID uuid.UUID) error
 }
 
 type Searches interface {
@@ -55,6 +57,7 @@ type Notifier interface {
 
 type Pushes interface {
 	PoolNew(ctx context.Context, pointID, enteredUserID uuid.UUID)
+	PointGone(ctx context.Context, point entity.Point, lastVoter uuid.UUID)
 }
 
 type PhotoStore interface {
@@ -146,7 +149,7 @@ func (s *Service) Point(ctx context.Context, viewerID, pointID uuid.UUID) (point
 		return pointsrepo.FeedPoint{}, err
 	}
 
-	if card.Point.Status != entity.PointActive &&
+	if card.Point.Status != entity.PointActive && card.Point.Status != entity.PointPaused &&
 		(card.Point.CreatedBy == nil || *card.Point.CreatedBy != viewerID) {
 		return pointsrepo.FeedPoint{}, entity.ErrNotFound
 	}
@@ -184,6 +187,41 @@ func (s *Service) Close(ctx context.Context, userID, pointID uuid.UUID) error {
 
 func (s *Service) Leave(ctx context.Context, userID, pointID uuid.UUID) error {
 	return s.repo.Leave(ctx, userID, pointID)
+}
+
+func (s *Service) Vote(ctx context.Context, viewerID, pointID uuid.UUID, alive bool) (pointsrepo.FeedPoint, error) {
+	card, err := s.repo.CardByID(ctx, viewerID, pointID)
+	if err != nil {
+		return pointsrepo.FeedPoint{}, err
+	}
+	if !card.Point.Votable() {
+		return pointsrepo.FeedPoint{}, entity.ErrNotVotable
+	}
+	if card.Point.Status != entity.PointActive {
+		return pointsrepo.FeedPoint{}, entity.ErrPointNotActive
+	}
+
+	out, err := s.repo.Vote(ctx, viewerID, pointID, alive)
+	if err != nil {
+		return pointsrepo.FeedPoint{}, err
+	}
+
+	card, err = s.repo.CardByID(ctx, viewerID, pointID)
+	if err != nil {
+		return pointsrepo.FeedPoint{}, err
+	}
+
+	if out.Hidden && s.pushes != nil {
+		s.pushes.PointGone(ctx, card.Point, viewerID)
+	}
+	return card, nil
+}
+
+func (s *Service) Restore(ctx context.Context, userID, pointID uuid.UUID) (pointsrepo.FeedPoint, error) {
+	if err := s.repo.Restore(ctx, userID, pointID); err != nil {
+		return pointsrepo.FeedPoint{}, err
+	}
+	return s.repo.CardByID(ctx, userID, pointID)
 }
 
 func (s *Service) Pool(ctx context.Context, viewer entity.User, pointID uuid.UUID) (PoolView, error) {

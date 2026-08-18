@@ -35,6 +35,7 @@ type fakeRepo struct {
 	createErr   error
 
 	card      pointsrepo.FeedPoint
+	cardAfter *pointsrepo.FeedPoint
 	cardErr   error
 	cardCalls int
 
@@ -52,6 +53,18 @@ type fakeRepo struct {
 	entered    bool
 	enterErr   error
 	enterCalls int
+
+	voteUser  uuid.UUID
+	votePoint uuid.UUID
+	voteAlive bool
+	voteOut   pointsrepo.VoteOutcome
+	voteErr   error
+	voteCalls int
+
+	restoreUser  uuid.UUID
+	restorePoint uuid.UUID
+	restoreErr   error
+	restoreCalls int
 }
 
 type fakeSearches struct {
@@ -106,6 +119,9 @@ func (f *fakeRepo) ByURLNorm(_ context.Context, urlNorm string) (*entity.Point, 
 
 func (f *fakeRepo) CardByID(context.Context, uuid.UUID, uuid.UUID) (pointsrepo.FeedPoint, error) {
 	f.cardCalls++
+	if f.cardCalls > 1 && f.cardAfter != nil {
+		return *f.cardAfter, f.cardErr
+	}
 	return f.card, f.cardErr
 }
 
@@ -137,6 +153,18 @@ func (f *fakeRepo) Leave(context.Context, uuid.UUID, uuid.UUID) error { return n
 
 func (f *fakeRepo) InPool(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
 	return f.inPool, nil
+}
+
+func (f *fakeRepo) Vote(_ context.Context, userID, pointID uuid.UUID, alive bool) (pointsrepo.VoteOutcome, error) {
+	f.voteCalls++
+	f.voteUser, f.votePoint, f.voteAlive = userID, pointID, alive
+	return f.voteOut, f.voteErr
+}
+
+func (f *fakeRepo) Restore(_ context.Context, userID, pointID uuid.UUID) error {
+	f.restoreCalls++
+	f.restoreUser, f.restorePoint = userID, pointID
+	return f.restoreErr
 }
 
 func (f *fakeSearches) ListByUser(context.Context, uuid.UUID) ([]entity.Search, error) {
@@ -505,6 +533,13 @@ func TestPointHidesWhatIsNotApproved(t *testing.T) {
 		t.Errorf("Point() of an active flat failed: %v", err)
 	}
 
+	paused := pointsrepo.FeedPoint{Point: entity.Point{
+		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPaused, CreatedBy: &creator}}
+	s = newService(t, &fakeRepo{card: paused}, &fakeSearches{}, nil)
+	if _, err := s.Point(t.Context(), stranger, paused.Point.ID); err != nil {
+		t.Errorf("Point() of a paused flat failed for a stranger: %v", err)
+	}
+
 	orphan := pointsrepo.FeedPoint{Point: entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Source: entity.SourceManual,
 		Status: entity.PointPending, CreatedBy: nil}}
@@ -729,5 +764,140 @@ func TestCloseDelegatesToTheRepository(t *testing.T) {
 	repo.closeErr = entity.ErrNotFound
 	if err := s.Close(t.Context(), user, point); !errors.Is(err, entity.ErrNotFound) {
 		t.Errorf("Close() of a foreign point = %v, want ErrNotFound", err)
+	}
+}
+
+func TestVoteRejectsWhatIsNotAFlatWithALink(t *testing.T) {
+	url := "https://avito.ru/x"
+	tests := []struct {
+		name  string
+		point entity.Point
+	}{
+		{"intent_home", entity.Point{ID: uuid.New(), Type: entity.PointIntentHome, Status: entity.PointActive, URLNorm: &url}},
+		{"flat without a link", entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeRepo{card: pointsrepo.FeedPoint{Point: tt.point}}
+			s := newService(t, repo, &fakeSearches{}, nil)
+
+			if _, err := s.Vote(t.Context(), uuid.New(), tt.point.ID, true); !errors.Is(err, entity.ErrNotVotable) {
+				t.Errorf("Vote() = %v, want ErrNotVotable", err)
+			}
+			if repo.voteCalls != 0 {
+				t.Errorf("repo.Vote called %d times, want 0", repo.voteCalls)
+			}
+		})
+	}
+}
+
+func TestVoteRejectsAPointThatIsNotActive(t *testing.T) {
+	url := "https://avito.ru/x"
+	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPaused, URLNorm: &url}
+	repo := &fakeRepo{card: pointsrepo.FeedPoint{Point: point}}
+	s := newService(t, repo, &fakeSearches{}, nil)
+
+	if _, err := s.Vote(t.Context(), uuid.New(), point.ID, false); !errors.Is(err, entity.ErrPointNotActive) {
+		t.Errorf("Vote() = %v, want ErrPointNotActive", err)
+	}
+	if repo.voteCalls != 0 {
+		t.Errorf("repo.Vote called %d times, want 0", repo.voteCalls)
+	}
+}
+
+func TestVoteStaysSilentBelowTheThreshold(t *testing.T) {
+	url := "https://avito.ru/x"
+	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, URLNorm: &url}
+	repo := &fakeRepo{
+		card:    pointsrepo.FeedPoint{Point: point},
+		voteOut: pointsrepo.VoteOutcome{GoneVotes: 1, Hidden: false},
+	}
+	pushes := &fakePushes{}
+	s := New(repo, &fakeSearches{}, &fakePhotos{}, mustDir(t), nil, pushes)
+
+	if _, err := s.Vote(t.Context(), uuid.New(), point.ID, false); err != nil {
+		t.Fatalf("Vote() failed: %v", err)
+	}
+	if len(pushes.pointGone) != 0 {
+		t.Errorf("PointGone called %d times below the threshold, want 0", len(pushes.pointGone))
+	}
+	if repo.cardCalls != 2 {
+		t.Errorf("CardByID called %d times, want 2 (before and after the vote)", repo.cardCalls)
+	}
+	if repo.voteUser == uuid.Nil || repo.votePoint != point.ID || repo.voteAlive {
+		t.Errorf("repo.Vote(%s, %s, %v), want the caller, the point and alive=false",
+			repo.voteUser, repo.votePoint, repo.voteAlive)
+	}
+}
+
+func TestVoteTellsThePoolWhenThePointHides(t *testing.T) {
+	url := "https://avito.ru/x"
+	before := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, URLNorm: &url}
+	after := before
+	after.Status = entity.PointPaused
+	repo := &fakeRepo{
+		card:      pointsrepo.FeedPoint{Point: before},
+		cardAfter: &pointsrepo.FeedPoint{Point: after},
+		voteOut:   pointsrepo.VoteOutcome{GoneVotes: 2, Hidden: true},
+	}
+	pushes := &fakePushes{}
+	s := New(repo, &fakeSearches{}, &fakePhotos{}, mustDir(t), nil, pushes)
+
+	voter := uuid.New()
+	got, err := s.Vote(t.Context(), voter, before.ID, false)
+	if err != nil {
+		t.Fatalf("Vote() failed: %v", err)
+	}
+	if got.Point.Status != entity.PointPaused {
+		t.Errorf("Vote() returned status %s, want the re-read paused card", got.Point.Status)
+	}
+
+	if len(pushes.pointGone) != 1 {
+		t.Fatalf("PointGone called %d times, want 1", len(pushes.pointGone))
+	}
+	if call := pushes.pointGone[0]; call.point.ID != before.ID || call.point.Status != entity.PointPaused || call.lastVoter != voter {
+		t.Errorf("PointGone(%+v, %s), want the re-read point and %s", call.point, call.lastVoter, voter)
+	}
+}
+
+func TestVoteWithoutPushesDoesNotPanic(t *testing.T) {
+	url := "https://avito.ru/x"
+	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, URLNorm: &url}
+	repo := &fakeRepo{card: pointsrepo.FeedPoint{Point: point}, voteOut: pointsrepo.VoteOutcome{Hidden: true}}
+	s := newService(t, repo, &fakeSearches{}, nil)
+
+	if _, err := s.Vote(t.Context(), uuid.New(), point.ID, false); err != nil {
+		t.Fatalf("Vote() failed: %v", err)
+	}
+}
+
+func TestRestoreReturnsTheRereadCard(t *testing.T) {
+	restored := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive}
+	repo := &fakeRepo{card: pointsrepo.FeedPoint{Point: restored}}
+	s := newService(t, repo, &fakeSearches{}, nil)
+
+	user := uuid.New()
+	got, err := s.Restore(t.Context(), user, restored.ID)
+	if err != nil {
+		t.Fatalf("Restore() failed: %v", err)
+	}
+	if got.Point.ID != restored.ID {
+		t.Errorf("Restore() = %+v, want the re-read card %s", got.Point, restored.ID)
+	}
+	if repo.restoreCalls != 1 || repo.restoreUser != user || repo.restorePoint != restored.ID {
+		t.Errorf("repo.Restore(%s, %s) called %d times, want (%s, %s) once",
+			repo.restoreUser, repo.restorePoint, repo.restoreCalls, user, restored.ID)
+	}
+}
+
+func TestRestorePropagatesTheRepositoryError(t *testing.T) {
+	repo := &fakeRepo{restoreErr: entity.ErrPointNotPaused}
+	s := newService(t, repo, &fakeSearches{}, nil)
+
+	if _, err := s.Restore(t.Context(), uuid.New(), uuid.New()); !errors.Is(err, entity.ErrPointNotPaused) {
+		t.Errorf("Restore() = %v, want ErrPointNotPaused", err)
+	}
+	if repo.cardCalls != 0 {
+		t.Errorf("CardByID called %d times after a failed restore, want 0", repo.cardCalls)
 	}
 }

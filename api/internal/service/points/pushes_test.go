@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/service/notifications"
 )
 
@@ -17,12 +18,22 @@ type poolNewCall struct {
 	entered uuid.UUID
 }
 
+type pointGoneCall struct {
+	point     entity.Point
+	lastVoter uuid.UUID
+}
+
 type fakePushes struct {
-	poolNew []poolNewCall
+	poolNew   []poolNewCall
+	pointGone []pointGoneCall
 }
 
 func (f *fakePushes) PoolNew(_ context.Context, pointID, enteredUserID uuid.UUID) {
 	f.poolNew = append(f.poolNew, poolNewCall{pointID: pointID, entered: enteredUserID})
+}
+
+func (f *fakePushes) PointGone(_ context.Context, point entity.Point, lastVoter uuid.UUID) {
+	f.pointGone = append(f.pointGone, pointGoneCall{point: point, lastVoter: lastVoter})
 }
 
 func TestEnterTellsThePool(t *testing.T) {

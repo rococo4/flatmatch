@@ -32,6 +32,8 @@ export type FlatPoolPerson = {
   habits: string;
   matches: number;
   verdicts: { verdict: Verdict; label: string }[];
+  /** Ваш мэтч — бейдж вместо шеврона, лайкать уже нечего. */
+  matched?: boolean;
 };
 
 /** Шапка-карточка: та же квартира, что в ленте, только развёрнутая. */
@@ -137,6 +139,7 @@ export function FlatPoolScreen({
   onOpenPerson,
   onEnter,
   onLeave,
+  onShare,
 }: {
   flat: FlatPoolCard;
   /** null = смотрящий не в пуле: список ему закрыт, карточка — нет (§6). */
@@ -152,6 +155,8 @@ export function FlatPoolScreen({
   onOpenPerson?: (id: string) => void;
   onEnter?: () => void;
   onLeave?: () => void;
+  /** «Позвать в пул — поделиться в чат»: у любого участника, квартира ничья (§2.2). */
+  onShare?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? (members ?? []) : (members ?? []).slice(0, shownCount);
@@ -261,8 +266,26 @@ export function FlatPoolScreen({
               <div key={p.id} style={L.personCard} onClick={() => onOpenPerson?.(p.id)}>
                 <Avatar name={p.name} size={48} src={p.photoUrl} />
                 <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                  <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>
-                    {p.name}, {p.age}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16, fontWeight: 590, letterSpacing: '-0.2px' }}>
+                      {p.name}, {p.age}
+                    </span>
+                    {p.matched && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 640,
+                          letterSpacing: '.04em',
+                          textTransform: 'uppercase',
+                          padding: '2px 7px',
+                          borderRadius: 999,
+                          background: 'var(--verdict-ok-bg)',
+                          color: 'var(--verdict-ok-fg)',
+                        }}
+                      >
+                        мэтч
+                      </span>
+                    )}
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{p.habits}</span>
                   <span style={{ fontSize: 13, fontWeight: 510 }}>{p.matches} совпадений анкеты</span>
@@ -294,6 +317,11 @@ export function FlatPoolScreen({
 
         {/* Из своего пула выхода нет: вход обратно требует активной точки, и
             создатель точки на проверке вернуться бы уже не смог. */}
+        {members !== null && onShare && (
+          <button type="button" style={S.secondaryButton} onClick={onShare}>
+            Позвать в пул — поделиться в чат
+          </button>
+        )}
         {members !== null && !mine && (
           <div style={{ paddingTop: 4 }}>
             <button type="button" style={L.leaveButton} disabled={busy} onClick={onLeave}>

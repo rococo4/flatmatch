@@ -83,12 +83,14 @@ export function FlatPoolView({
   onOpenPerson,
   onChanged,
   onLeft,
+  onShare,
 }: {
   pointId: string;
   /** Своя точка: «Выйти из пула» на ней не рисуется — вернуться было бы некуда. */
   mine?: boolean;
   onBack?: () => void;
   onOpenPerson?: (userId: string) => void;
+  onShare?: (pointId: string) => void;
   /** Членство изменилось: хозяин списков перечитывает «Мои поиски» и ленту. */
   onChanged?: () => void;
   /** Вышли из пула: смотреть на экране больше нечего. */
@@ -194,6 +196,7 @@ export function FlatPoolView({
           if (point.url) openExternal(point.url);
         }}
         onOpenPerson={onOpenPerson}
+        onShare={onShare ? () => onShare(pointId) : undefined}
         onEnter={() => void enter()}
         onLeave={() => setLeaving(true)}
       />
@@ -246,6 +249,7 @@ function toPerson(m: PointPoolMemberDTO): FlatPoolPerson {
     photoUrl: m.photo_url || undefined,
     habits: habitsLine(m),
     matches: m.shared_answers,
+    matched: m.matched,
     verdicts: params
       ? (m.chips ?? []).map((c) => ({ verdict: VERDICT_UI[c.verdict], label: chipLabel(c, params) }))
       : [],

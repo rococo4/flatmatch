@@ -110,6 +110,7 @@ type memberDTO struct {
 	Params        *paramsDTO `json:"params,omitempty"`
 	Zone          *zoneDTO   `json:"zone,omitempty"`
 	EnteredAt     time.Time  `json:"entered_at"`
+	Matched       bool       `json:"matched,omitempty"`
 }
 
 type photoResponse struct {
@@ -257,6 +258,7 @@ func toMember(m points.MemberView, photos Photos, zone *zoneDTO) memberDTO {
 		SharedAnswers: m.SharedAnswers,
 		Zone:          zone,
 		EnteredAt:     m.EnteredAt,
+		Matched:       m.Matched,
 	}
 	if m.Search != nil {
 		out.Params = pointer.To(toParamsDTO(m.Search.SearchParams))

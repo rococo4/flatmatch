@@ -166,18 +166,11 @@ func TestCardByIDHidesUnreachableRooms(t *testing.T) {
 		t.Fatalf("Create() failed: %v", err)
 	}
 
-	for _, tt := range []struct {
-		name  string
-		point uuid.UUID
-	}{
-		{"invisible author", hiddenHome.ID},
-		{"matched author", matchedHome.ID},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := repo.CardByID(t.Context(), viewer, tt.point); !errors.Is(err, entity.ErrNotFound) {
-				t.Errorf("CardByID() = %v, want ErrNotFound", err)
-			}
-		})
+	if _, err := repo.CardByID(t.Context(), viewer, hiddenHome.ID); !errors.Is(err, entity.ErrNotFound) {
+		t.Errorf("CardByID(invisible author) = %v, want ErrNotFound", err)
+	}
+	if _, err := repo.CardByID(t.Context(), viewer, matchedHome.ID); err != nil {
+		t.Errorf("CardByID(matched author) = %v, want the room to stay visible after a match", err)
 	}
 
 	card, err := repo.CardByID(t.Context(), viewer, ownHome.ID)

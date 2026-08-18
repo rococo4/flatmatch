@@ -906,6 +906,7 @@ export function App() {
             onFreeSlot={() => toTab('searches')}
             onEnterFlatPool={(id) => void enterFlatPool(id)}
             onOpenFlat={(point) => openFlatPool(point.id)}
+            matchedAuthors={matches.map((m) => m.peer.user_id)}
             onWantRoom={(point) => void wantRoom(point)}
             // Профиль автора «к себе» открывается только с точкой: отношение
             // по ней сервер проверяет по этому параметру, без него — 404.
@@ -1076,6 +1077,7 @@ export function App() {
               void refreshFeed();
             }}
             onLeft={back}
+            onShare={sharePoint}
           />
         );
       }

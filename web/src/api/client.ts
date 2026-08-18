@@ -394,6 +394,8 @@ export interface PointPoolMemberDTO {
   /** Зона его поиска — «ищет на красной ветке». */
   zone?: ZoneRef;
   entered_at: string;
+  /** Вы уже в мэтче: карточка остаётся (пошли смотреть вместе), лайкать нечего. */
+  matched?: boolean;
 }
 
 /**

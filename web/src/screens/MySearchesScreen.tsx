@@ -399,7 +399,13 @@ export function MySearchesScreen({
                 />
               ))}
               {enteredFlats.map((p) => (
-                <FlatRow key={p.id} point={p} onOpenPool={onOpenFlatPool} onLeave={onLeavePool} />
+                <FlatRow
+                  key={p.id}
+                  point={p}
+                  onOpenPool={onOpenFlatPool}
+                  onShare={onSharePoint}
+                  onLeave={onLeavePool}
+                />
               ))}
               {liveFlats < flatSlotsTotal && <CreateEntry tone="flat" onClick={onCreateFlatPoint} />}
             </>
@@ -420,7 +426,7 @@ export function MySearchesScreen({
           ) : (
             <>
               {homes.map((h) => (
-                <HomeRow key={h.id} point={h} onClose={onClosePoint} />
+                <HomeRow key={h.id} point={h} onShare={onSharePoint} onClose={onClosePoint} />
               ))}
               {homes.length < homeSlotsTotal && <CreateEntry tone="home" onClick={onCreateHomePoint} />}
             </>
@@ -495,8 +501,8 @@ function FlatRow({
               question="Закрыть квартиру?"
             />
           ))}
-        {!mine && onLeave && (
-          <PointActions id={point.id} onClose={onLeave} question="Выйти из пула?" />
+        {!mine && (
+          <PointActions id={point.id} onShare={onShare} onClose={onLeave} question="Выйти из пула?" />
         )}
       </div>
     </article>
@@ -504,7 +510,15 @@ function FlatRow({
 }
 
 /** Строка «к себе» в своём блоке: стадия, цена доли, отклики, закрытие. */
-function HomeRow({ point, onClose }: { point: PointDTO; onClose?: (id: string) => void }) {
+function HomeRow({
+  point,
+  onShare,
+  onClose,
+}: {
+  point: PointDTO;
+  onShare?: (id: string) => void;
+  onClose?: (id: string) => void;
+}) {
   return (
     <article style={S.card}>
       <div
@@ -529,7 +543,7 @@ function HomeRow({ point, onClose }: { point: PointDTO; onClose?: (id: string) =
         <StatusRow status={point.status} />
         {/* Отклики автор смотрит в общем «Тебя лайкнули» — своего экрана
             разбора у него нет by design (§2.2). */}
-        <PointActions id={point.id} onClose={onClose} question="Закрыть точку?" />
+        <PointActions id={point.id} onShare={onShare} onClose={onClose} question="Закрыть точку?" />
       </div>
     </article>
   );

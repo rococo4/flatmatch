@@ -153,8 +153,8 @@ func TestFeedCountsAndMembersArePersonal(t *testing.T) {
 		t.Fatalf("Feed() returned %d points, want 1", len(feed))
 	}
 
-	if feed[0].PoolCount != 1 {
-		t.Errorf("PoolCount = %d, want 1", feed[0].PoolCount)
+	if feed[0].PoolCount != 2 {
+		t.Errorf("PoolCount = %d, want 2 — mate and the match, not the invisible ones", feed[0].PoolCount)
 	}
 	if !feed[0].InPool {
 		t.Error("InPool = false, want true — смотрящий в пуле")
@@ -167,8 +167,23 @@ func TestFeedCountsAndMembersArePersonal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PoolMembers() failed: %v", err)
 	}
-	if len(members) != 1 || members[0].User.ID != mate {
-		t.Fatalf("PoolMembers() = %+v, want only the visible mate", members)
+	if len(members) != 2 {
+		t.Fatalf("PoolMembers() = %+v, want the mate and the match", members)
+	}
+	byID := map[uuid.UUID]Member{}
+	for _, m := range members {
+		byID[m.User.ID] = m
+	}
+	if m, ok := byID[mate]; !ok || m.Matched {
+		t.Errorf("mate = %+v, want listed and not matched", m)
+	}
+	if m, ok := byID[matched]; !ok || !m.Matched {
+		t.Errorf("match = %+v, want listed WITH the matched flag", m)
+	}
+	for _, hidden := range []uuid.UUID{otherGender, blocked} {
+		if _, ok := byID[hidden]; ok {
+			t.Errorf("invisible member %s is listed", hidden)
+		}
 	}
 
 	if feed[0].PoolCount != len(members) {
@@ -437,14 +452,16 @@ func TestPoolMembersCarryFreshestSearch(t *testing.T) {
 	}
 	enteredAgo(t, pool, silent, flat.ID, 3)
 	enteredAgo(t, pool, searching, flat.ID, 2)
+	enteredAgo(t, pool, matched, flat.ID, 1)
 
-	members, err := repo.PoolMembers(t.Context(), viewer, flat.ID)
+	all, err := repo.PoolMembers(t.Context(), viewer, flat.ID)
 	if err != nil {
 		t.Fatalf("PoolMembers() failed: %v", err)
 	}
-	if len(members) != 2 {
-		t.Fatalf("PoolMembers() returned %d people, want 2", len(members))
+	if len(all) != 3 || all[0].User.ID != matched || !all[0].Matched {
+		t.Fatalf("PoolMembers() = %+v, want the match first (freshest) with the flag", all)
 	}
+	members := all[1:]
 
 	if members[0].User.ID != searching || members[1].User.ID != silent {
 		t.Fatalf("PoolMembers() order = %s, %s, want searching, silent",

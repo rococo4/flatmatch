@@ -126,7 +126,6 @@ func (r *Repo) PoolMembers(ctx context.Context, viewerID, pointID uuid.UUID) ([]
 			LIMIT 1
 		) s ON true
 		WHERE lp.point_id = $2
-		  AND `+notMatchedWith("lp.user_id")+`
 		ORDER BY lp.created_at DESC, lp.user_id`, viewerID, pointID)
 	if err != nil {
 		return nil, fmt.Errorf("pool members of point %s: %w", pointID, err)
@@ -287,7 +286,6 @@ func (r *Repo) feed(ctx context.Context, where string, args ...any) ([]FeedPoint
 			FROM likes_points lp
 			JOIN visible_people($1) vp ON vp = lp.user_id
 			WHERE lp.point_id = p.id
-			  AND `+notMatchedWith("lp.user_id")+`
 		) pool ON p.type = 'flat'
 		LEFT JOIN LATERAL (
 			SELECT count(*) AS n FROM likes_users lu WHERE lu.point_id = p.id
@@ -312,8 +310,7 @@ func (r *Repo) feed(ctx context.Context, where string, args ...any) ([]FeedPoint
 
 func cardShown() string {
 	return `(p.type = 'flat'
-	       OR (EXISTS (SELECT 1 FROM visible_people($1) vp WHERE vp = p.created_by)
-	           AND ` + notMatchedWith("p.created_by") + `))`
+	       OR EXISTS (SELECT 1 FROM visible_people($1) vp WHERE vp = p.created_by))`
 }
 
 func notMatchedWith(userColumn string) string {

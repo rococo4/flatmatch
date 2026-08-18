@@ -101,6 +101,7 @@ export function FeedScreen({
   likesRemaining,
   myUserId,
   respondedPoints,
+  matchedAuthors,
   onEditParams,
   onJoinPool,
   onOpenPool,
@@ -122,6 +123,8 @@ export function FeedScreen({
   myUserId?: string;
   /** Точки, на которые отклик уже улетел в этой сессии: кнопка отработала. */
   respondedPoints?: string[];
+  /** Авторы «к себе», с которыми уже мэтч: карточка остаётся, кнопка гаснет. */
+  matchedAuthors?: string[];
   onEditParams?: () => void;
   onJoinPool?: () => void;
   onOpenPool?: () => void;
@@ -202,6 +205,7 @@ export function FeedScreen({
                   likesRemaining={likesRemaining}
                   mine={p.author?.user_id != null && p.author.user_id === myUserId}
                   responded={respondedPoints?.includes(p.id)}
+                  matched={p.author != null && matchedAuthors?.includes(p.author.user_id)}
                   onWantRoom={onWantRoom}
                   onOpenProfile={onOpenProfile}
                 />
@@ -330,6 +334,7 @@ function HomePointCard({
   likesRemaining,
   mine,
   responded,
+  matched,
   onWantRoom,
   onOpenProfile,
 }: {
@@ -338,6 +343,7 @@ function HomePointCard({
   /** Своя точка: откликаться самому себе не на что, кнопки нет. */
   mine?: boolean;
   responded?: boolean;
+  matched?: boolean;
   onWantRoom?: (point: PointDTO) => void;
   onOpenProfile?: (point: PointDTO) => void;
 }) {
@@ -421,7 +427,19 @@ function HomePointCard({
         {/* Своя точка кнопки не несёт: отклик самому себе бессмыслен, и сервер
             его всё равно отобьёт. Остаток показываем, только когда он известен:
             своего запроса за бюджетом у ленты нет. */}
-        {onWantRoom && !mine && (
+        {onWantRoom && !mine && matched && (
+          <div
+            style={{
+              ...S.secondaryButton,
+              background: 'var(--verdict-ok-bg)',
+              color: 'var(--verdict-ok-fg)',
+              textAlign: 'center',
+            }}
+          >
+            ✓ У вас мэтч — контакты в «Моих мэтчах»
+          </div>
+        )}
+        {onWantRoom && !mine && !matched && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <button
               type="button"

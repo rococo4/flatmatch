@@ -27,7 +27,10 @@ const personColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
 	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
 
-const memberColumns = `lp.created_at AS entered_at, ` + personColumns + `,
+const memberColumns = `lp.created_at AS entered_at,
+	EXISTS (SELECT 1 FROM matches m
+	        WHERE m.a_id = least($1::uuid, lp.user_id)
+	          AND m.b_id = greatest($1::uuid, lp.user_id)) AS matched, ` + personColumns + `,
 	s.id AS s_id, s.zone_id AS s_zone_id, s.price_min AS s_price_min,
 	s.price_max AS s_price_max, s.rooms_min AS s_rooms_min,
 	s.rooms_max AS s_rooms_max, s.move_in AS s_move_in, s.term AS s_term,
@@ -53,6 +56,7 @@ type Member struct {
 	User      entity.User
 	Search    *entity.Search
 	EnteredAt time.Time
+	Matched   bool
 }
 
 type pointRow struct {
@@ -112,6 +116,7 @@ type memberRow struct {
 	personRow
 
 	EnteredAt time.Time `db:"entered_at"`
+	Matched   bool      `db:"matched"`
 
 	SID         *uuid.UUID `db:"s_id"`
 	SZoneID     *string    `db:"s_zone_id"`
@@ -205,7 +210,7 @@ func (r feedRow) toEntity() FeedPoint {
 
 func (r memberRow) toEntity() Member {
 	user := r.personRow.toEntity()
-	return Member{User: *user, Search: r.toSearch(user.ID), EnteredAt: r.EnteredAt}
+	return Member{User: *user, Search: r.toSearch(user.ID), EnteredAt: r.EnteredAt, Matched: r.Matched}
 }
 
 func (r memberRow) toSearch(userID uuid.UUID) *entity.Search {

@@ -20,8 +20,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// Точка стоит на станции, зона выдачи — район вокруг неё: Спортивная лежит в
-// Хамовниках, Сокол — нет.
 const (
 	station      = "st-sportivnaya"
 	district     = "d-khamovniki"
@@ -29,7 +27,7 @@ const (
 )
 
 type fakeRepo struct {
-	byURL    []*entity.Point // ответы ByURLNorm по порядку вызовов
+	byURL    []*entity.Point
 	urlCalls []string
 
 	createIn    entity.Point
@@ -60,8 +58,6 @@ type fakeSearches struct {
 	list []entity.Search
 }
 
-// fakePhotos is the store the form's upload writes to: ключ придумывает сервис,
-// хранилище только кладёт байты.
 type fakePhotos struct {
 	keys []string
 	err  error
@@ -193,8 +189,6 @@ func fields(t *testing.T, err error) []string {
 	return fe.Fields
 }
 
-// Одна и та же квартира приходит с www, с мобильного зеркала, со следами
-// поисковой выдачи в query и без схемы — ключ дедупа обязан быть один (§6).
 func TestNormalizeURL(t *testing.T) {
 	const want = "https://avito.ru/moskva/kvartiry/2-k_kvartira_1234567"
 
@@ -228,8 +222,7 @@ func TestNormalizeURL(t *testing.T) {
 		"subdomain":        "https://spb.avito.ru/kvartira/1",
 		"not a url":        "квартира на авито",
 		"other scheme":     "ftp://avito.ru/1",
-		// Главная площадки — не квартира, и первый же такой «дубль» запер бы
-		// весь домен.
+
 		"bare host":              "https://avito.ru",
 		"bare host with a slash": "https://avito.ru/",
 		"bare host no scheme":    "avito.ru",
@@ -242,13 +235,10 @@ func TestNormalizeURL(t *testing.T) {
 		})
 	}
 
-	// Регистр пути — часть идентификатора объявления: слить два разных в одно
-	// хуже, чем пропустить обход дедупа.
 	if got, _ := normalizeURL("https://avito.ru/Moskva/Kvartiry/1"); got != "https://avito.ru/Moskva/Kvartiry/1" {
 		t.Errorf("path case changed: %q", got)
 	}
 
-	// Циан живёт по тем же правилам.
 	if got, ok := normalizeURL("https://www.cian.ru/rent/flat/123/"); !ok || got != "https://cian.ru/rent/flat/123" {
 		t.Errorf("cian link = %q, %v", got, ok)
 	}
@@ -291,8 +281,7 @@ func TestCreateFlatValidatesTheForm(t *testing.T) {
 			if got := fields(t, err); !slices.Equal(got, tt.want) {
 				t.Errorf("fields = %v, want %v", got, tt.want)
 			}
-			// Ни одна кривая форма не должна доехать до базы: словарные поля
-			// там встретит CHECK, и это будет пятисотка вместо 400.
+
 			if repo.createCalls != 0 {
 				t.Errorf("the form reached the repository %d times", repo.createCalls)
 			}
@@ -323,14 +312,14 @@ func TestCreateFlatFillsProvenance(t *testing.T) {
 		t.Errorf("provenance = %s / %s / %v, want flat / user_link / %s",
 			sent.Type, sent.Source, sent.CreatedBy, author)
 	}
-	// Статус форма не выбирает: точка уходит на проверку дефолтом репозитория (§5).
+
 	if sent.Status != "" {
 		t.Errorf("Status = %q, want it left to the repository", sent.Status)
 	}
 	if sent.URLNorm == nil || *sent.URLNorm != "https://avito.ru/moskva/kvartiry/2-k_kvartira_1234567" {
 		t.Errorf("URLNorm = %v, want the normalised link", sent.URLNorm)
 	}
-	// Один и тот же чип дважды — тот же факт.
+
 	want := []entity.Restriction{entity.RestrictionNoPets, entity.RestrictionNoSmoking}
 	if !slices.Equal(sent.Restrictions, want) {
 		t.Errorf("Restrictions = %v, want %v", sent.Restrictions, want)
@@ -341,8 +330,6 @@ func TestCreateFlatFillsProvenance(t *testing.T) {
 	}
 }
 
-// Точка уже создана: отменённый запрос не должен отменить сообщение
-// модератору — иначе она молча зависнет в очереди до /queue.
 func TestModerationSurvivesACancelledRequest(t *testing.T) {
 	notify := &fakeNotifier{}
 	s := newService(t, &fakeRepo{}, &fakeSearches{}, notify)
@@ -376,8 +363,7 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 		if !errors.As(err, &dup) || dup.Existing.ID != existing.ID {
 			t.Fatalf("CreateFlat() = %v, want ErrDuplicateURL with %s", err, existing.ID)
 		}
-		// «Эта квартира уже есть, в пуле N — войти?» (§6): без N предлагать
-		// нечего.
+
 		if dup.PoolCount != 3 {
 			t.Errorf("PoolCount = %d, want 3", dup.PoolCount)
 		}
@@ -386,9 +372,6 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 		}
 	})
 
-	// Точка на проверке пула ещё не имеет: войти некуда, и предлагать нечего.
-	// Счётчик у неё не читают вовсе — он персонален (§4) и на чужой ссылке
-	// стал бы оракулом видимости её создателя.
 	t.Run("still on review", func(t *testing.T) {
 		pending := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPending}
 		repo := &fakeRepo{
@@ -411,8 +394,6 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 		}
 	})
 
-	// Гонка двух подач одной ссылки: база отбивает вторую уникальным индексом,
-	// а человек обязан услышать тот же дедуп, что и опоздавший на секунду.
 	t.Run("lost the race", func(t *testing.T) {
 		repo := &fakeRepo{
 			byURL:     []*entity.Point{nil, &existing},
@@ -430,8 +411,6 @@ func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
 		}
 	})
 
-	// Победитель успел закрыть свою точку — дубля больше нет, и врать про него
-	// нечем: наружу уходит исходная ошибка.
 	t.Run("nothing to point at", func(t *testing.T) {
 		repo := &fakeRepo{byURL: []*entity.Point{nil, nil}, createErr: pointsrepo.ErrURLTaken}
 		s := newService(t, repo, &fakeSearches{}, nil)
@@ -454,7 +433,7 @@ func TestCreateIntentHomeValidatesTheStage(t *testing.T) {
 			h.Stage = entity.ParsePointStage("хочу сдать")
 		}, []string{"stage"}},
 		{"no stage", func(h *CreateIntentHome) { h.Stage = "" }, []string{"stage"}},
-		// «Договорился и заезжаю» без даты заезда — не тот кейс (§2.2).
+
 		{"moving in without a date", func(h *CreateIntentHome) {
 			h.Stage = entity.StageMovingIn
 		}, []string{"move_in"}},
@@ -489,8 +468,7 @@ func TestCreateIntentHomeValidatesTheStage(t *testing.T) {
 		t.Fatalf("CreateIntentHome() failed: %v", err)
 	}
 	sent := repo.createIn
-	// «К себе» — тоже пользовательская форма, но лимит рыночных ссылок её не
-	// касается: у неё свой счёт (§2.2).
+
 	if sent.Type != entity.PointIntentHome || sent.Source != entity.SourceUserLink ||
 		sent.Stage == nil || *sent.Stage != entity.StageMovingIn ||
 		sent.PriceShare == nil || *sent.PriceShare != 45000 || sent.URLNorm != nil {
@@ -501,8 +479,6 @@ func TestCreateIntentHomeValidatesTheStage(t *testing.T) {
 	}
 }
 
-// Точка на проверке видна создателю сразу, в общую ленту уходит после
-// аппрува (§5).
 func TestPointHidesWhatIsNotApproved(t *testing.T) {
 	creator := uuid.New()
 	stranger := uuid.New()
@@ -522,7 +498,6 @@ func TestPointHidesWhatIsNotApproved(t *testing.T) {
 		})
 	}
 
-	// Одобренная квартира обезличена: её видит кто угодно (§2.2).
 	card := pointsrepo.FeedPoint{Point: entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, CreatedBy: &creator}}
 	s := newService(t, &fakeRepo{card: card}, &fakeSearches{}, nil)
@@ -530,8 +505,6 @@ func TestPointHidesWhatIsNotApproved(t *testing.T) {
 		t.Errorf("Point() of an active flat failed: %v", err)
 	}
 
-	// У досыпки и парсера создателя нет вовсе (§8): «пустой создатель равен
-	// пустому смотрящему» открывал бы неодобренную точку кому попало.
 	orphan := pointsrepo.FeedPoint{Point: entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Source: entity.SourceManual,
 		Status: entity.PointPending, CreatedBy: nil}}
@@ -584,7 +557,7 @@ func TestPoolChipsNeedBothSearches(t *testing.T) {
 	}{
 		{"search over the same station", []entity.Search{mine}, true},
 		{"no search at all", nil, false},
-		// Поиск в другом районе про эту квартиру ничего не говорит.
+
 		{"search elsewhere", []entity.Search{elsewhere}, false},
 		{"closed search", []entity.Search{closed}, false},
 	}
@@ -603,12 +576,11 @@ func TestPoolChipsNeedBothSearches(t *testing.T) {
 			if got := len(view.Members[0].Chips) > 0; got != tt.wantChips {
 				t.Errorf("chips against a member with a search: %v, want %v", got, tt.wantChips)
 			}
-			// У участника без поиска чипов нет никогда: вход в пул поиска не
-			// требует (§2.2).
+
 			if len(view.Members[1].Chips) != 0 {
 				t.Errorf("member without a search carries chips: %v", view.Members[1].Chips)
 			}
-			// Совпадения анкеты считаются всегда — они про людей, не про поиски.
+
 			if view.Members[0].SharedAnswers == 0 {
 				t.Error("SharedAnswers = 0, want the questionnaire counted")
 			}
@@ -616,13 +588,10 @@ func TestPoolChipsNeedBothSearches(t *testing.T) {
 	}
 }
 
-// Чипы читаются со стороны смотрящего: это ЕГО параметры против чужих, и
-// «не указана» у другого — серое «неважно», а не зелёное совпадение (§6).
 func TestPoolChipsSpeakFromTheViewerSide(t *testing.T) {
 	card := pointsrepo.FeedPoint{Point: entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, ZoneID: station}}
-	// Асимметрия нарочно: у смотрящего комнатность и месяц заезда указаны, у
-	// участника нет — перестановка сторон вернула бы по ним зелёное.
+
 	viewerParams := entity.SearchParams{
 		ZoneID: district, PriceMin: pointer.To(35000), PriceMax: 45000,
 		RoomsMin: pointer.To(2), RoomsMax: pointer.To(2),
@@ -653,8 +622,6 @@ func TestPoolChipsSpeakFromTheViewerSide(t *testing.T) {
 	}
 }
 
-// Из нескольких пересекающих поисков чипы говорят от свежайшего — того, чем
-// человек живёт сейчас.
 func TestPoolChipsUseTheFreshestSearch(t *testing.T) {
 	card := pointsrepo.FeedPoint{Point: entity.Point{
 		ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, ZoneID: station}}
@@ -677,7 +644,7 @@ func TestPoolChipsUseTheFreshestSearch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Pool() failed: %v", err)
 		}
-		// Свежий бюджет пересекается с участником, старый — нет.
+
 		if got := view.Members[0].Chips[0]; got.Verdict != pools.VerdictGreen {
 			t.Errorf("price chip = %v, want green — чипы взяли не свежайший поиск", got.Verdict)
 		}
@@ -694,8 +661,7 @@ func TestFeedAndCountUseIntersectingZones(t *testing.T) {
 	if _, err := s.Feed(t.Context(), uuid.New(), district); err != nil {
 		t.Fatalf("Feed() failed: %v", err)
 	}
-	// Граница выдачи — зона: квартира на станции внутри района попадает в его
-	// ленту (§8).
+
 	if !slices.Contains(repo.feedZones, station) || !slices.Contains(repo.feedZones, district) {
 		t.Errorf("feed zones = %v, want the district and its stations", repo.feedZones)
 	}
@@ -711,8 +677,6 @@ func TestFeedAndCountUseIntersectingZones(t *testing.T) {
 	}
 }
 
-// Фото уходит в хранилище раньше самой точки: форма грузит его, пока точки
-// ещё нет, и получает ключ, который приложит к ней при сабмите.
 func TestSavePhotoStoresUnderItsOwnKey(t *testing.T) {
 	photos := &fakePhotos{}
 	s := New(&fakeRepo{}, &fakeSearches{}, photos, mustDir(t), nil, nil)
@@ -731,8 +695,6 @@ func TestSavePhotoStoresUnderItsOwnKey(t *testing.T) {
 		t.Errorf("store got %v, want the returned key %q", photos.keys, key)
 	}
 
-	// Второе фото не затирает первое: у одного человека до семи точек (§8), и
-	// ключ анкеты им не подходит — он один на пользователя.
 	second, err := s.SavePhoto(t.Context(), bytes.NewReader([]byte("\x89PNG\r\n\x1a\n body")))
 	if err != nil {
 		t.Fatalf("SavePhoto() failed: %v", err)
@@ -744,7 +706,6 @@ func TestSavePhotoStoresUnderItsOwnKey(t *testing.T) {
 		t.Errorf("key = %q, want the sniffed extension", second)
 	}
 
-	// Не картинка до хранилища не доходит.
 	if _, err := s.SavePhoto(t.Context(), bytes.NewReader([]byte("GIF87a"))); !errors.Is(err, imagetype.ErrUnsupported) {
 		t.Errorf("SavePhoto() of a gif = %v, want ErrUnsupported", err)
 	}
@@ -753,8 +714,6 @@ func TestSavePhotoStoresUnderItsOwnKey(t *testing.T) {
 	}
 }
 
-// Закрытие — дело создателя: сервис его не решает, но и не размазывает —
-// вопрос владения решается одним UPDATE'ом в репозитории.
 func TestCloseDelegatesToTheRepository(t *testing.T) {
 	repo := &fakeRepo{}
 	s := newService(t, repo, &fakeSearches{}, nil)

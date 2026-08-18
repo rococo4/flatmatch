@@ -21,10 +21,7 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, lc LikeContex
 		if err != nil {
 			return err
 		}
-		// Draft and pending may browse and save searches, but not spend a dear
-		// like (§5). The gate stands before everything else, including the reply
-		// path: nobody can have liked a draft first — visible_people hides them
-		// — so an unapproved reply is not a case, it is a bug elsewhere.
+
 		if status != entity.StatusActive {
 			return entity.ErrNotApproved
 		}
@@ -43,11 +40,7 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, lc LikeContex
 		if err != nil {
 			return err
 		}
-		// An existing like of ours makes this tap a repeat, and a repeat changes
-		// nothing — so the gates below, which guard the SPENDING of a slot, must
-		// not run. Otherwise a second tap on the fifth person liked today would
-		// answer «limit reached» instead of «already liked», and so would a tap
-		// made after the search that paid for the like was closed.
+
 		already, err := exists(ctx, tx,
 			`SELECT 1 FROM likes_users WHERE from_id = $1 AND to_id = $2`, fromID, toID)
 		if err != nil {
@@ -74,8 +67,7 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, lc LikeContex
 		if err != nil {
 			return err
 		}
-		// A repeat tap: the row is already there, no slot was spent, and the
-		// stored context stays the one the first tap called from.
+
 		out.Already = tag.RowsAffected() == 0
 
 		if reply {
@@ -94,10 +86,6 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, lc LikeContex
 	}
 
 	if out.Match == nil {
-		// The mirrored like may be running right now: the transaction above
-		// could not see it, but it holds the pair lock until it commits. Asking
-		// for that lock once more queues behind it, so both sides return the
-		// same match instead of only the one that happened to be second.
 		match, err := r.settledMatch(ctx, fromID, toID)
 		if err != nil {
 			return entity.LikeResult{}, fmt.Errorf("like %s -> %s: %w", fromID, toID, err)
@@ -199,15 +187,6 @@ func lockPair(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) (entity.St
 	return entity.StatusUnknown, entity.ErrNotFound
 }
 
-// contextGate asks the context of a SPENDING like for the relation behind it
-// (§2.3). A zone pool proves it with a search of the liker in one of the zones
-// crossing the context; a point carries the relation itself — the pool of a
-// market flat by membership, «к себе» by being the showcase of its author — and
-// asks for no search at all.
-//
-// A point that is not active is answered with ErrNotFound rather than a
-// separate sentinel: an unapproved or closed card is not a card the liker was
-// ever shown.
 func contextGate(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID, lc LikeContext) error {
 	if lc.PointID == nil {
 		hasSearch, err := exists(ctx, tx,

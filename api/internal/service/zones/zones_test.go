@@ -37,11 +37,6 @@ func TestDirectoryGet(t *testing.T) {
 func TestDirectoryIntersecting(t *testing.T) {
 	d := miniDirectory(t)
 
-	// The fixture's whole intersection matrix, pinned exactly: contents and the
-	// sorted order the pool queries rely on. d-khamovniki spans both lines, so
-	// its answer is a union across several stations — line-1 through
-	// Фрунзенская/Спортивная, line-2 and st-sokol through Сокол — and looking at
-	// one station of a zone is not enough to produce it. Every zone contains itself.
 	want := map[string][]string{
 		"line-1":       {"d-khamovniki", "line-1"},
 		"line-2":       {"d-khamovniki", "line-2", "st-sokol"},
@@ -54,13 +49,10 @@ func TestDirectoryIntersecting(t *testing.T) {
 		}
 	}
 
-	// The two lines share no station and must not leak into each other.
 	if slices.Contains(d.Intersecting("line-1"), "line-2") {
 		t.Error("line-1 and line-2 share no station, must not intersect")
 	}
 
-	// Symmetry as a property over the whole directory: if A intersects B, then
-	// B intersects A.
 	for _, z := range d.All() {
 		for _, other := range d.Intersecting(z.ID) {
 			if !slices.Contains(d.Intersecting(other), z.ID) {

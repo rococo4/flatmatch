@@ -10,7 +10,6 @@ import (
 
 const moderationChat = int64(-100500)
 
-// fakeModeration records the verdicts routed to it.
 type fakeModeration struct {
 	handled  []string
 	ack      string
@@ -29,8 +28,51 @@ func (f *fakeModeration) SendQueue(context.Context) error {
 	return f.queueErr
 }
 
+type fakePushes struct {
+	searchTaps []buttonTap
+	pollTaps   []buttonTap
+	unblocked  []int64
+	ack        string
+	err        error
+}
+
+type buttonTap struct {
+	tgID int64
+	data string
+}
+
+func (f *fakePushes) HandleSearchCallback(_ context.Context, tgID int64, data string) (string, error) {
+	f.searchTaps = append(f.searchTaps, buttonTap{tgID, data})
+	return f.ack, f.err
+}
+
+func (f *fakePushes) HandlePollCallback(_ context.Context, tgID int64, data string) (string, error) {
+	f.pollTaps = append(f.pollTaps, buttonTap{tgID, data})
+	return f.ack, f.err
+}
+
+func (f *fakePushes) ClearPushBlocked(_ context.Context, tgID int64) error {
+	f.unblocked = append(f.unblocked, tgID)
+	return nil
+}
+
 func newTestBot(api *botAPI, mod Moderation, chatID int64) *Bot {
-	return NewBot(api.client(), "https://app.example", slog.New(slog.DiscardHandler), mod, chatID)
+	return newTestBotWithPushes(api, mod, chatID, &fakePushes{})
+}
+
+func newTestBotWithPushes(api *botAPI, mod Moderation, chatID int64, pushes Pushes) *Bot {
+	return NewBot(api.client(), "https://app.example", slog.New(slog.DiscardHandler), mod, chatID, pushes)
+}
+
+func privateTap(tgID int64, data string) Update {
+	return Update{
+		UpdateID: 4,
+		CallbackQuery: &CallbackQuery{
+			ID:      "q-2",
+			Data:    data,
+			Message: &Message{MessageID: 501, Chat: Chat{ID: tgID, Type: "private"}},
+		},
+	}
 }
 
 func tap(chatID int64, data string) Update {
@@ -45,8 +87,6 @@ func tap(chatID int64, data string) Update {
 }
 
 func TestVerdictIsAppliedAndTheCardStopsBeingTappable(t *testing.T) {
-	// Both acks mean the card is done with: the second tap on an old button is
-	// ordinary in a chat where the queue is scrolled top to bottom (§3 дизайна).
 	for _, ack := range []string{"✓ Одобрено", "уже обработано"} {
 		t.Run(ack, func(t *testing.T) {
 			api := newBotAPI(t)
@@ -79,7 +119,6 @@ func TestVerdictIsAppliedAndTheCardStopsBeingTappable(t *testing.T) {
 }
 
 func TestFailedVerdictKeepsTheButtons(t *testing.T) {
-	// Nothing was applied, so the tap has to stay repeatable.
 	api := newBotAPI(t)
 	mod := &fakeModeration{err: errors.New("connection refused")}
 
@@ -98,7 +137,6 @@ func TestFailedVerdictKeepsTheButtons(t *testing.T) {
 }
 
 func TestTapsFromOtherChatsAreIgnored(t *testing.T) {
-	// A verdict from anywhere else would be a stranger moderating the product.
 	api := newBotAPI(t)
 	mod := &fakeModeration{ack: "✓ Одобрено"}
 
@@ -135,15 +173,13 @@ func TestQueueCommandResendsTheQueue(t *testing.T) {
 	if mod.queued != 1 {
 		t.Errorf("SendQueue called %d times, want 1", mod.queued)
 	}
-	// The moderation chat gets the queue, not the Mini App button.
+
 	if api.got("sendMessage") != nil {
 		t.Error("the moderation chat was answered with the start message")
 	}
 }
 
 func TestUsernameIsEmptyUntilTelegramAnswers(t *testing.T) {
-	// The Mini App asks /me for this name to build share links, and /me may be
-	// answered before the first poll ever happens.
 	api := newBotAPI(t)
 	api.replies["getMe"] = `{"ok":true,"result":{"username":"flatmatch_finder_bot"}}`
 	api.replies["getUpdates"] = `{"ok":true,"result":[]}`
@@ -193,5 +229,124 @@ func TestQueueCommandElsewhereIsAnOrdinaryMessage(t *testing.T) {
 	}
 	if api.got("sendMessage") == nil {
 		t.Error("the message was left unanswered")
+	}
+}
+
+func TestPushAnswersAreRoutedByPrefix(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+		ack  string
+	}{
+		{"search", "srch:yes:1a1c1de1-0000-4000-8000-000000000001", "✓ Ищу дальше"},
+		{"poll", "poll:1a1c1de1-0000-4000-8000-000000000002:moving", "✓ Съезжаемся"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			api := newBotAPI(t)
+			pushes := &fakePushes{ack: tc.ack}
+
+			newTestBotWithPushes(api, &fakeModeration{}, moderationChat, pushes).
+				handle(t.Context(), privateTap(188993596, tc.data))
+
+			routed := pushes.searchTaps
+			if tc.name == "poll" {
+				routed = pushes.pollTaps
+			}
+			if len(routed) != 1 || routed[0].data != tc.data || routed[0].tgID != 188993596 {
+				t.Fatalf("routed %v, want one tap of %q from 188993596", routed, tc.data)
+			}
+			if len(pushes.searchTaps)+len(pushes.pollTaps) != 1 {
+				t.Errorf("the tap reached both handlers: %v / %v", pushes.searchTaps, pushes.pollTaps)
+			}
+
+			answer := api.got("answerCallbackQuery")
+			if answer == nil {
+				t.Fatal("the tap was never answered, the button keeps spinning")
+			}
+			if got := answer.body["text"]; got != tc.ack {
+				t.Errorf("ack = %v, want %q", got, tc.ack)
+			}
+
+			if api.got("editMessageReplyMarkup") == nil {
+				t.Error("the buttons were left under an answered push")
+			}
+		})
+	}
+}
+
+func TestTapOnAnAnsweredPushSaysSo(t *testing.T) {
+	api := newBotAPI(t)
+	pushes := &fakePushes{}
+
+	newTestBotWithPushes(api, &fakeModeration{}, moderationChat, pushes).
+		handle(t.Context(), privateTap(188993596, pushSeen))
+
+	if len(pushes.searchTaps)+len(pushes.pollTaps) != 0 {
+		t.Error("the mark was routed to a handler")
+	}
+	answer := api.got("answerCallbackQuery")
+	if answer == nil || answer.body["text"] != ackSeen {
+		t.Errorf("ack = %v, want %q", answer, ackSeen)
+	}
+}
+
+func TestFailedPushAnswerKeepsTheButtons(t *testing.T) {
+	api := newBotAPI(t)
+	pushes := &fakePushes{err: errors.New("connection refused")}
+
+	newTestBotWithPushes(api, &fakeModeration{}, moderationChat, pushes).
+		handle(t.Context(), privateTap(188993596, "srch:found:1a1c1de1-0000-4000-8000-000000000001"))
+
+	if got := api.got("answerCallbackQuery").body["text"]; got != ackFailed {
+		t.Errorf("ack = %v, want %q", got, ackFailed)
+	}
+	if api.got("editMessageReplyMarkup") != nil {
+		t.Error("the buttons were cleared although nothing was applied")
+	}
+}
+
+func TestPushAnswersOutsidePrivateChatsAreIgnored(t *testing.T) {
+	api := newBotAPI(t)
+	pushes := &fakePushes{ack: "✓ Ищу дальше"}
+
+	newTestBotWithPushes(api, &fakeModeration{}, moderationChat, pushes).
+		handle(t.Context(), tap(moderationChat, "srch:yes:1a1c1de1-0000-4000-8000-000000000001"))
+
+	if len(pushes.searchTaps) != 0 {
+		t.Errorf("a group tap was routed: %v", pushes.searchTaps)
+	}
+	if api.count() != 0 {
+		t.Errorf("%d calls made, want silence", api.count())
+	}
+}
+
+func TestVerdictsFromPrivateChatsAreIgnored(t *testing.T) {
+	api := newBotAPI(t)
+	mod := &fakeModeration{ack: "✓ Одобрено"}
+
+	newTestBotWithPushes(api, mod, moderationChat, &fakePushes{}).
+		handle(t.Context(), privateTap(188993596, "mod:u:ok:42"))
+
+	if len(mod.handled) != 0 {
+		t.Errorf("moderation got %v from a private chat", mod.handled)
+	}
+}
+
+func TestMessageToTheBotClearsThePushBlock(t *testing.T) {
+	api := newBotAPI(t)
+	pushes := &fakePushes{}
+
+	newTestBotWithPushes(api, &fakeModeration{}, moderationChat, pushes).handle(t.Context(), Update{
+		UpdateID: 5,
+		Message:  &Message{Chat: Chat{ID: 188993596, Type: "private"}, Text: "/start"},
+	})
+
+	if len(pushes.unblocked) != 1 || pushes.unblocked[0] != 188993596 {
+		t.Errorf("unblocked %v, want [188993596]", pushes.unblocked)
+	}
+	if api.got("sendMessage") == nil {
+		t.Error("/start was left unanswered")
 	}
 }

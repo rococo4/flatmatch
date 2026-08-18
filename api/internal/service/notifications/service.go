@@ -17,9 +17,6 @@ type Repository interface {
 	InsertMany(ctx context.Context, ns []entity.Notification) (int, error)
 }
 
-// Searches отдаёт подписчиков зоны: активный поиск — это и есть подписка на
-// «появился новый совпавший» (§3). ActiveByUser — обратная сторона: чьи поиски
-// доанонсировать, когда человека наконец одобрили.
 type Searches interface {
 	ActiveIn(ctx context.Context, zoneIDs []string) ([]entity.Search, error)
 	ActiveByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
@@ -34,7 +31,6 @@ type People interface {
 	IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error)
 }
 
-// Ключи payload: их пишет сервис событий, читает воркер.
 const (
 	payloadName     = "name"
 	payloadGender   = "gender"
@@ -87,10 +83,7 @@ func (s *Service) ProfileVerdict(ctx context.Context, userID uuid.UUID, typ enti
 		Type:     typ,
 		ActorKey: verdictActor(userID, typ, time.Now()),
 	})
-	// Аппрув — это и есть «человек появился в пулах» (§5): поиски он мог
-	// сохранить и до одобрения, но visible_people его тогда не отдавала, и
-	// фан-аут вышел пустым. Доанонс безопасен — писать было нечего, а повтор
-	// отобьёт уникальный индекс по актору.
+
 	if typ == entity.NotifProfileOK {
 		s.announceSearches(ctx, userID)
 	}

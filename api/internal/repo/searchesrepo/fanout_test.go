@@ -10,8 +10,6 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// Зоны фан-аута свои: ActiveIn смотрит на всю базу, и чужой поиск в
-// «Хамовниках» — девсид, коллега, что угодно — попал бы в выдачу теста.
 const (
 	fanoutZoneA = "z-test-fanout-a"
 	fanoutZoneB = "z-test-fanout-b"
@@ -24,8 +22,7 @@ func TestActiveIn(t *testing.T) {
 	repo := New(pool)
 
 	author := seedUser(t, pool, 1, "active", "male", "any")
-	// Пол не совпадает и анкета не одобрена — ActiveIn всё равно отдаёт обоих:
-	// видимость решает сервис одной точкой (§4), запрос знает только зоны.
+
 	neighbour := seedUser(t, pool, 2, "active", "female", "same")
 	pending := seedUser(t, pool, 3, "pending", "male", "any")
 
@@ -74,8 +71,6 @@ func TestActiveIn(t *testing.T) {
 		}
 	}
 
-	// Фан-аут строит адресата и контекст из этих двух полей, и они обязаны
-	// доехать целыми.
 	for _, s := range got {
 		if s.ID == neighbourInA.ID && (s.UserID != neighbour || s.ZoneID != fanoutZoneA) {
 			t.Errorf("ActiveIn() returned %+v, want user %s in zone %s", s, neighbour, fanoutZoneA)
@@ -125,7 +120,7 @@ func TestActiveByUser(t *testing.T) {
 			t.Errorf("ActiveByUser() returned %s — someone else's search or a closed one", unwanted.ID)
 		}
 	}
-	// Доанонс строит контекст из зоны, и она обязана доехать целой.
+
 	if got[0].ZoneID != fanoutZoneA || got[0].UserID != owner {
 		t.Errorf("ActiveByUser() returned %+v, want user %s in zone %s", got[0], owner, fanoutZoneA)
 	}

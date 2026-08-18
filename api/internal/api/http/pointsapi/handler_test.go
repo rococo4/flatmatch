@@ -32,9 +32,6 @@ const flatForm = `{"type":"flat","url":"https://avito.ru/1","zone_id":"st-sokol"
 const homeForm = `{"type":"intent_home","stage":"live","zone_id":"st-sokol",
 	"price_share":40000,"photo_keys":["points/room.jpg"]}`
 
-// fakePoints stands in for the service and keeps its gates: the card of a
-// point still on review is the creator's alone (§5), and here that rule is
-// what the handler must not route around.
 type fakePoints struct {
 	created entity.Point
 	err     error
@@ -72,8 +69,7 @@ func TestCreateAnswersWithTheCardOnReview(t *testing.T) {
 		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusCreated, rec.Body)
 	}
 	body := rec.Body.String()
-	// Создателю точка видна сразу, «на проверке» (§5), и в пуле своей квартиры
-	// он стоит с первой секунды — «ты первый в пуле» (§6).
+
 	for _, want := range []string{`"status":"pending"`, `"in_pool":true`, `"Сокол"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("created card %s does not carry %s", body, want)
@@ -84,8 +80,6 @@ func TestCreateAnswersWithTheCardOnReview(t *testing.T) {
 	}
 }
 
-// «Уже живу здесь» / «договорился и заезжаю» — гейт формы (§2.2); всё
-// остальное не наш кейс, и ручка отвечает про поле, а не пятисоткой из CHECK.
 func TestCreateRejectsAnUnknownType(t *testing.T) {
 	service := &fakePoints{}
 
@@ -100,8 +94,6 @@ func TestCreateRejectsAnUnknownType(t *testing.T) {
 	}
 }
 
-// Дубль ссылки — не тупик: активная точка зовёт войти в свой пул, точка на
-// проверке ещё ничья, и входить в неё некуда (§5, §6).
 func TestDuplicateURLBranchesByStatus(t *testing.T) {
 	existing := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: station}
 
@@ -109,9 +101,7 @@ func TestDuplicateURLBranchesByStatus(t *testing.T) {
 		status entity.PointStatus
 		pool   int
 		want   string
-		// offersToEnter: точку можно назвать и предложить войти. У точки на
-		// проверке ни того, ни другого: до аппрува её видит только подавший
-		// (§5), и «в пуле N» на чужой ссылке стало бы оракулом видимости (§4).
+
 		offersToEnter bool
 	}{
 		"активная зовёт в пул": {
@@ -151,8 +141,6 @@ func TestDuplicateURLBranchesByStatus(t *testing.T) {
 	}
 }
 
-// Лимитов два, и человеку важно, в какой он упёрся: пять ссылок с рынка (§8)
-// и две точки «к себе» (§2.2) — разные истории и разные выходы.
 func TestPointLimitSpeaksByFormType(t *testing.T) {
 	cases := map[string]struct {
 		form string
@@ -179,8 +167,6 @@ func TestPointLimitSpeaksByFormType(t *testing.T) {
 	}
 }
 
-// Точка на проверке для всех, кроме создателя, не существует (§5) — тот же
-// 404, что и у несуществующей.
 func TestPendingPointIsTheCreatorsAlone(t *testing.T) {
 	creator := uuid.New()
 	pending := pointsrepo.FeedPoint{Point: entity.Point{
@@ -198,8 +184,6 @@ func TestPendingPointIsTheCreatorsAlone(t *testing.T) {
 	}
 }
 
-// «Мои» — не uuid: разъедься порядок роутов, блоки «Моих поисков» уходили бы
-// в разбор идентификатора.
 func TestMineRouteWinsOverTheCard(t *testing.T) {
 	service := &fakePoints{mine: []pointsrepo.FeedPoint{{
 		Point: entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, ZoneID: station},
@@ -220,8 +204,6 @@ func TestMineRouteWinsOverTheCard(t *testing.T) {
 	}
 }
 
-// «В пуле N — увидишь после входа» (§6): вход бесплатен и безлимитен, поэтому
-// гейт стоит на нём.
 func TestPoolNeedsEntering(t *testing.T) {
 	service := &fakePoints{err: entity.ErrNeedEnter}
 
@@ -265,8 +247,7 @@ func TestPoolMembersCarryNoContacts(t *testing.T) {
 			t.Errorf("pool JSON leaks %q:\n%s", forbidden, body)
 		}
 	}
-	// Вердикт-чипы, совпадения анкеты и зона поиска участника — то, из чего
-	// собрана мини-карточка пула (§6).
+
 	for _, want := range []string{`"shared_answers":4`, `"verdict":"green"`, `"price_max":45000`, `"Сокол"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("pool card %s does not carry %s", body, want)
@@ -274,8 +255,6 @@ func TestPoolMembersCarryNoContacts(t *testing.T) {
 	}
 }
 
-// Вход и выход — один тап и никакого тела в ответе; отказ входа приходит от
-// репозитория: у «к себе» и у точки на проверке пула нет (§2.2, §5).
 func TestEnterAndLeave(t *testing.T) {
 	viewer := uuid.New()
 	id := uuid.New()
@@ -321,8 +300,6 @@ func (f *fakePoints) CreateIntentHome(context.Context, uuid.UUID, points.CreateI
 	return f.created, f.err
 }
 
-// Point repeats the service's gate: всё, кроме одобренной точки, видит только
-// создатель (§5).
 func (f *fakePoints) Point(_ context.Context, viewerID, _ uuid.UUID) (pointsrepo.FeedPoint, error) {
 	f.cards++
 	if f.err != nil {
@@ -394,9 +371,6 @@ func (f fakeAccounts) EnsureFromTelegram(context.Context, entity.TelegramIdentit
 	return f.user, nil
 }
 
-// Фото уходит до самой точки: форма грузит его, пока точки ещё нет, и получает
-// ключ, который приложит к ней при сабмите. Анкеты автора это не касается —
-// у фото точки нет своего статуса модерации (§5).
 func TestUploadPhotoReturnsTheKey(t *testing.T) {
 	service := &fakePoints{photoKey: "points/a1b2.jpg"}
 	body := new(bytes.Buffer)
@@ -425,7 +399,6 @@ func TestUploadPhotoReturnsTheKey(t *testing.T) {
 	}
 }
 
-// Без формы грузить нечего — это ошибка запроса, а не пятисотка.
 func TestUploadPhotoNeedsAMultipartForm(t *testing.T) {
 	service := &fakePoints{photoKey: "points/a1b2.jpg"}
 
@@ -439,8 +412,6 @@ func TestUploadPhotoNeedsAMultipartForm(t *testing.T) {
 	}
 }
 
-// Закрыть точку может только создатель (§5): чужая отвечает 404 и остаётся на
-// месте, своя закрывается без тела в ответе.
 func TestCloseIsTheCreatorsOwn(t *testing.T) {
 	id := uuid.New()
 	service := &fakePoints{}

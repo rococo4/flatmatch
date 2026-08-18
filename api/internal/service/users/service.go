@@ -26,9 +26,6 @@ type PhotoStore interface {
 	URL(key string) string
 }
 
-// Notifier shows a questionnaire to the moderator. Best-effort and without an
-// error: очередь живёт в БД (§5), чат — только способ до неё дотянуться, и
-// молчащий бот не должен ронять отправку анкеты.
 type Notifier interface {
 	UserPending(ctx context.Context, u entity.User)
 }
@@ -78,8 +75,7 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Prof
 	if err != nil {
 		return entity.User{}, err
 	}
-	// Из всей анкеты модератор смотрит фото и «о себе» (§5) — привычки и возраст
-	// меняются молча.
+
 	if p.About != nil && user.Status == entity.StatusActive {
 		s.enqueue(ctx, user)
 	}
@@ -101,9 +97,7 @@ func (s *Service) SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker
 	if err != nil {
 		return entity.User{}, err
 	}
-	// У одобренной анкеты перезалитое фото — это правка на перепроверку; у
-	// незаконченной карточку покажет сабмит (§5: в очередь попадают только
-	// отправленные).
+
 	if user.Status == entity.StatusActive {
 		s.enqueue(ctx, user)
 	}
@@ -128,7 +122,7 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error)
 	if err != nil {
 		return entity.User{}, err
 	}
-	// Повторный сабмит уже отправленной анкеты не дублирует карточку в чате.
+
 	if user.Status != entity.StatusPending {
 		s.enqueue(ctx, submitted)
 	}
@@ -146,13 +140,10 @@ func (s *Service) OwnPhotoURL(u entity.User) string {
 	return s.photos.URL(u.PhotoKey)
 }
 
-// enqueue is the one door to the moderation chat: без него (тесты, стенд без
-// чата) очередь всё равно копится в БД.
 func (s *Service) enqueue(ctx context.Context, u entity.User) {
 	if s.notify == nil {
 		return
 	}
-	// Отменённый запрос не отменяет модерацию: анкета уже отправлена, и
-	// сообщение в чат ей нужно (§5).
+
 	s.notify.UserPending(context.WithoutCancel(ctx), u)
 }

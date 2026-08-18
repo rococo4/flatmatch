@@ -14,10 +14,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// TestMatchListCarriesNoContacts pins where contacts stop (§3): the list is a
-// list, the detail is the handover. The repository reads no contact columns for
-// the list at all, so a leak here could only come from this DTO — which is
-// exactly what the pin watches, since the peer arrives as a whole entity.User.
 func TestMatchListCarriesNoContacts(t *testing.T) {
 	m := matchesrepo.MatchWithPeer{
 		Match: entity.Match{ID: uuid.New(), CreatedAt: time.Now()},
@@ -42,9 +38,6 @@ func TestMatchListCarriesNoContacts(t *testing.T) {
 	}
 }
 
-// TestParamOverlapBounds pins how a range reaches the screen: an unbounded top
-// («от двух комнат и сколько угодно») has no max at all, so the front-end has
-// nothing to print a zero from, while a degenerate range keeps both numbers.
 func TestParamOverlapBounds(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -81,9 +74,6 @@ func TestParamOverlapBounds(t *testing.T) {
 	}
 }
 
-// Блок ГДЕ рассказывает одно из двух: пул зоны или точку (§6). Контексты
-// взаимоисключимы — лайк несёт один (§2.3), — и закрытую точку саммари всё
-// равно называет: мэтч необратим, его контекст исторический.
 func TestMatchDetailTellsWhereFromOneContext(t *testing.T) {
 	m := matchesrepo.MatchWithPeer{
 		Match: entity.Match{ID: uuid.New(), CreatedAt: time.Now()},

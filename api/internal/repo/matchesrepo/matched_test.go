@@ -23,7 +23,6 @@ func TestIsMatched(t *testing.T) {
 		t.Fatalf("seed match: %v", err)
 	}
 
-	// Пара канонична (a_id < b_id), а спрашивают о ней с любой стороны.
 	for _, pair := range [][2]uuid.UUID{{a, b}, {b, a}} {
 		got, err := repo.IsMatched(t.Context(), pair[0], pair[1])
 		if err != nil {

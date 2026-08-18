@@ -9,10 +9,10 @@ import (
 type Verdict string
 
 const (
-	VerdictGreen Verdict = "green" // пересеклись
-	VerdictEdge  Verdict = "edge"  // «краем»: границы касаются / соседние ступени
-	VerdictGrey  Verdict = "grey"  // не пересеклись
-	VerdictNone  Verdict = "none"  // у него не указан — «не указана», не участвует
+	VerdictGreen Verdict = "green"
+	VerdictEdge  Verdict = "edge"
+	VerdictGrey  Verdict = "grey"
+	VerdictNone  Verdict = "none"
 )
 
 type Param string
@@ -32,7 +32,6 @@ const (
 	SectionNone    SectionID = "none"
 )
 
-// roomsWide stands for an open upper bound on rooms: «от 3 и больше».
 const roomsWide = math.MaxInt32
 
 type Chip struct {
@@ -52,7 +51,6 @@ func Compare(mine, theirs entity.SearchParams) ([]Chip, SectionID) {
 		{ParamTerm, termVerdict(mine, theirs)},
 	}
 
-	// «Пересёкся» = зелёный, «краем» или не участвует. Жёсткие — цена и заезд.
 	ok := func(p Param) bool {
 		for _, c := range chips {
 			if c.Param == p {
@@ -95,7 +93,7 @@ func roomsVerdict(mine, theirs entity.SearchParams) Verdict {
 		return VerdictNone
 	}
 	if mine.RoomsMin == nil && mine.RoomsMax == nil {
-		return VerdictGreen // моё «неважно» совпадает со всем (§2.1)
+		return VerdictGreen
 	}
 	aMin, aMax := orOne(mine.RoomsMin), orWide(mine.RoomsMax)
 	bMin, bMax := orOne(theirs.RoomsMin), orWide(theirs.RoomsMax)
@@ -124,7 +122,6 @@ func moveInVerdict(mine, theirs entity.SearchParams) Verdict {
 	}
 }
 
-// termVerdict: the ladder полгода+ → год+ → бессрочно; neighbours are «краем».
 func termVerdict(mine, theirs entity.SearchParams) Verdict {
 	if theirs.Term == nil {
 		return VerdictNone

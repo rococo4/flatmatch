@@ -12,9 +12,6 @@ import (
 	"flatmatch/api/internal/repo/likesrepo"
 )
 
-// TestIncomingCarriesNoContacts pins the privacy rule structurally (§3): an
-// incoming like shows a name and a face, never a way to reach the person —
-// that appears once the like is answered and a match exists.
 func TestIncomingCarriesNoContacts(t *testing.T) {
 	like := likesrepo.IncomingLike{
 		From: entity.User{
@@ -40,9 +37,6 @@ func TestIncomingCarriesNoContacts(t *testing.T) {
 	}
 }
 
-// «На твою комнату» (§2.2): адресат intent_home-контекста и есть автор
-// комнаты, поэтому подпись говорит с ним напрямую. Квартира с рынка — общий
-// пул, и подпись у неё нейтральная.
 func TestPointLabelsSpeakForTheContext(t *testing.T) {
 	cases := []struct {
 		kind    entity.PointType
@@ -51,7 +45,7 @@ func TestPointLabelsSpeakForTheContext(t *testing.T) {
 	}{
 		{entity.PointIntentHome, "Сокол", "на твою комнату · м. Сокол"},
 		{entity.PointFlat, "Сокол", "квартира у м. Сокол"},
-		// Зона ушла из справочника — лайк это переживает (§2.3), строка короче.
+
 		{entity.PointIntentHome, "", "на твою комнату"},
 		{entity.PointFlat, "", "квартира"},
 	}

@@ -16,8 +16,7 @@ import (
 
 type fakeRepo struct {
 	err error
-	// result подменяет исход транзакции: ответный лайк, повторный тап и мэтч
-	// решаются в ней, а сервису они приходят готовыми.
+
 	result *entity.LikeResult
 
 	ctx           likesrepo.LikeContext
@@ -26,8 +25,6 @@ type fakeRepo struct {
 	budgetCalls   int
 }
 
-// The real repository must keep satisfying the interface this package declares:
-// drift should break the build here, not at the Task 5 handler wiring.
 var _ Repository = (*likesrepo.Repo)(nil)
 
 func (f *fakeRepo) Create(_ context.Context, _, _ uuid.UUID, lc likesrepo.LikeContext) (entity.LikeResult, error) {
@@ -65,8 +62,6 @@ func testDir(t *testing.T) *zones.Directory {
 	return d
 }
 
-// likes_users.zone_id has no foreign key, so a zone nobody knows would be
-// stored as it came and resurface as the context of the match.
 func TestLikeRejectsUnknownZone(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, testDir(t), nil)
@@ -83,7 +78,6 @@ func TestLikeRejectsUnknownZone(t *testing.T) {
 	}
 }
 
-// A reply carries no context (§2.3), and that is not a missing field.
 func TestLikeWithoutZoneIsLegal(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, testDir(t), nil)
@@ -111,15 +105,12 @@ func TestLikeKnownZoneReachesRepo(t *testing.T) {
 	if repo.ctx.ZoneID != "d-khamovniki" {
 		t.Errorf("repo got zone %q, want d-khamovniki", repo.ctx.ZoneID)
 	}
-	// Гейт «мы увиделись» работает списком пересекающихся зон — сам контекст
-	// обязан в него входить, иначе поиск ровно на эту зону лайк не оплатит.
+
 	if !slices.Contains(repo.ctx.ContextZones, "d-khamovniki") {
 		t.Errorf("context zones %v must contain the context zone itself", repo.ctx.ContextZones)
 	}
 }
 
-// Точечный контекст сервис не проверяет — активность точки, её тип и отношение
-// к ней читаются в транзакции, рядом с решением о трате слота.
 func TestLikePointReachesRepoUntouched(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, testDir(t), nil)
@@ -137,8 +128,6 @@ func TestLikePointReachesRepoUntouched(t *testing.T) {
 	}
 }
 
-// Один лайк — один контекст: мэтч рассказывает, ГДЕ пересеклись, и делить этот
-// рассказ надвое нельзя (§6).
 func TestLikeRefusesTwoContexts(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, testDir(t), nil)
@@ -156,8 +145,6 @@ func TestLikeRefusesTwoContexts(t *testing.T) {
 	}
 }
 
-// Every gate of §2.3 lives in the transaction; the service must not swallow
-// or rename what it answers.
 func TestLikePassesRepoErrorsThrough(t *testing.T) {
 	for _, want := range []error{
 		entity.ErrLikeLimit, entity.ErrNeedSearch, entity.ErrNotApproved, entity.ErrNotFound,

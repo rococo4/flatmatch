@@ -13,13 +13,8 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// moveInDate is the wire format of a move-in date. У точки это день, а не
-// месяц как у поиска: «заезжаю 15 августа» — конкретная дата (§2.2).
 const moveInDate = "2006-01-02"
 
-// zoneDTO is the outbound twin of searchesapi's: same fields, same
-// declensions. Copied rather than shared because a DTO belongs to the handler
-// that serves it.
 type zoneDTO struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -27,10 +22,6 @@ type zoneDTO struct {
 	NameGen string `json:"name_gen"`
 }
 
-// createRequest carries both forms of §6 — «Найди, с кем снять эту квартиру» и
-// «Зову соседа к себе», — потому что тип решает, какие поля читать, а не какой
-// эндпоинт вызвать. Словарные значения парсятся, а не валидируются: незнакомое
-// становится сентинелом, который сервис называет по имени в invalid_field.
 type createRequest struct {
 	Type string `json:"type"`
 
@@ -46,17 +37,10 @@ type createRequest struct {
 	Utilities    *string  `json:"utilities"`
 	Restrictions []string `json:"restrictions"`
 	PhotoKeys    []string `json:"photo_keys"`
-	MoveIn       *string  `json:"move_in"` // «2026-09-15»
+	MoveIn       *string  `json:"move_in"`
 	Deposit      *int     `json:"deposit"`
 }
 
-// Card is the point as every screen shows it (§6): лента, карточка, оба блока
-// «Моих поисков». Тип экспортирован, потому что ленту собирает poolsapi — с
-// копией шапка карточки в двух местах разъехалась бы на первой же правке.
-//
-// Создателя в карточке нет: квартира с рынка обезличена, created_by — это
-// provenance и лимиты (§2.2). Лицо есть только у «к себе», и приезжает оно
-// автором.
 type Card struct {
 	ID     uuid.UUID `json:"id"`
 	Type   string    `json:"type"`
@@ -71,19 +55,14 @@ type Card struct {
 	Bathrooms    string   `json:"bathrooms,omitempty"`
 	Utilities    string   `json:"utilities,omitempty"`
 	Restrictions []string `json:"restrictions,omitempty"`
-	// PhotoURLs едут всегда: фото точки — скрины объявления или комната, и
-	// модерация одобряет их вместе с точкой, отдельного статуса у них нет.
-	// Первое — обложка карточки, остальные листаются на экране точки.
+
 	PhotoURLs []string `json:"photo_urls"`
 	URL       string   `json:"url,omitempty"`
 	MoveIn    string   `json:"move_in,omitempty"`
 	Deposit   *int     `json:"deposit,omitempty"`
 
-	// CreatedDaysAgo backs «добавлена N дней назад» — точность до дня, «20
-	// минут назад» продукт не обещает (§8).
 	CreatedDaysAgo int `json:"created_days_ago"`
-	// PoolCount is «в пуле N» рыночной квартиры, Responses — «N откликов» у
-	// «к себе»: какой из счётчиков показать, решает тип карточки (§2.2).
+
 	PoolCount int  `json:"pool_count"`
 	Responses int  `json:"responses"`
 	InPool    bool `json:"in_pool"`
@@ -91,8 +70,6 @@ type Card struct {
 	Author *authorDTO `json:"author,omitempty"`
 }
 
-// authorDTO is the showcase of «к себе» — единственная карточка с лицом (§2.2).
-// Контактов не несёт, как и всё, кроме экрана мэтча (§3); dto_test это пинует.
 type authorDTO struct {
 	UserID     uuid.UUID `json:"user_id"`
 	Name       string    `json:"name"`
@@ -110,21 +87,16 @@ type chipDTO struct {
 	Verdict string `json:"verdict"`
 }
 
-// paramsDTO is the outbound twin of poolsapi's: same fields, same encodings.
 type paramsDTO struct {
 	PriceMin *int     `json:"price_min,omitempty"`
 	PriceMax int      `json:"price_max"`
 	RoomsMin *int     `json:"rooms_min,omitempty"`
 	RoomsMax *int     `json:"rooms_max,omitempty"`
-	MoveIn   *string  `json:"move_in,omitempty"` // «2026-09»
+	MoveIn   *string  `json:"move_in,omitempty"`
 	Term     *string  `json:"term,omitempty"`
 	HasStuff []string `json:"has_stuff,omitempty"`
 }
 
-// memberDTO is one person in the pool of a flat (§6): совпадения анкеты и
-// вердикт-чипы, если смотрящему есть чем сравнивать. Поиска у участника может
-// не быть вовсе — вход в пул его не требует (§2.2), — и тогда карточка едет
-// без параметров и без чипов.
 type memberDTO struct {
 	UserID        uuid.UUID  `json:"user_id"`
 	Name          string     `json:"name"`
@@ -140,8 +112,6 @@ type memberDTO struct {
 	EnteredAt     time.Time  `json:"entered_at"`
 }
 
-// photoResponse hands the key back to the form: до сабмита точка живёт на
-// экране, а её фото — уже в хранилище.
 type photoResponse struct {
 	PhotoKey string `json:"photo_key"`
 }
@@ -155,19 +125,10 @@ type mineResponse struct {
 	Entered []Card `json:"entered"`
 }
 
-// duplicateResponse is the 409 of a link somebody already brought: «эта
-// квартира уже есть, в пуле N — войти?» (§6). Всё, что нужно кнопке «Войти»,
-// едет рядом с сообщением — иначе фронту пришлось бы искать точку по ссылке
-// второй раз.
-//
-// У точки, которая ещё на проверке, ни кнопки, ни счётчика нет: до аппрува её
-// видит только подавший (§5), поэтому чужая ссылка отвечает одним сообщением —
-// идентификатор и «в пуле N» рассказали бы о ней больше, чем ей положено.
 type duplicateResponse struct {
 	Error   httpx.ErrorDetail `json:"error"`
 	PointID *uuid.UUID        `json:"point_id,omitempty"`
-	// PoolCount is «в пуле N» существующей точки — персональный, как всякий
-	// счётчик пула (§4).
+
 	PoolCount int    `json:"pool_count"`
 	Status    string `json:"status"`
 }
@@ -187,8 +148,6 @@ func (b createRequest) toFlat() points.CreateFlat {
 	}
 }
 
-// toIntentHome fails only on a date that cannot be represented at all; всё
-// остальное — вопрос сервиса, включая обязательность заезда у «заезжаю» (§2.2).
 func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 	in := points.CreateIntentHome{
 		Stage:        entity.ParsePointStage(b.Stage),
@@ -211,12 +170,6 @@ func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 	return in, nil
 }
 
-// toCard serialises a point. The photo of the point goes through the store as
-// it is; the face of an author goes through the §5 rule, the same one every
-// other screen applies.
-// cardStatus: отклонённая модератором точка — это closed с причиной
-// 'rejected', но создателю она показывается своим словом. Статус уровня
-// провода, в entity его нет.
 func cardStatus(p entity.Point) string {
 	if p.Status == entity.PointClosed && p.CloseReason != nil && *p.CloseReason == "rejected" {
 		return "rejected"
@@ -262,8 +215,7 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
 	for _, r := range p.Restrictions {
 		out.Restrictions = append(out.Restrictions, string(r))
 	}
-	// Ссылка на оригинал — нормализованная: исходную строку схема не хранит, а
-	// нормализация трогает только схему, зеркало хоста и хвост (§6).
+
 	if p.URLNorm != nil {
 		out.URL = *p.URLNorm
 	}
@@ -338,8 +290,6 @@ func toZoneDTO(z zones.Zone) zoneDTO {
 	return zoneDTO{ID: z.ID, Name: z.Name, NameIn: z.NameIn, NameGen: z.NameGen}
 }
 
-// personPhoto is the §5 rule: фото, которого модератор не одобрил, вместо
-// адреса отдаёт пустоту — на экране его место занимает заглушка.
 func personPhoto(u entity.User, photos Photos) string {
 	if !u.PhotoApproved() {
 		return ""
@@ -347,8 +297,6 @@ func personPhoto(u entity.User, photos Photos) string {
 	return photos.URL(u.PhotoKey)
 }
 
-// daysAgo counts whole days, что и обещает строка свежести: «добавлена вчера»
-// у точки часовой давности было бы враньём в обе стороны.
 func daysAgo(t time.Time) int {
 	days := int(time.Since(t) / (24 * time.Hour))
 	if days < 0 {

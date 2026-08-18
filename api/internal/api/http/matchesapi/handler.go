@@ -1,6 +1,3 @@
-// Package matchesapi serves «Мои мэтчи» and the match screen (§6) — the one
-// place in the product where contacts are handed over, together with the
-// «почему совпали» summary that gives the first message its topics.
 package matchesapi
 
 import (
@@ -25,8 +22,6 @@ type Matches interface {
 	Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo.MatchWithPeer, matches.Summary, error)
 }
 
-// Photos is the §5 rule about an unapproved photo, and it lives in one place —
-// the users service — because every screen has to hide the same thing.
 type Photos interface {
 	PhotoURL(u entity.User) string
 }
@@ -95,8 +90,6 @@ func (h *Handler) detail(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photos.PhotoURL(match.Peer)))
 }
 
-// zone names the historical context of a match: an id the directory no longer
-// knows is dropped, the match itself is nobody's to revoke (§2.3).
 func (h *Handler) zone(id string) *zoneDTO {
 	zone, ok := h.dir.Get(id)
 	if !ok {
@@ -106,8 +99,6 @@ func (h *Handler) zone(id string) *zoneDTO {
 }
 
 func handleError(w http.ResponseWriter, r *http.Request, err error) {
-	// Somebody else's match and a non-existent one are the same answer: a match
-	// is private to its pair (§2.3).
 	if errors.Is(err, entity.ErrNotFound) {
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such match", err)
 		return

@@ -11,8 +11,6 @@ import (
 	"flatmatch/api/internal/service/notifications"
 )
 
-// Сервис уведомлений обязан оставаться тем, кого этот пакет просит: расхождение
-// должно ломать сборку здесь, а не в проводке.
 var _ Pushes = (*notifications.Service)(nil)
 
 type profileVerdict struct {
@@ -76,7 +74,6 @@ func TestUserVerdictPushesItsType(t *testing.T) {
 	}
 }
 
-// Стухшая кнопка вердикта не применяет — и рассказывать человеку не о чем (§5).
 func TestStaleUserVerdictPushesNothing(t *testing.T) {
 	tests := []struct {
 		name string
@@ -117,8 +114,6 @@ func TestStaleUserVerdictPushesNothing(t *testing.T) {
 	}
 }
 
-// Вердикт не применился — рассказывать нечего: пуш «анкета одобрена» без
-// одобрения врал бы человеку.
 func TestFailedUserVerdictPushesNothing(t *testing.T) {
 	user := submitted()
 	pushes := &fakePushes{}
@@ -196,7 +191,6 @@ func TestStalePointVerdictPushesNothing(t *testing.T) {
 	}
 }
 
-// Точку не прочитали — вердикт уже применён, и отменять его из-за пуша нельзя.
 func TestPointVerdictSurvivesAnUnreadablePoint(t *testing.T) {
 	pushes := &fakePushes{}
 	s := newPushService(t, &fakeUsers{},
@@ -214,7 +208,6 @@ func TestPointVerdictSurvivesAnUnreadablePoint(t *testing.T) {
 	}
 }
 
-// Стенд без лога уведомлений — рабочий стенд: вердикт применяется и молча.
 func TestVerdictsWithoutPushesDoNotPanic(t *testing.T) {
 	user := submitted()
 	s := newService(t, testChat, &fakeSender{}, &fakeUsers{user: user}, &fakePoints{changed: true})

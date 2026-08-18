@@ -1,5 +1,3 @@
-// Package pointsrepo stores points and the cheap likes that fill their pools
-// (§2.2).
 package pointsrepo
 
 import (

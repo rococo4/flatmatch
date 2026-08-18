@@ -19,8 +19,7 @@ import (
 type fakeRepo struct {
 	rows []entity.Notification
 	seen map[string]bool
-	// ctxErr — отмену запроса строка события переживает, и проверить это можно
-	// только тем контекстом, который доехал до репозитория.
+
 	ctxErr error
 	err    error
 }
@@ -47,9 +46,6 @@ func (f *fakeRepo) InsertMany(ctx context.Context, ns []entity.Notification) (in
 	return inserted, nil
 }
 
-// keep повторяет уникальный индекс лога — (адресат, тип, актор, контекст):
-// дубли невозможны на уровне БД (§7), и фейк, который их принимает, разрешил бы
-// сервису то, чего база не разрешит.
 func (f *fakeRepo) keep(n entity.Notification) bool {
 	key := strings.Join([]string{n.UserID.String(), string(n.Type), n.ActorKey, n.ContextKey}, "|")
 	if f.seen[key] {
@@ -126,8 +122,6 @@ func (f *fakePoints) PoolMemberIDs(_ context.Context, _, _ uuid.UUID) ([]uuid.UU
 	return f.members, f.err
 }
 
-// fakePeople отвечает по адресату: актор в тестах один, и его видимость — это
-// свойство пары, которое достаточно завести на смотрящего.
 type fakePeople struct {
 	invisibleTo  map[uuid.UUID]bool
 	matchedWith  map[uuid.UUID]bool
@@ -168,8 +162,6 @@ func search(userID uuid.UUID, zoneID string) entity.Search {
 	return entity.Search{ID: uuid.New(), UserID: userID, SearchParams: entity.SearchParams{ZoneID: zoneID}}
 }
 
-// Зона поиска — граница пула (§2.1): новичок в «красной ветке» виден и тем, кто
-// ищет в Хамовниках, потому что станции пересекаются.
 func TestZoneNewFansOutToIntersectingSubscribers(t *testing.T) {
 	author := uuid.New()
 	district, both, elsewhere := uuid.New(), uuid.New(), uuid.New()
@@ -207,13 +199,11 @@ func TestZoneNewFansOutToIntersectingSubscribers(t *testing.T) {
 	if got := repo.contexts(district); !slices.Equal(got, []string{"d-khamovniki"}) {
 		t.Errorf("contexts of the district subscriber = %v, want [d-khamovniki]", got)
 	}
-	// Два пересекающих поиска — два пула и две строки: контекст у них разный, и
-	// уникальный индекс их не схлопнет.
+
 	if got := sorted(repo.contexts(both)); !slices.Equal(got, []string{"d-khamovniki", "line-1"}) {
 		t.Errorf("contexts of the double subscriber = %v, want both zones", got)
 	}
-	// Видимость — вопрос про пару, а не про поиск: второй поиск того же
-	// человека не стоит второго запроса.
+
 	if people.visibleCalls[both] != 1 {
 		t.Errorf("asked about the visibility of %s %d times, want 1", both, people.visibleCalls[both])
 	}
@@ -235,8 +225,6 @@ func TestZoneNewSurvivesFailures(t *testing.T) {
 		t.Errorf("wrote %d rows without subscribers", len(repo.rows))
 	}
 
-	// Упавшая вставка тоже не поднимается наверх: доменная операция уже
-	// закоммичена, пуш ей не судья.
 	failing := &fakeRepo{err: errors.New("insert failed")}
 	svc := testService(t, failing, &fakeSearches{searches: []entity.Search{search(uuid.New(), "line-1")}},
 		&fakePoints{}, &fakePeople{})
@@ -278,8 +266,6 @@ func TestLikedCarriesTheName(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := testService(t, repo, &fakeSearches{}, &fakePoints{}, &fakePeople{})
 
-	// Отменённый контекст: лайк уже записан, и пуш о нём не должен пропасть
-	// вместе с отвалившимся клиентом.
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	svc.Liked(ctx, to, from, "Катя", entity.GenderFemale)
@@ -311,8 +297,7 @@ func TestMatchedTellsBothSides(t *testing.T) {
 	}
 	for i, want := range []uuid.UUID{a, b} {
 		n := repo.rows[i]
-		// Актор — мэтч: гонка встречных лайков приводит сюда дважды, и вторую
-		// пару строк снимает уникальный индекс.
+
 		if n.UserID != want || n.Type != entity.NotifMatched || n.ActorKey != match.ID.String() {
 			t.Errorf("row %+v, want a matched push to %s about %s", n, want, match.ID)
 		}
@@ -325,8 +310,7 @@ func TestProfileVerdict(t *testing.T) {
 	svc := testService(t, repo, &fakeSearches{}, &fakePoints{}, &fakePeople{})
 
 	svc.ProfileVerdict(t.Context(), userID, entity.NotifPhotoRejected)
-	// Не вердикт по анкете — не пуш: тип приходит из вызова, и опечатка в нём
-	// не должна становиться строкой очереди.
+
 	svc.ProfileVerdict(t.Context(), userID, entity.NotifZoneNew)
 
 	if len(repo.rows) != 1 {
@@ -336,8 +320,7 @@ func TestProfileVerdict(t *testing.T) {
 	if n.UserID != userID || n.Type != entity.NotifPhotoRejected {
 		t.Errorf("row %+v, want a photo_rejected push to %s", n, userID)
 	}
-	// Вердикты повторяются, поэтому актора им даёт время: два реджекта фото —
-	// два разных ключа.
+
 	prefix := userID.String() + ":" + string(entity.NotifPhotoRejected) + ":"
 	if !strings.HasPrefix(n.ActorKey, prefix) {
 		t.Fatalf("actor %q, want the prefix %q", n.ActorKey, prefix)
@@ -347,16 +330,13 @@ func TestProfileVerdict(t *testing.T) {
 	}
 }
 
-// Поиски сохраняют и до аппрува (§4), но до него человека не видно нигде (§5):
-// фан-аут его поисков выходит пустым, и рассказать о нём пулам можно только в
-// момент одобрения.
 func TestApprovalAnnouncesTheSearchesSavedBefore(t *testing.T) {
 	newcomer, subscriber := uuid.New(), uuid.New()
 	mine := search(newcomer, "line-1")
 
 	repo := &fakeRepo{}
 	searches := &fakeSearches{searches: []entity.Search{mine, search(subscriber, "d-khamovniki")}}
-	// Неодобренного не отдаёт visible_people — для подписчика его нет.
+
 	people := &fakePeople{invisibleTo: map[uuid.UUID]bool{subscriber: true}}
 	svc := testService(t, repo, searches, &fakePoints{}, people)
 
@@ -365,7 +345,6 @@ func TestApprovalAnnouncesTheSearchesSavedBefore(t *testing.T) {
 		t.Fatalf("wrote %d rows about a pending newcomer, want 0: %+v", len(got), got)
 	}
 
-	// Аппрув: человек проявляется везде разом (§5).
 	delete(people.invisibleTo, subscriber)
 	svc.ProfileVerdict(t.Context(), newcomer, entity.NotifProfileOK)
 
@@ -381,15 +360,12 @@ func TestApprovalAnnouncesTheSearchesSavedBefore(t *testing.T) {
 		t.Errorf("the approval itself was not pushed: %+v", repo.rows)
 	}
 
-	// Второй аппрув дубля не даёт: у доанонса ключ строки тот же.
 	svc.ProfileVerdict(t.Context(), newcomer, entity.NotifProfileOK)
 	if got := repo.typed(entity.NotifZoneNew); len(got) != 1 {
 		t.Errorf("announced %d rows after a repeated approval, want 1: %+v", len(got), got)
 	}
 }
 
-// Доанонс — свойство аппрува: реджекты пулам ничего не рассказывают, человека
-// в них по-прежнему нет.
 func TestRejectionAnnouncesNothing(t *testing.T) {
 	newcomer, subscriber := uuid.New(), uuid.New()
 	repo := &fakeRepo{}
@@ -406,8 +382,6 @@ func TestRejectionAnnouncesNothing(t *testing.T) {
 	}
 }
 
-// Непрочитанные поиски не отменяют вердикт: строка «анкета одобрена» уже нужна
-// человеку, а доанонс — украшение аппрува.
 func TestApprovalSurvivesUnreadableSearches(t *testing.T) {
 	userID := uuid.New()
 	repo := &fakeRepo{}
@@ -430,7 +404,7 @@ func TestPointVerdict(t *testing.T) {
 	svc := testService(t, repo, &fakeSearches{}, &fakePoints{}, &fakePeople{})
 
 	svc.PointVerdict(t.Context(), mine, true)
-	// У парсера и досыпки создателя нет (§8) — адресата тоже.
+
 	svc.PointVerdict(t.Context(), parsed, false)
 
 	if len(repo.rows) != 1 {

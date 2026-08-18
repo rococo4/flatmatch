@@ -9,11 +9,6 @@ import (
 	"flatmatch/api/internal/entity"
 )
 
-// TestToParamsEmptyOptionalIsAny pins the shape the promo block actually posts:
-// it copies the feed's filters verbatim, and there an unfilled month or term
-// travels as an empty string. Absent and empty must mean the same «неважно» —
-// otherwise the one button that saves a search answers 400 (move_in) or 500
-// (term, rejected by the CHECK on the column).
 func TestToParamsEmptyOptionalIsAny(t *testing.T) {
 	b := paramsRequest{
 		ZoneID:   "d-khamovniki",
@@ -36,7 +31,6 @@ func TestToParamsEmptyOptionalIsAny(t *testing.T) {
 	}
 }
 
-// TestToParamsMalformedMoveIn: empty is «неважно», wrong is still wrong.
 func TestToParamsMalformedMoveIn(t *testing.T) {
 	for _, raw := range []string{"2026-13", "sept", "2026-09-01"} {
 		t.Run(raw, func(t *testing.T) {

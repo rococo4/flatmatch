@@ -11,13 +11,11 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// Test users live in their own negative tg_id range so leftovers never
-// collide with real accounts or with usersrepo's tests.
 const testTGBase int64 = -998000000
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	// pgx uses the extended protocol: one statement per Exec, no semicolons.
+
 	clean := func() {
 		for _, q := range []string{
 			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -34,8 +32,6 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Cleanup(clean)
 }
 
-// seedUser inserts a user directly: repo methods can't set status/gender to
-// arbitrary combinations, and this test is about the SQL function itself.
 func seedUser(t *testing.T, pool *pgxpool.Pool, n int64, status, gender, pref string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
@@ -81,11 +77,10 @@ func TestVisiblePeopleGenderIsMutual(t *testing.T) {
 		wantYes []uuid.UUID
 		wantNo  []uuid.UUID
 	}{
-		// same-M видит any-M (оба согласны), не видит женщин: он их отсёк.
 		{"same male", sameM, []uuid.UUID{anyM}, []uuid.UUID{anyF, sameF}},
-		// any-F готова на всех, но same-M отсёк её: правило обоюдно (§4).
+
 		{"any female", anyF, []uuid.UUID{anyM, sameF}, []uuid.UUID{sameM}},
-		// any-M не видит same-F по той же причине, себя — никогда.
+
 		{"any male", anyM, []uuid.UUID{anyF, sameM}, []uuid.UUID{sameF, anyM}},
 	}
 	for _, tt := range tests {
@@ -109,7 +104,7 @@ func TestVisiblePeopleOnlyActive(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
 
-	viewer := seedUser(t, pool, 1, "draft", "male", "any") // draft может смотреть (§5)
+	viewer := seedUser(t, pool, 1, "draft", "male", "any")
 	for i, status := range []string{"draft", "pending", "banned"} {
 		hidden := seedUser(t, pool, int64(10+i), status, "female", "any")
 		if visibleTo(t, pool, viewer)[hidden] {

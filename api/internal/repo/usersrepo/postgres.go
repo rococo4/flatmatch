@@ -29,6 +29,16 @@ func (r *Repo) EnsureByTelegramID(ctx context.Context, tg entity.TelegramIdentit
 	return user, nil
 }
 
+func (r *Repo) ByTelegramID(ctx context.Context, tgID int64) (entity.User, error) {
+	const query = `SELECT ` + columns + ` FROM users WHERE tg_id = $1`
+
+	user, err := r.one(ctx, query, tgID)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("get user by tg_id %d: %w", tgID, err)
+	}
+	return user, nil
+}
+
 func (r *Repo) ByID(ctx context.Context, id uuid.UUID) (entity.User, error) {
 	const query = `SELECT ` + columns + ` FROM users WHERE id = $1`
 
@@ -114,10 +124,6 @@ func (r *Repo) SetStatus(ctx context.Context, id uuid.UUID, status entity.Status
 	return user, nil
 }
 
-// SetModeration applies a moderator's verdict: nil leaves a field alone.
-// Всё тремя указателями сразу, потому что вердикт §5 — это связка: «ок»
-// проявляет человека везде разом, а реджект фото у неодобренной анкеты
-// возвращает её в draft тем же движением.
 func (r *Repo) SetModeration(ctx context.Context, id uuid.UUID, status *entity.Status, photo, about *entity.ModerationStatus) (entity.User, error) {
 	const query = `
 		UPDATE users SET
@@ -134,9 +140,6 @@ func (r *Repo) SetModeration(ctx context.Context, id uuid.UUID, status *entity.S
 	return user, nil
 }
 
-// PendingModeration is the questionnaire queue (§5), both of its kinds: a
-// freshly submitted profile and a re-check of the photo or «о себе» of somebody
-// already active — the moderator looks at exactly those two fields.
 func (r *Repo) PendingModeration(ctx context.Context) ([]entity.User, error) {
 	const query = `
 		SELECT ` + columns + `
@@ -170,7 +173,6 @@ func (r *Repo) MarkPushBlocked(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// ClearPushBlocked — /start в боте: человек вернулся, очередь снова его берёт.
 func (r *Repo) ClearPushBlocked(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE users SET push_blocked_at = NULL WHERE id = $1`, id)

@@ -12,9 +12,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// Sender is the moderation chat's transport. Фото уходит файлом, а не ссылкой:
-// на стенде картинки недоступны из интернета, а Telegram ходит за URL сам.
-// Кнопка — пара (текст, callback_data).
 type Sender interface {
 	SendModerationPhoto(ctx context.Context, chatID int64, photoPath, caption string, buttons [][2]string) (int, error)
 }
@@ -31,16 +28,11 @@ type PointsMod interface {
 	PendingModeration(ctx context.Context) ([]entity.Point, error)
 }
 
-// Pushes — лог уведомлений (§7): вердикт человек узнаёт из бота, и пуш «загрузи
-// другое» — единственная дорога назад из реджекта фото (§5). nil молча ничего
-// не делает.
 type Pushes interface {
 	ProfileVerdict(ctx context.Context, userID uuid.UUID, typ entity.NotificationType)
 	PointVerdict(ctx context.Context, point entity.Point, ok bool)
 }
 
-// PhotoURLs resolves a stored key to a local file: в базе лежит ключ, адрес
-// собирает хранилище.
 type PhotoURLs interface {
 	Path(key string) (string, error)
 }
@@ -61,8 +53,6 @@ func New(bot Sender, chatID int64, users UsersMod, points PointsMod, photos Phot
 		photos: photos, dir: dir, pushes: pushes}
 }
 
-// UserPending shows a questionnaire to the moderator: фото и «о себе» — ровно
-// то, что он смотрит (§5).
 func (s *Service) UserPending(ctx context.Context, u entity.User) {
 	s.send(ctx, subjectUser, u.ID, u.PhotoKey, userCaption(u), [][2]string{
 		{"ок", callback(subjectUser, opOK, u.ID)},
@@ -78,8 +68,6 @@ func (s *Service) PointPending(ctx context.Context, p entity.Point) {
 	})
 }
 
-// SendQueue re-sends everything still waiting — догон после рестарта, когда
-// сообщения с кнопками потерялись или бот стоял (§3 дизайна).
 func (s *Service) SendQueue(ctx context.Context) error {
 	users, err := s.users.PendingModeration(ctx)
 	if err != nil {
@@ -99,9 +87,6 @@ func (s *Service) SendQueue(ctx context.Context) error {
 	return nil
 }
 
-// send is best-effort by design: очередь живёт в БД, а не в чате, поэтому
-// неотправленное сообщение — повод для warn и команды /queue, но не ошибка
-// наверх, которая отменила бы создание точки или отправку анкеты.
 func (s *Service) send(ctx context.Context, subject string, id uuid.UUID, photoKey, caption string, buttons [][2]string) {
 	log := logctx.From(ctx).With("subject", subject, "id", id)
 	if s.chatID == 0 {
@@ -146,9 +131,6 @@ func userCaption(u entity.User) string {
 	return fmt.Sprintf("%s, %d\n%s\nстатус: %s", u.Name, u.Profile.Age, u.Profile.About, statusLine(u))
 }
 
-// statusLine tells the moderator, что именно он смотрит: у одобренной анкеты в
-// очереди на перепроверку уходят только фото и «о себе», остальное меняется
-// молча (§5).
 func statusLine(u entity.User) string {
 	if u.Status != entity.StatusActive {
 		return "первичная анкета"
@@ -174,8 +156,6 @@ func stageLabel(stage *entity.PointStage) string {
 	return "живёт здесь"
 }
 
-// coverPhoto — кадр для модератора: обложка точки. Остальные фото он при
-// сомнении откроет в приложении, слать альбом в чат — шум.
 func coverPhoto(p entity.Point) string {
 	if len(p.PhotoKeys) == 0 {
 		return ""

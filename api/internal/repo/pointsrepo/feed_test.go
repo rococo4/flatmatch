@@ -13,10 +13,6 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// newFeedRepo adds to cleanTestUsers the tables only the read tests write:
-// matches, dear likes and blocks. The order matters on both ends — the links
-// have to go before the users they reference, and t.Cleanup runs LIFO, so the
-// cleanup registered here lands in front of the one cleanTestUsers registers.
 func newFeedRepo(t *testing.T) (*pgxpool.Pool, *Repo) {
 	t.Helper()
 	pool := pgtest.NewPool(t)
@@ -42,9 +38,6 @@ func cleanTestLinks(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
-// seedPerson is seedUser with the two things the read tests need from a
-// neighbour: a gender pair the §4 rule can act on, and a @username — the
-// contact a showcase card must NOT bring along.
 func seedPerson(t *testing.T, pool *pgxpool.Pool, n int64, gender, pref string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
@@ -79,8 +72,6 @@ func seedMatch(t *testing.T, pool *pgxpool.Pool, a, b uuid.UUID) {
 	}
 }
 
-// seedResponse writes the dear like straight in: likesrepo does not fill
-// point_id yet (Task 4), and «N откликов» counts exactly those rows.
 func seedResponse(t *testing.T, pool *pgxpool.Pool, from, to, pointID uuid.UUID) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
@@ -116,8 +107,6 @@ func enterPool(t *testing.T, repo *Repo, userID, pointID uuid.UUID) {
 	}
 }
 
-// agePoint и enteredAgo двигают время назад: и ранжирование, и порядок
-// участников читаются по секундам, которые в одном тесте иначе совпадут.
 func agePoint(t *testing.T, pool *pgxpool.Pool, id uuid.UUID, daysAgo int) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(),
@@ -163,8 +152,7 @@ func TestFeedCountsAndMembersArePersonal(t *testing.T) {
 	if len(feed) != 1 {
 		t.Fatalf("Feed() returned %d points, want 1", len(feed))
 	}
-	// Из пятерых виден один: чужой пол и блок прячут человека всюду (§4),
-	// смэтченный ушёл из discovery, а сам смотрящий себя не считает.
+
 	if feed[0].PoolCount != 1 {
 		t.Errorf("PoolCount = %d, want 1", feed[0].PoolCount)
 	}
@@ -182,8 +170,7 @@ func TestFeedCountsAndMembersArePersonal(t *testing.T) {
 	if len(members) != 1 || members[0].User.ID != mate {
 		t.Fatalf("PoolMembers() = %+v, want only the visible mate", members)
 	}
-	// Счётчик карточки и список пула — про одних и тех же людей: разойдись они,
-	// «в пуле N» врал бы про экран, который откроется следующим тапом.
+
 	if feed[0].PoolCount != len(members) {
 		t.Errorf("PoolCount = %d, but the pool lists %d people", feed[0].PoolCount, len(members))
 	}
@@ -191,8 +178,6 @@ func TestFeedCountsAndMembersArePersonal(t *testing.T) {
 		t.Errorf("pool member carries contacts: %+v", members[0].User)
 	}
 
-	// Тот, кто не видит смотрящего, не видит и его пула — счётчик персонален
-	// с обеих сторон.
 	hers, err := repo.Feed(t.Context(), otherGender, []string{testZone})
 	if err != nil {
 		t.Fatalf("Feed() for the other gender failed: %v", err)
@@ -220,8 +205,7 @@ func TestFeedResponsesCountPointLikes(t *testing.T) {
 	}
 	seedResponse(t, pool, responder, author, home.ID)
 	seedResponse(t, pool, hidden, author, home.ID)
-	// Дорогой лайк с контекстом квартиры с рынка — не отклик: там жест входа,
-	// а чужие дорогие лайки не видны никому, кроме адресата (§2.3).
+
 	seedResponse(t, pool, hidden, responder, flat.ID)
 
 	feed, err := repo.Feed(t.Context(), viewer, []string{testZone})
@@ -232,8 +216,7 @@ func TestFeedResponsesCountPointLikes(t *testing.T) {
 	for _, p := range feed {
 		byID[p.Point.ID] = p
 	}
-	// Соревновательный сигнал считает всех откликнувшихся: имена не светятся,
-	// поэтому фильтр видимости к агрегату не применяется (§2.2).
+
 	if got := byID[home.ID].Responses; got != 2 {
 		t.Errorf("Responses of the room = %d, want 2", got)
 	}
@@ -260,10 +243,6 @@ func TestFeedRanksFreshOverCrowded(t *testing.T) {
 		return p
 	}
 
-	// score = (пул + 1) / (возраст в днях + 2)^1.5 (§8): вчерашняя с пятерыми
-	// = 1.16, сегодняшняя пустая = 0.35, десятидневная с двумя = 0.07. Порядок
-	// не совпадает ни со свежестью (была бы empty первой), ни с размером пула
-	// (тогда crowded, aging, empty).
 	empty := newPoint("https://cian.ru/empty")
 	crowded := newPoint("https://cian.ru/crowded")
 	aging := newPoint("https://cian.ru/aging")
@@ -292,7 +271,7 @@ func TestFeedRanksFreshOverCrowded(t *testing.T) {
 		t.Errorf("Feed() order = %v, want crowded %s, empty %s, aging %s",
 			got, crowded.ID, empty.ID, aging.ID)
 	}
-	// Смотрящий не входил никуда: чужие входы его флага не поднимают.
+
 	for _, p := range feed {
 		if p.InPool {
 			t.Errorf("InPool = true for point %s the viewer never entered", p.Point.ID)
@@ -328,8 +307,7 @@ func TestFeedAuthorIsShowcaseOnly(t *testing.T) {
 	for _, p := range feed {
 		byID[p.Point.ID] = p
 	}
-	// Витрина «к себе» — единственная карточка с лицом (§2.2); квартира с
-	// рынка обезличена, и создателя в ней не видно даже когда он есть.
+
 	if byID[flat.ID].Author != nil {
 		t.Errorf("market flat carries an author: %+v", byID[flat.ID].Author)
 	}
@@ -346,13 +324,11 @@ func TestFeedAuthorIsShowcaseOnly(t *testing.T) {
 		got.PhotoStatus != entity.ModerationOK || got.Status != entity.StatusActive {
 		t.Errorf("author lost the showcase fields: %+v", got)
 	}
-	// Пин приватности: контактов в наборе колонок нет вовсе — им место в
-	// мэтче, а не на карточке (§2.3).
+
 	if got.Username != "" || got.TelegramID != 0 {
 		t.Errorf("author carries contacts: %+v", got)
 	}
-	// Автор — это и есть карточка: при несовпадении gender_pref человека нет
-	// нигде (§4), значит и его комнаты в ленте нет.
+
 	if _, shown := byID[hiddenHome.ID]; shown {
 		t.Error("feed shows the room of an author the viewer cannot see")
 	}
@@ -405,8 +381,7 @@ func TestMineSplitsCreatedAndEntered(t *testing.T) {
 		return out
 	}
 	createdByID, enteredByID := ids(created), ids(entered)
-	// «Присмотренные» показывают и то, что ещё на проверке: создателю точка
-	// видна сразу (§5). Закрытая — уже история, её в блоках нет.
+
 	if len(created) != 3 {
 		t.Errorf("Mine() created = %d points, want 3", len(created))
 	}
@@ -421,18 +396,15 @@ func TestMineSplitsCreatedAndEntered(t *testing.T) {
 	if !createdByID[own.ID].InPool {
 		t.Error("InPool = false for the creator's own pool")
 	}
-	// Квартира с рынка обезличена и с создателем: created_by — provenance,
-	// а не витрина (§2.2).
+
 	if a := createdByID[own.ID].Author; a != nil {
 		t.Errorf("user_link flat carries an author: %+v", a)
 	}
-	// Своя витрина едет с автором: visible_people исключает самого смотрящего,
-	// поэтому гейт видимости живёт в ленте, а не в join'е карточки.
+
 	if a := createdByID[home.ID].Author; a == nil || a.ID != viewer {
 		t.Errorf("own intent_home came without its author: %+v", a)
 	}
 
-	// Вошедший в собственный пул не должен встретить свою же квартиру дважды.
 	if len(entered) != 1 || entered[0].Point.ID != foreign.ID {
 		t.Fatalf("Mine() entered = %+v, want only the foreign flat", entered)
 	}
@@ -453,7 +425,7 @@ func TestPoolMembersCarryFreshestSearch(t *testing.T) {
 	seedSearch(t, pool, searching, "active", 5)
 	freshest := seedSearch(t, pool, searching, "active", 1)
 	seedSearch(t, pool, searching, "closed", 0)
-	// Вход в пул поиска не требует (§2.2), поэтому у участника его может не быть.
+
 	seedSearch(t, pool, silent, "closed", 0)
 
 	flat, err := repo.Create(t.Context(), flatPoint(nil, entity.SourceManual, "https://cian.ru/1", entity.PointActive))
@@ -473,7 +445,7 @@ func TestPoolMembersCarryFreshestSearch(t *testing.T) {
 	if len(members) != 2 {
 		t.Fatalf("PoolMembers() returned %d people, want 2", len(members))
 	}
-	// Свежие входы сверху: пул читается как лента прихода.
+
 	if members[0].User.ID != searching || members[1].User.ID != silent {
 		t.Fatalf("PoolMembers() order = %s, %s, want searching, silent",
 			members[0].User.ID, members[1].User.ID)
@@ -534,9 +506,6 @@ func TestCountActiveIn(t *testing.T) {
 	}
 }
 
-// Отклонённая модератором точка не пропадает из «Присмотренных» молча: она
-// остаётся с причиной 'rejected', пока создатель не скроет её сам — Close
-// переводит причину в 'closed', и карточка уходит.
 func TestMineKeepsRejectedUntilHidden(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

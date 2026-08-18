@@ -32,7 +32,6 @@ func pollTargets(t *testing.T, repo *Repo, olderThan time.Duration, matchID uuid
 	}
 	var out []PollTarget
 	for _, target := range all {
-		// Тесты соседних пакетов идут параллельно и в ту же таблицу.
 		if target.Match.ID == matchID {
 			out = append(out, target)
 		}
@@ -40,7 +39,6 @@ func pollTargets(t *testing.T, repo *Repo, olderThan time.Duration, matchID uuid
 	return out
 }
 
-// Опрос личный: спрашивают обе стороны, и ответ одной другую не освобождает.
 func TestMatchesForPostPollAsksBothSidesUntilTheyAnswer(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -53,7 +51,6 @@ func TestMatchesForPostPollAsksBothSidesUntilTheyAnswer(t *testing.T) {
 	matchID := matchPair(t, likes, me, peer, testZone)
 	window := time.Duration(entity.PostMatchDays) * 24 * time.Hour
 
-	// Свежий мэтч не спрашивают: пара только познакомилась.
 	if got := pollTargets(t, repo, window, matchID); len(got) != 0 {
 		t.Fatalf("a fresh match is already polled: %+v", got)
 	}
@@ -67,7 +64,7 @@ func TestMatchesForPostPollAsksBothSidesUntilTheyAnswer(t *testing.T) {
 		if target.Match.ContextZone != testZone {
 			t.Errorf("target %+v lost the match context", target)
 		}
-		// Имя в тексте — имя ВТОРОЙ стороны: «Как дела с Катей?».
+
 		wantPeer := "peer"
 		if target.UserID == peer {
 			wantPeer = "me"
@@ -109,7 +106,7 @@ func TestSavePollAnswerIsIdempotent(t *testing.T) {
 	if changed, err := repo.SavePollAnswer(t.Context(), matchID, me, entity.PollTalking); err != nil || !changed {
 		t.Fatalf("SavePollAnswer() = %v, %v, want true, nil", changed, err)
 	}
-	// Повторный тап приходит по старому сообщению — первый ответ главнее.
+
 	for _, answer := range []entity.PollAnswer{entity.PollTalking, entity.PollFailed} {
 		changed, err := repo.SavePollAnswer(t.Context(), matchID, me, answer)
 		if err != nil {
@@ -129,7 +126,6 @@ func TestSavePollAnswerIsIdempotent(t *testing.T) {
 		t.Errorf("stored answer = %q, want %q", stored, entity.PollTalking)
 	}
 
-	// Чужой мэтч отвечает «нет такого», как и везде (§2.3), и ничего не пишет.
 	for _, id := range []uuid.UUID{matchID, uuid.New()} {
 		if _, err := repo.SavePollAnswer(t.Context(), id, stranger, entity.PollMoving); !errors.Is(err, entity.ErrNotFound) {
 			t.Errorf("SavePollAnswer() by a stranger = %v, want ErrNotFound", err)

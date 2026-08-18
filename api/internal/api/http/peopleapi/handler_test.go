@@ -16,8 +16,6 @@ import (
 	"flatmatch/api/internal/tma"
 )
 
-// station is the zone of every test point: fakeDir knows this one id and no
-// other, so a label with «м. Сокол» proves the directory was asked.
 const station = "st-sokol"
 
 type fakePeople struct {
@@ -33,29 +31,18 @@ type fakePhotos struct{}
 
 type fakeDir struct{}
 
-// fakePoints holds one point and the membership of its pool: the two facts the
-// point half of «мы увиделись» is made of. Calls are counted for the same
-// reason Between's are — про невидимого человека нельзя спрашивать ничего.
 type fakePoints struct {
 	point entity.Point
 	pool  map[uuid.UUID]bool
 	calls *int
 }
 
-// fakeSearches answers the pool half of «мы увиделись»: met=true means the
-// pair's active searches intersect.
 type fakeSearches struct{ met bool }
 
-// The two halves of authmw, so the handler runs behind the real middleware and
-// finds a real viewer in the context.
 type fakeValidator struct{}
 
 type fakeAccounts struct{ user entity.User }
 
-// TestProfileChecksVisibilityBeforeLikes pins the order of §4 against §2.3:
-// Between has no visibility gate of its own, so it must not be asked anything
-// about a person the viewer cannot see — the mere fact that a like exists is
-// something only the addressee may learn.
 func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 	likes := &fakeLikes{}
 	pointCalls := 0
@@ -71,16 +58,12 @@ func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 		t.Errorf("Between was called %d time(s) for an invisible person — like existence leaks",
 			likes.betweenCalls)
 	}
-	// Точку в query спрашивать тоже не о чем: невидимый человек не существует
-	// нигде (§4), и контекст его профиля — тем более.
+
 	if pointCalls != 0 {
 		t.Errorf("Points was asked %d time(s) about an invisible person", pointCalls)
 	}
 }
 
-// TestProfileReadsLikesOfVisiblePerson is the other half of the pin: once the
-// gate lets the viewer through, the like state IS read — otherwise the test
-// above would pass on a handler that never asks at all.
 func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 	likes := &fakeLikes{}
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
@@ -97,9 +80,6 @@ func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 	}
 }
 
-// TestProfileHiddenWithoutMeeting pins the «мы увиделись» rule (§2.3): a
-// visible person whose searches share no pool with the viewer — and with no
-// likes between the two — answers the same 404 as one who does not exist.
 func TestProfileHiddenWithoutMeeting(t *testing.T) {
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
 	router := newRouter(New(&fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
@@ -112,9 +92,6 @@ func TestProfileHiddenWithoutMeeting(t *testing.T) {
 	}
 }
 
-// Точка — вторая половина «мы увиделись» (§2.3): пул квартиры сводит двоих
-// членством, карточка «к себе» — тем, что цель и есть её автор. Поисков ни у
-// кого нет: точечное отношение их не требует.
 func TestProfileOpensToThePointRelation(t *testing.T) {
 	viewer := uuid.New()
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
@@ -146,18 +123,17 @@ func TestProfileOpensToThePointRelation(t *testing.T) {
 			want:   http.StatusOK,
 			label:  "на комнату Кати · м. Сокол",
 		},
-		// Комната открывает профиль СВОЕГО автора: соседа по отклику она не
-		// сводит ни с кем — пула у «к себе» нет (§2.2).
+
 		"«к себе» чужого автора": {
 			points: fakePoints{point: strangersRoom},
 			want:   http.StatusNotFound,
 		},
-		// Посторонний называет ту же точку — но в её пуле его нет.
+
 		"не вошедший в пул": {
 			points: fakePoints{point: flat, pool: map[uuid.UUID]bool{target.ID: true}},
 			want:   http.StatusNotFound,
 		},
-		// Цель вышла из пула: смотреть больше не на что общее.
+
 		"вышедшая из пула цель": {
 			points: fakePoints{point: flat, pool: map[uuid.UUID]bool{viewer: true}},
 			want:   http.StatusNotFound,
@@ -190,8 +166,6 @@ func TestProfileOpensToThePointRelation(t *testing.T) {
 	}
 }
 
-// Чужая точка в query — не пропуск: отношение её не подтверждает, и профиль
-// отвечает тем же 404, что и невидимому.
 func TestProfileIgnoresAnUnrelatedPointParam(t *testing.T) {
 	viewer := uuid.New()
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}

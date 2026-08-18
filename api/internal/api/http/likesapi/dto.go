@@ -10,9 +10,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// zoneDTO is the outbound twin of searchesapi's: same fields, same
-// declensions. Copied rather than shared because a DTO belongs to the handler
-// that serves it.
 type zoneDTO struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -22,19 +19,16 @@ type zoneDTO struct {
 
 type likeRequest struct {
 	ToID string `json:"to_id"`
-	// ZoneID is the pool the like was placed from; empty is legal — a reply has
-	// no pool to name (§2.3).
+
 	ZoneID string `json:"zone_id"`
-	// PointID is the other context: пул квартиры или «Хочу эту комнату» с
-	// карточки «к себе». Взаимоисключим с зоной — лайк несёт один контекст, и
-	// два сразу сервис отбивает по имени полей.
+
 	PointID string `json:"point_id"`
 }
 
 type likeResponse struct {
 	Matched bool       `json:"matched"`
 	MatchID *uuid.UUID `json:"match_id,omitempty"`
-	// Already is the repeat tap: nothing was spent, nothing changed.
+
 	Already bool      `json:"already"`
 	Budget  budgetDTO `json:"budget"`
 }
@@ -44,18 +38,12 @@ type budgetDTO struct {
 	NextFreeAt *time.Time `json:"next_free_at,omitempty"`
 }
 
-// pointDTO is the mini-card of a point context: the label is ready to print,
-// the kind colours the card's header and tells «отклик на твою комнату» from a
-// shared pool (§2.2).
 type pointDTO struct {
 	ID    uuid.UUID `json:"id"`
 	Kind  string    `json:"kind"`
 	Label string    `json:"label"`
 }
 
-// incomingDTO is one card of «Тебя лайкнули» (§6): a name right away, the
-// context to tap into, and the grey «сейчас не в поиске» mark. No contacts —
-// they exist on the match screen and nowhere else (§3), which dto_test pins.
 type incomingDTO struct {
 	UserID   uuid.UUID `json:"user_id"`
 	Name     string    `json:"name"`
@@ -100,9 +88,6 @@ func toIncoming(like likesrepo.IncomingLike, photoURL string, zone *zoneDTO, poi
 	}
 }
 
-// pointLabel: адресат intent_home-контекста и есть автор комнаты — отклик
-// пришёл именно на неё (§2.2). Станция может не приехать, если зона ушла из
-// справочника, — строка тогда просто короче.
 func pointLabel(kind entity.PointType, station string) string {
 	label := "квартира"
 	if kind == entity.PointIntentHome {

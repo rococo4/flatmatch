@@ -13,8 +13,6 @@ import (
 	"flatmatch/api/internal/logctx"
 )
 
-// The three messages the front-end shows as they come: the limit, the missing
-// search (the mini-form of §2.3) and the unapproved questionnaire (§5).
 const (
 	likeLimitMessage   = "Лимит исчерпан"
 	nextFreeAtTemplate = " — следующий лайк освободится через "
@@ -26,7 +24,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, userID uui
 	var fields *entity.FieldsError
 	switch {
 	case errors.Is(err, entity.ErrNotFound):
-		// Invisible and non-existent are the same answer (§4).
+
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such person", err)
 	case errors.Is(err, entity.ErrNeedSearch):
 		httpx.BadRequest(w, r, httpx.CodeNeedSearch, needSearchMessage, nil, err)
@@ -41,14 +39,9 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, userID uui
 	}
 }
 
-// limitMessage says how long until the next slot. Relative, not a clock time:
-// «в 15:00» spent at 15:00 reads as right now when it means tomorrow. The 400
-// envelope has no field for it: the message is what the user reads.
 func (h *Handler) limitMessage(r *http.Request, userID uuid.UUID) string {
 	budget, err := h.likes.Budget(r.Context(), userID)
 	if err != nil {
-		// The refusal itself is correct and already decided, so a budget that
-		// cannot be read costs the countdown, not the answer.
 		logctx.From(r.Context()).Error("read like budget for the limit message", "error", err)
 		return likeLimitMessage
 	}

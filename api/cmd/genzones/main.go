@@ -1,27 +1,3 @@
-// Command genzones builds internal/service/zones/moscow.json — the finite,
-// versioned directory of Moscow districts, metro stations and metro lines (§8).
-//
-// It is a one-shot tool, not part of the service: the product reads the
-// committed JSON, and this exists so the file can be regenerated when a new
-// line opens. Only the standard library is used.
-//
-// Sources (both checked live on 2026-08-07):
-//
-//   - Stations and lines: https://api.hh.ru/metro/1 — `{lines: [{id, name,
-//     hex_color, stations: [{id, name, lat, lng, order, line}]}]}`, 21 lines /
-//     452 platforms, WGS84. Includes МЦК (name «МЦК») and МЦД-1…МЦД-4, plus a
-//     stale «Каховская» line absorbed into the БКЛ in 2023 (see skippedLines).
-//     Line names in the payload are the keys of linesByOfficialName; an
-//     unmapped one fails generation instead of silently dropping stations.
-//   - District boundaries: https://gis-lab.info/data/mos-adm/mo.geojson —
-//     FeatureCollection, CRS84, 146 features, geometry Polygon (141) or
-//     MultiPolygon (5). Properties: NAME («Хамовники»), NAME_AO / ABBREV_AO
-//     (okrug, e.g. «Троицкий»), TYPE_MO, OKATO, OKTMO. gis-lab answered, so the
-//     Overpass fallback was not needed.
-//
-// Usage:
-//
-//	cd api && go run ./cmd/genzones -out internal/service/zones/moscow.json
 package main
 
 import (
@@ -40,35 +16,23 @@ import (
 )
 
 const (
-	// boundaryBufferM: a station just outside a district line still serves it —
-	// «Парк культуры» is a Khamovniki station whichever side of the street the
-	// vestibule sits on.
 	boundaryBufferM = 400.0
-	// nearestStationsForMetroless: districts with no metro of their own get the
-	// closest few, so that no district is an empty zone the engine would reject.
+
 	nearestStationsForMetroless = 3
 
-	// Новая Москва is not a zone: its settlements are villages an hour out, and
-	// pooling flatmates there with Moscow ones would be noise (§1 — the market
-	// is Moscow). Their stations still reach users through their lines.
 	okrugTroitsky      = "Троицкий"
 	okrugNovomoskovsky = "Новомосковский"
 
 	metersPerDegreeLat = 110540.0
 	metersPerDegreeLng = 111320.0
 
-	// stationSplitM breaks up a same-named group whose platforms are not one
-	// place: «у метро Лианозово» must not span a 40-minute walk between the
-	// metro and the МЦД platform.
 	stationSplitM = 1500.0
 
-	// dirVersion: 2 — МЦД split-offs, Новомосковская merge, район Аэропорт.
 	dirVersion = 2
 
 	fetchTimeout = 60 * time.Second
 )
 
-// hhMetro is the slice of api.hh.ru/metro/1 this tool needs.
 type hhMetro struct {
 	Lines []hhLine `json:"lines"`
 }
@@ -100,36 +64,27 @@ type geoFeature struct {
 	} `json:"geometry"`
 }
 
-// point is lng, lat — GeoJSON order, kept as-is to avoid a swap per vertex.
 type point [2]float64
 
-// district is one boundary polygon set. Interior holes are dropped: for
-// deciding which station serves a district they are noise.
 type district struct {
 	Name    string
 	OkrugAO string
 	Rings   [][]point
-	// Bounding box of all rings, for a cheap reject before the ray cast.
+
 	MinLng, MinLat, MaxLng, MaxLat float64
 }
 
-// declension is one hand-written entry of declensions.json.
 type declension struct {
 	In  string `json:"in"`
 	Gen string `json:"gen"`
 }
 
-// outFile mirrors the zones package file format; it is written, then read back
-// through zones.New before the tool exits successfully.
 type outFile struct {
 	Version  int             `json:"version"`
 	Stations []zones.Station `json:"stations"`
 	Zones    []zones.Zone    `json:"zones"`
 }
 
-// translitTable is a deliberately dumb 1:1 map. Zone slugs land in
-// searches.zone_id and are therefore FOREVER — a clever scheme that changes its
-// mind on the next Go version would orphan every saved search.
 var translitTable = map[rune]string{
 	'а': "a", 'б': "b", 'в': "v", 'г': "g", 'д': "d", 'е': "e", 'ё': "e",
 	'ж': "zh", 'з': "z", 'и': "i", 'й': "i", 'к': "k", 'л': "l", 'м': "m",
@@ -183,8 +138,6 @@ func run(metroSrc, districtsSrc, declSrc, out string) error {
 		return err
 	}
 
-	// Bump on every meaningful data change: the version is the /zones ETag, and
-	// a stale one would 304 old data into caches for a day.
 	f := outFile{Version: dirVersion, Stations: stations}
 	f.Zones = append(f.Zones, lineZones...)
 	f.Zones = append(f.Zones, districtZones...)
@@ -198,8 +151,7 @@ func run(metroSrc, districtsSrc, declSrc, out string) error {
 	if err != nil {
 		return err
 	}
-	// Never ship a file the service would refuse to boot on: validate with the
-	// very code that will load it in production.
+
 	if _, err := zones.New(raw); err != nil {
 		return fmt.Errorf("generated file fails zones.New: %w", err)
 	}
@@ -211,9 +163,6 @@ func run(metroSrc, districtsSrc, declSrc, out string) error {
 	return nil
 }
 
-// buildLines turns source lines into line zones and the global station list.
-// МЦД stations outside the city are dropped here: the diameters run to Lobnya
-// and Ramenskoye, and a Moscow flatmate pool has no business there (§1).
 func buildLines(metro *hhMetro, moscow []district) ([]zones.Zone, []zones.Station, error) {
 	sorted := append([]hhLine(nil), metro.Lines...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
@@ -243,8 +192,6 @@ func buildLines(metro *hhMetro, moscow []district) ([]zones.Zone, []zones.Statio
 
 		var ids []string
 		for _, s := range l.Stations {
-			// The feed has shipped «Бутырская » with a trailing space; that
-			// would reach the user as «у метро Бутырская ».
 			s.Name = strings.TrimSpace(s.Name)
 			if canonical, ok := stationAliases[s.Name]; ok {
 				s.Name = canonical
@@ -307,10 +254,6 @@ func buildLines(metro *hhMetro, moscow []district) ([]zones.Zone, []zones.Statio
 	return lineZones, stations, nil
 }
 
-// checkCoordinateCollisions is the guard that would have caught hh shipping
-// «Покровское» at the coordinates of «Покровское-Стрешнево». Two platforms of
-// the SAME station legitimately share a point — two different stations never do,
-// and such a pair means the feed copied a row.
 func checkCoordinateCollisions(stations []zones.Station) error {
 	atPoint := map[string][]zones.Station{}
 	for _, s := range stations {
@@ -340,10 +283,6 @@ func checkCoordinateCollisions(stations []zones.Station) error {
 		"add the real position to stationOverrides:\n  %s", strings.Join(bad, "\n  "))
 }
 
-// buildDistricts assigns stations by geometry: inside the polygon, or within
-// boundaryBufferM of its border. Districts the metro missed get the nearest
-// few — an empty zone would be rejected by the engine and would be a dead end
-// in the UI besides.
 func buildDistricts(ds []district, stations []zones.Station, decls map[string]declension) ([]zones.Zone, error) {
 	var missing []string
 	for _, d := range ds {
@@ -359,7 +298,7 @@ func buildDistricts(ds []district, stations []zones.Station, decls map[string]de
 
 	var (
 		out       []zones.Zone
-		metroless [][2]string // district name, assigned stations
+		metroless [][2]string
 		slugs     = map[string]string{}
 	)
 	for _, d := range ds {
@@ -392,9 +331,6 @@ func buildDistricts(ds []district, stations []zones.Station, decls map[string]de
 	return out, nil
 }
 
-// buildStationZones groups same-named platforms — «Арбатская» on the blue line
-// and «Арбатская» on the light-blue one are one place to a person looking for a
-// flat, so they are one zone (§2.1).
 func buildStationZones(stations []zones.Station) ([]zones.Zone, error) {
 	groups := map[string][]zones.Station{}
 	var order []string
@@ -467,8 +403,6 @@ func maxSpreadM(g []zones.Station) float64 {
 	return spread
 }
 
-// splitByRail parts a group into metro platforms and МЦД ones — the only kind
-// of same-name pair that sits kilometres apart in practice.
 func splitByRail(g []zones.Station) (base, rail []zones.Station) {
 	for _, s := range g {
 		parts := strings.SplitN(s.ID, ":", 3)
@@ -481,8 +415,6 @@ func splitByRail(g []zones.Station) (base, rail []zones.Station) {
 	return base, rail
 }
 
-// finalize makes the file byte-stable across runs and removes the one thing the
-// engine tolerates but should never be shipped: a station listed twice in a zone.
 func finalize(f *outFile) error {
 	sort.Slice(f.Stations, func(i, j int) bool { return f.Stations[i].ID < f.Stations[j].ID })
 	sort.SliceStable(f.Zones, func(i, j int) bool {
@@ -557,16 +489,13 @@ func loadMetro(src string) (*hhMetro, error) {
 	if len(m.Lines) == 0 {
 		return nil, fmt.Errorf("metro source has no lines")
 	}
-	// Trim at the door: a stray space in a line name would silently miss the
-	// linesByOfficialName lookup and fail generation for the wrong reason.
+
 	for i := range m.Lines {
 		m.Lines[i].Name = strings.TrimSpace(m.Lines[i].Name)
 	}
 	return &m, nil
 }
 
-// loadDistricts returns every feature (the union of which is the city boundary,
-// used to keep МЦД honest) and, separately, the ones that become zones.
 func loadDistricts(src string) (all, zoneDistricts []district, err error) {
 	raw, err := read(src)
 	if err != nil {
@@ -618,7 +547,7 @@ func loadDeclensions(path string) (map[string]declension, error) {
 	out := make(map[string]declension, len(m))
 	for k, v := range m {
 		if strings.HasPrefix(k, "_") {
-			continue // comment key
+			continue
 		}
 		var d declension
 		if err := json.Unmarshal(v, &d); err != nil {
@@ -648,8 +577,6 @@ func read(src string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// outerRings keeps only the exterior ring of each polygon; holes are irrelevant
-// for "which district is this station in".
 func outerRings(kind string, coords json.RawMessage) ([][]point, error) {
 	switch kind {
 	case "Polygon":
@@ -692,10 +619,6 @@ func stationsForDistrict(d district, stations []zones.Station) []string {
 	return out
 }
 
-// nearestStations picks the n closest station *places* to the district centre,
-// not platforms: counting «Новогиреево» twice because the metro and the МЦД
-// stop there would spend a slot on nothing. Every platform of a chosen place is
-// taken, so the district intersects each line running through it.
 func nearestStations(d district, stations []zones.Station, n int) []string {
 	c := centroid(d.Rings)
 	idx := make([]int, len(stations))
@@ -747,8 +670,6 @@ func stationNames(ids []string, stations []zones.Station) []string {
 	return out
 }
 
-// displayName picks the spelling to show for a group of same-named platforms,
-// preferring the one that keeps ё («Тёплый Стан», not «Теплый Стан»).
 func displayName(g []zones.Station) string {
 	names := make([]string, 0, len(g))
 	for _, s := range g {
@@ -788,7 +709,6 @@ func insideRings(rings [][]point, p point) bool {
 	return false
 }
 
-// rayCast is the standard even-odd test: count crossings of a ray going east.
 func rayCast(ring []point, p point) bool {
 	inside := false
 	for i, j := 0, len(ring)-1; i < len(ring); j, i = i, i+1 {
@@ -816,8 +736,6 @@ func distanceToBoundaryM(rings [][]point, p point) float64 {
 	return best
 }
 
-// pointSegmentM measures in metres through a local equirectangular projection —
-// exact enough at Moscow's scale, and it keeps the tool dependency-free.
 func pointSegmentM(p, a, b point) float64 {
 	k := math.Cos(p[1] * math.Pi / 180)
 	px, py := 0.0, 0.0
@@ -838,8 +756,6 @@ func metersBetween(a, b point) float64 {
 	return math.Hypot((b[0]-a[0])*metersPerDegreeLng*k, (b[1]-a[1])*metersPerDegreeLat)
 }
 
-// centroid is the area centroid of the largest ring, so a district with a
-// detached sliver is measured from its actual body.
 func centroid(rings [][]point) point {
 	var (
 		best     []point
@@ -878,15 +794,13 @@ func ringArea(r []point) float64 {
 	return a / 2
 }
 
-// normalizeName folds the two spellings of the same place into one key: case
-// and ё, nothing else.
 func normalizeName(s string) string {
 	return strings.ReplaceAll(strings.ToLower(s), "ё", "е")
 }
 
 func translit(s string) string {
 	var b strings.Builder
-	prevDash := true // leading dashes are trimmed by never emitting one first
+	prevDash := true
 	for _, r := range strings.ToLower(s) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':

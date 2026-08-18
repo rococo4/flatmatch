@@ -21,8 +21,6 @@ var ErrNeedEnter = errors.New("the pool is visible to its members only")
 
 var ErrNotApproved = errors.New("profile is not approved yet")
 
-// FieldsError carries the names InvalidFields and MissingFields return, so a
-// caller can say which fields to fix without deriving the list a second time.
 type FieldsError struct {
 	Err    error
 	Fields []string

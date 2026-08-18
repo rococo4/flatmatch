@@ -43,9 +43,6 @@ func TestSniffAcceptsWhatBrowsersCanRender(t *testing.T) {
 }
 
 func TestSniffRejectsAnythingElse(t *testing.T) {
-	// A gif is an image and still refused: the set is what the product stores,
-	// not what happens to be a picture. Text is the ordinary case — a renamed
-	// document, or an upload that never was an image.
 	for name, body := range map[string][]byte{
 		"gif":   gif,
 		"text":  []byte("это не картинка"),
@@ -60,8 +57,6 @@ func TestSniffRejectsAnythingElse(t *testing.T) {
 }
 
 func TestSniffRewindsSoTheFileCanStillBeStored(t *testing.T) {
-	// Without the rewind the first 512 bytes would be missing from whatever is
-	// written to storage, and the stored photo would be corrupt.
 	body := append(jpeg, bytes.Repeat([]byte("x"), 600)...)
 	file := bytes.NewReader(body)
 

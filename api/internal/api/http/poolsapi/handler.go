@@ -1,9 +1,3 @@
-// Package poolsapi serves the two screens a zone pool has: the feed of a set
-// of filters (§6 — выдача с промо-блоком людей) and the pool itself, with its
-// three sections and verdict chips (§2.1).
-//
-// Neither route saves anything: looking at a feed is not a subscription (§3),
-// the search behind the promo block is created through searchesapi.
 package poolsapi
 
 import (
@@ -33,15 +27,10 @@ type Pools interface {
 	ZonePool(ctx context.Context, viewer entity.User, zoneID string) (pools.Pool, error)
 }
 
-// Searches tells the promo block how many slots are taken and whether this
-// zone is already one of them.
 type Searches interface {
 	List(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
 }
 
-// Points is the other half of the feed: квартиры с рынка и «к себе» в зоне
-// формы. Режет выдачу только зона — цена и комнатность не участвуют ни в
-// фильтре, ни в сортировке (§8: score ~ pool/(age+c)^k).
 type Points interface {
 	Feed(ctx context.Context, viewerID uuid.UUID, zoneID string) ([]pointsrepo.FeedPoint, error)
 }
@@ -67,9 +56,6 @@ func New(pools Pools, searches Searches, points Points, photos pointsapi.Photos,
 	return &Handler{pools: pools, searches: searches, points: points, photos: photos, dir: dir}
 }
 
-// Feed answers the third step of the search-first feed (§6): the filters come
-// in the query string and stay there — the search is saved only by the button
-// inside the promo block, which posts to searchesapi.
 func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 	user, ok := authmw.FromContext(r.Context())
 	if !ok {
@@ -77,9 +63,6 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Filters are validated before anything is counted: Compare against empty
-	// parameters calls the whole zone a full match, so a missing price_max
-	// would quietly inflate every counter instead of failing.
 	params, bad := parseParams(r.URL.Query())
 	zone, known := h.dir.Get(params.ZoneID)
 	if !known {
@@ -100,8 +83,6 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 	}
 	used, mySearchID := slots(mine, params.ZoneID)
 
-	// The counters belong to the zone the promo block names — the one asked
-	// for, not the one some saved search of the viewer happens to cover.
 	counts, err := h.pools.Counts(r.Context(), user.ID, params, nil)
 	if err != nil {
 		handleError(w, r, err)
@@ -128,8 +109,6 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ZonePool serves the pool screen. The whole viewer goes down, not just their
-// id: «N совпадений анкеты» is computed against their questionnaire.
 func (h *Handler) ZonePool(w http.ResponseWriter, r *http.Request) {
 	user, ok := authmw.FromContext(r.Context())
 	if !ok {
@@ -145,10 +124,6 @@ func (h *Handler) ZonePool(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, toPoolResponse(pool))
 }
 
-// parseParams reads the look-without-saving filters of the feed. Only zone_id
-// and price_max are required; the rest is «неважно» when absent (§2.1). The
-// returned names are the parameters that could not be read at all — semantic
-// checks are entity's job.
 func parseParams(q url.Values) (entity.SearchParams, []string) {
 	var bad []string
 
@@ -169,16 +144,11 @@ func parseParams(q url.Values) (entity.SearchParams, []string) {
 		}
 	}
 	if raw := q.Get("term"); raw != "" {
-		// Parsed, not validated: an unknown value becomes the sentinel, which
-		// entity.InvalidFields reports by name.
 		p.Term = pointer.To(entity.ParseTerm(raw))
 	}
 	return p, bad
 }
 
-// slots reads the two subscription facts the promo block needs: how many of
-// the three slots are taken, and whether this very zone is already one of them
-// — an intersecting zone is not, the button must still offer to subscribe.
 func slots(mine []entity.Search, zoneID string) (used int, mySearchID *uuid.UUID) {
 	for i, s := range mine {
 		if s.Status != entity.SearchActive {
@@ -197,8 +167,7 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, entity.ErrNotFound):
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such zone", err)
 	case errors.Is(err, entity.ErrNeedSearch):
-		// Пул без пересекающего поиска не показываем (§2.3 «мы увиделись»);
-		// тизер зоны живёт в промо-блоке ленты, он не гейтится.
+
 		httpx.BadRequest(w, r, httpx.CodeNeedSearch,
 			"Сохрани поиск в этой зоне — пул откроется", nil, err)
 	default:
@@ -206,8 +175,6 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// optInt reads an optional integer parameter, naming one that is present but
-// not a number.
 func optInt(q url.Values, name string, bad *[]string) *int {
 	raw := q.Get(name)
 	if raw == "" {
@@ -221,8 +188,6 @@ func optInt(q url.Values, name string, bad *[]string) *int {
 	return &v
 }
 
-// nonNil keeps a JSON array an array: the front-end iterates the avatar stack
-// without checking it for null first.
 func nonNil(s []string) []string {
 	if s == nil {
 		return []string{}

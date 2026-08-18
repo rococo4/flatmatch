@@ -15,7 +15,7 @@ import (
 	"flatmatch/api/internal/httpx"
 )
 
-const maxPhotoBytes = 5 << 20 // 5 MiB
+const maxPhotoBytes = 5 << 20
 
 type Accounts interface {
 	UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error)
@@ -24,8 +24,6 @@ type Accounts interface {
 	OwnPhotoURL(u entity.User) string
 }
 
-// Bot is the Mini App's host: share links have to lead back into the same bot
-// the app was opened from, and only Telegram knows its name.
 type Bot interface {
 	Username() string
 }

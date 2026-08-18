@@ -113,8 +113,6 @@ type memberRow struct {
 
 	EnteredAt time.Time `db:"entered_at"`
 
-	// The search side of the LEFT JOIN LATERAL; close_reason is not among the
-	// columns because the lateral only ever picks an active search.
 	SID         *uuid.UUID `db:"s_id"`
 	SZoneID     *string    `db:"s_zone_id"`
 	SPriceMin   *int       `db:"s_price_min"`
@@ -175,7 +173,7 @@ func (r personRow) toEntity() *entity.User {
 		Profile: entity.Profile{
 			Age:    pointer.Get(r.UAge),
 			Gender: entity.ParseGender(pointer.Get(r.UGender)),
-			// Занятость — подпись на витрине «к себе» (§6): «удалёнка», «офис».
+
 			Occupation: entity.ParseOccupation(pointer.Get(r.UOccupation)),
 			Schedule:   entity.ParseSchedule(pointer.Get(r.USchedule)),
 			Smoking:    entity.ParseSmoking(pointer.Get(r.USmoking)),
@@ -190,9 +188,7 @@ func (r personRow) toEntity() *entity.User {
 		PhotoKey:    pointer.Get(r.UPhotoKey),
 		PhotoStatus: entity.ParseModerationStatus(pointer.Get(r.UPhotoStatus)),
 		LastSeen:    pointer.Get(r.ULastSeen),
-		// Not read from the row: everyone who gets here has already passed
-		// visible_people, which only ever returns active people (§4). Stating
-		// that guarantee beats leaving a zero that would make User.Visible() lie.
+
 		Status: entity.StatusActive,
 	}
 }
@@ -208,7 +204,6 @@ func (r feedRow) toEntity() FeedPoint {
 }
 
 func (r memberRow) toEntity() Member {
-	// Never nil here: a member comes through an inner join on users.
 	user := r.personRow.toEntity()
 	return Member{User: *user, Search: r.toSearch(user.ID), EnteredAt: r.EnteredAt}
 }

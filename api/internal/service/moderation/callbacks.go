@@ -26,8 +26,6 @@ const (
 	opNo    = "no"
 )
 
-// Тап по кнопке из старого сообщения — обычное дело в чате, где очередь
-// пролистывают сверху вниз.
 const (
 	ackApproved      = "✓ Одобрено"
 	ackPhotoRejected = "✕ Фото отклонено"
@@ -36,13 +34,8 @@ const (
 	ackDone          = "уже обработано"
 )
 
-// rejectedReason marks a point closed by the moderator rather than by its
-// author. «Присмотренные» этой разницы пока не показывают — список отдаёт
-// только незакрытые, — но причина остаётся в базе для разбора (§5).
 const rejectedReason = "rejected"
 
-// HandleCallback applies one inline-button tap. Ack — это текст всплывающего
-// ответа Telegram; ошибка означает, что вердикт НЕ применён.
 func (s *Service) HandleCallback(ctx context.Context, data string) (string, error) {
 	parts := strings.Split(data, ":")
 	if len(parts) != 4 || parts[0] != callbackPrefix {
@@ -68,8 +61,7 @@ func (s *Service) userVerdict(ctx context.Context, op string, id uuid.UUID) (str
 	if err != nil {
 		return "", err
 	}
-	// Бан — исход разбора жалобы, а не инструмент модерации контента (§5):
-	// кнопка из очереди его не отменяет.
+
 	if u.Status == entity.StatusBanned {
 		return ackDone, nil
 	}
@@ -83,7 +75,7 @@ func (s *Service) userVerdict(ctx context.Context, op string, id uuid.UUID) (str
 		if !inQueue(u) {
 			return ackDone, nil
 		}
-		// После аппрува человек проявляется везде разом (§5).
+
 		_, err = s.users.SetModeration(ctx, id, pointer.To(entity.StatusActive),
 			pointer.To(entity.ModerationOK), pointer.To(entity.ModerationOK))
 		ack, notif = ackApproved, entity.NotifProfileOK
@@ -120,7 +112,7 @@ func (s *Service) pointVerdict(ctx context.Context, op string, id uuid.UUID) (st
 	case opOK:
 		status = entity.PointActive
 	case opNo:
-		// CHECK в схеме держит пару: закрытая точка всегда с причиной.
+
 		status, reason = entity.PointClosed, pointer.To(rejectedReason)
 	default:
 		return "", fmt.Errorf("moderation callback for point %s: unknown verdict %q", id, op)
@@ -152,11 +144,6 @@ func (s *Service) pushVerdict(ctx context.Context, id uuid.UUID, ok bool) {
 	s.pushes.PointVerdict(ctx, point, ok)
 }
 
-// inQueue repeats the predicate usersrepo.PendingModeration selects by: одобрять
-// можно ровно то, что очередь показала. Через «хоть одно поле pending» гейт
-// строить нельзя — после «фото не ок» анкета уходит в draft с pending-«о себе»,
-// и стухшая кнопка «ок» из соседнего сообщения воскресила бы отклонённое, хотя
-// дорога назад одна: «загрузи другое» (§5).
 func inQueue(u entity.User) bool {
 	switch u.Status {
 	case entity.StatusPending:
@@ -168,9 +155,6 @@ func inQueue(u entity.User) bool {
 	}
 }
 
-// backToDraft: реджект возвращает анкету в draft, потому что фото обязательно и
-// без него человека не показать; у одобренной статус не трогаем — правка не
-// должна выкидывать её из пулов (§5, две ветки реджекта).
 func backToDraft(u entity.User) *entity.Status {
 	if u.Status == entity.StatusActive {
 		return nil

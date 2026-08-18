@@ -1,13 +1,3 @@
-// Package photostore keeps profile photos.
-//
-// The implementation here writes to a directory on disk. It exists so the rest
-// of the product can be built before object storage is set up: the interface it
-// satisfies is declared by service/users, and the eventual S3 version replaces
-// it by changing one line in cmd/api/main.go.
-//
-// Nothing outside this package knows where a photo lives. The database holds a
-// key; turning that into an address is this package's job, which is what keeps
-// a local host name out of the rows.
 package photostore
 
 import (
@@ -83,9 +73,6 @@ func (d *Dir) URL(key string) string {
 
 func (d *Dir) Root() string { return d.root }
 
-// Path is the local file behind a key. Telegram cannot fetch a photo from a
-// стенд that is not on the public internet, so the moderation chat uploads the
-// bytes instead of sending a URL (§5).
 func (d *Dir) Path(key string) (string, error) {
 	clean := path.Clean("/" + key)
 	name := filepath.Join(d.root, filepath.FromSlash(clean))

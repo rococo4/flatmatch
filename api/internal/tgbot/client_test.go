@@ -15,7 +15,6 @@ import (
 	"testing"
 )
 
-// apiCall is one request the client made, in whichever encoding it used.
 type apiCall struct {
 	method   string
 	body     map[string]any
@@ -24,8 +23,6 @@ type apiCall struct {
 	filename string
 }
 
-// botAPI is a stand-in Telegram: it records calls and answers whatever the test
-// told it to.
 type botAPI struct {
 	t       *testing.T
 	server  *httptest.Server
@@ -43,7 +40,6 @@ func newBotAPI(t *testing.T) *botAPI {
 	return api
 }
 
-// client is a Client pointed at the fake instead of api.telegram.org.
 func (a *botAPI) client() *Client {
 	c := NewClient("secret-token")
 	c.base = a.server.URL
@@ -101,8 +97,6 @@ func (a *botAPI) count() int {
 }
 
 func TestSendPhotoFileUploadsTheFileItself(t *testing.T) {
-	// Telegram fetches URLs from the internet, where a local stand does not
-	// exist — so the bytes have to travel with the request (§5, дизайн §3).
 	api := newBotAPI(t)
 	api.replies["sendPhoto"] = `{"ok":true,"result":{"message_id":777}}`
 
@@ -145,7 +139,7 @@ func TestSendPhotoFileUploadsTheFileItself(t *testing.T) {
 	if len(markup.Rows) != 1 || len(markup.Rows[0]) != 2 {
 		t.Fatalf("keyboard = %+v, want one row of two", markup.Rows)
 	}
-	// Without callback_data a tap carries nothing and no verdict can be applied.
+
 	if got := markup.Rows[0][0].Data; got != "mod:u:ok:1" {
 		t.Errorf("callback_data = %q, want mod:u:ok:1", got)
 	}
@@ -177,7 +171,7 @@ func TestEditReplyMarkupClearsTheButtons(t *testing.T) {
 	if got := call.body["message_id"]; got != float64(777) {
 		t.Errorf("message_id = %v, want 777", got)
 	}
-	// An empty array clears the keyboard; null is rejected by Telegram.
+
 	markup, ok := call.body["reply_markup"].(map[string]any)
 	if !ok {
 		t.Fatalf("reply_markup = %v, want an object", call.body["reply_markup"])
@@ -207,8 +201,6 @@ func TestAnswerCallbackCarriesTheAck(t *testing.T) {
 }
 
 func TestGetUpdatesSubscribesToButtonTaps(t *testing.T) {
-	// Telegram sends only the update types listed here: without callback_query
-	// the moderation buttons would be dead.
 	api := newBotAPI(t)
 	api.replies["getUpdates"] = `{"ok":true,"result":[]}`
 

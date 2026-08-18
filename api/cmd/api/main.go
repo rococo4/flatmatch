@@ -48,23 +48,15 @@ import (
 	"flatmatch/api/migrations"
 )
 
-// shutdownGrace is how long in-flight requests get to finish after a signal.
 const shutdownGrace = 15 * time.Second
 
-// mediaPrefix is where uploaded photos are addressed, both in the URL the API
-// hands out and in the route that serves them.
 const mediaPrefix = "/media"
 
-// people собирает вопрос «существует ли актор для адресата» из двух кладовых:
-// правило видимости (§4) живёт в users, мэтчи — в matches, а фан-ауту пушей
-// нужен один собеседник.
 type people struct {
 	visibility *usersrepo.Repo
 	matches    *matchesrepo.Repo
 }
 
-// deps are the wired components the routes are built from — a struct rather
-// than a dozen positional parameters.
 type deps struct {
 	accounts *users.Service
 	searches *searches.Service
@@ -73,22 +65,15 @@ type deps struct {
 	matches  *matches.Service
 	points   *points.Service
 
-	// people, pairLikes and pairSearches are storage read directly: the profile
-	// screen only asks for facts — is this person visible to the viewer, what
-	// have the two already done to each other, do their searches intersect,
-	// how many slots are left — and there is no policy in between for a
-	// service to hold.
 	people       *usersrepo.Repo
 	pairLikes    *likesrepo.Repo
 	pairSearches *searchesrepo.Repo
-	// pairPoints is the point half of the same question: does a point put these
-	// two in one place (§2.3).
+
 	pairPoints *pointsrepo.Repo
 
 	photos *photostore.Dir
 	dir    *zones.Directory
-	// bot is asked for one thing only: its own @name, which the Mini App needs
-	// to build share links back into the same bot.
+
 	bot *tgbot.Bot
 }
 
@@ -102,8 +87,6 @@ func (p people) IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error) {
 
 func main() {
 	if err := run(); err != nil {
-		// The logger may not exist yet if configuration itself failed, so this
-		// last-resort report goes straight to stderr.
 		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 		os.Exit(1)
 	}
@@ -131,13 +114,11 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// The one line that changes the day photos move to object storage.
 	photos, err := photostore.NewDir(cfg.PhotoDir, mediaPrefix)
 	if err != nil {
 		return err
 	}
 
-	// A broken directory has to kill the process here, not a request at noon.
 	dir, err := zones.Load()
 	if err != nil {
 		return err
@@ -149,20 +130,20 @@ func run() error {
 	pointsRepo := pointsrepo.New(pool)
 	matchesRepo := matchesrepo.New(pool)
 
-	// Лог уведомлений (§7): доменные сервисы пишут в него события, воркер шлёт.
-	// Пуш не часть операции — ошибка записи остаётся внутри сервиса.
-	pushes := notifications.New(notificationsrepo.New(pool), searchesRepo, pointsRepo,
+	notificationsRepo := notificationsrepo.New(pool)
+	pushes := notifications.New(notificationsRepo, searchesRepo, pointsRepo,
 		people{visibility: usersRepo, matches: matchesRepo}, dir, log)
 
-	// The bot client is built before the services because moderation sends
-	// through it, and the polling bot in turn routes taps back into moderation.
 	botClient := tgbot.NewClient(cfg.BotToken)
 	moderator := moderation.New(tgbot.NewModerationSender(botClient),
 		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir, pushes)
 
-	// The bot is built even with polling off: /me hands its @name to the Mini
-	// App for share links, and without a poll that name is simply empty.
-	bot := tgbot.NewBot(botClient, cfg.AppURL, log, moderator, cfg.ModerationChatID)
+	pushWorker := notifications.NewWorker(notificationsRepo,
+		tgbot.NewPushSender(botClient, cfg.AppURL), usersRepo, searchesRepo,
+		matchesRepo, pointsRepo, dir, cfg.PushTick, log)
+	pushCallbacks := notifications.NewCallbacks(searchesRepo, matchesRepo, usersRepo)
+
+	bot := tgbot.NewBot(botClient, cfg.AppURL, log, moderator, cfg.ModerationChatID, pushCallbacks)
 
 	wired := deps{
 		accounts: users.New(usersRepo, photos, moderator),
@@ -170,8 +151,7 @@ func run() error {
 		pools:    pools.New(searchesRepo, dir, photos),
 		likes:    likes.New(likesRepo, dir, pushes),
 		matches:  matches.New(matchesRepo, searchesRepo, usersRepo, pointsRepo, dir),
-		// Модератор обязателен: точка создаётся в pending и без сообщения в чат
-		// осталась бы ждать вечно (§5).
+
 		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator, pushes),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
@@ -215,7 +195,12 @@ func run() error {
 		log.Warn("bot polling is disabled, /start will not answer")
 	}
 
-	// Wait for a signal or for a component to give up.
+	if cfg.PushWorkerEnabled {
+		go pushWorker.Run(ctx)
+	} else {
+		log.Warn("the push worker is disabled, notifications will only pile up in the log")
+	}
+
 	var runErr error
 	select {
 	case <-ctx.Done():
@@ -224,7 +209,7 @@ func run() error {
 		if runErr != nil {
 			log.Error("component stopped", "error", runErr)
 		}
-		stop() // tell the other components to wind down too
+		stop()
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
@@ -252,15 +237,10 @@ func router(
 
 	r.Get("/healthz", httpx.Health(pinger))
 
-	// Photos are served without authentication, the same way an object storage
-	// bucket will serve them later: the key is a random uuid, so the address is
-	// unguessable, and a face in a profile is meant to be seen.
 	r.Handle(mediaPrefix+"/*", http.StripPrefix(mediaPrefix+"/",
 		http.FileServer(http.Dir(d.photos.Root()))))
 
 	r.Route("/api/v1", func(r chi.Router) {
-		// Поиски трогает та же кладовая, что их и хранит: открытое приложение —
-		// молчаливый ответ на «ещё ищешь?» (§3).
 		r.Use(authmw.New(validator, d.accounts, d.pairSearches))
 		r.Mount("/", usersapi.New(d.accounts, d.bot).Routes())
 		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
@@ -269,8 +249,6 @@ func router(
 		r.Mount("/matches", matchesapi.New(d.matches, d.accounts, d.dir).Routes())
 		r.Mount("/points", pointsapi.New(d.points, d.photos, d.dir).Routes())
 
-		// chi allows only one Mount per pattern, so the routes that would need a
-		// second Mount("/", …) are registered directly.
 		poolsHandler := poolsapi.New(d.pools, d.searches, d.points, d.photos, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)

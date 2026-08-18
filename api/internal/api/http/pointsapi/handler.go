@@ -1,10 +1,3 @@
-// Package pointsapi serves the points of §2.2: квартира с рынка, под которую
-// собирают людей, и «сосед к себе» — витрина с лицом автора. Обе формы, обе
-// карточки, дешёвый вход в пул и сам пул.
-//
-// Гейты живут в сервисе и в транзакциях репозитория: pending-точка своему
-// создателю, пул — только вошедшим, лимиты — под локом. Ручка переводит их
-// сентинелы в коды §3 и решает, какой микрокопией ответить.
 package pointsapi
 
 import (
@@ -28,8 +21,6 @@ import (
 
 const maxBodyBytes = 64 << 10
 
-// maxPhotoBytes is the limit of the questionnaire's upload, and for the same
-// reason: пять мегабайт — это фотография с телефона, а не архив.
 const maxPhotoBytes = 5 << 20
 
 type Points interface {
@@ -44,9 +35,6 @@ type Points interface {
 	Pool(ctx context.Context, viewer entity.User, pointID uuid.UUID) (points.PoolView, error)
 }
 
-// Photos turns a stored key into an address. Фото точки отдельного статуса не
-// имеет — модератор одобряет точку целиком (§5), — поэтому ключ превращается в
-// адрес без проверок; лицо человека проходит правило §5 в personPhoto.
 type Photos interface {
 	URL(key string) string
 }
@@ -70,9 +58,9 @@ func New(points Points, photos Photos, dir ZoneDir) *Handler {
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.create)
-	// Фото уходит до самой точки: форма грузит его, пока точки ещё нет.
+
 	r.Post("/photo", h.uploadPhoto)
-	// «Мои» — раньше карточки: иначе /mine ушло бы в разбор uuid.
+
 	r.Get("/mine", h.mine)
 	r.Get("/{id}", h.card)
 	r.Post("/{id}/enter", h.enter)
@@ -82,8 +70,6 @@ func (h *Handler) Routes() chi.Router {
 	return r
 }
 
-// Cards serialises a list of points for whoever shows them — лента живёт в
-// poolsapi, но карточка в ней та же, что и здесь.
 func Cards(list []pointsrepo.FeedPoint, photos Photos, dir ZoneDir) []Card {
 	out := make([]Card, 0, len(list))
 	for _, fp := range list {
@@ -126,16 +112,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создатель квартиры входит в её пул той же транзакцией — «ты первый в
-	// пуле» (§6); у «к себе» пула нет вовсе (§2.2).
 	card := pointsrepo.FeedPoint{Point: created, InPool: created.Type == entity.PointFlat}
 	httpx.JSON(w, r, http.StatusCreated, h.toCard(card))
 }
 
-// uploadPhoto takes the picture before the point exists — скрин объявления или
-// фото комнаты — и отдаёт ключ, который форма приложит к точке. Анкеты автора
-// он не касается: у фото точки нет своего статуса модерации, её смотрят
-// целиком (§5).
 func (h *Handler) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	if _, ok := authmw.FromContext(r.Context()); !ok {
 		httpx.Internal(w, r, errNoUserInContext)
@@ -187,8 +167,6 @@ func (h *Handler) card(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, h.toCard(card))
 }
 
-// mine backs blocks 2–3 of «Моих поисков» (§6): «Присмотренные квартиры» —
-// созданные вместе с теми, в чьи пулы человек вошёл, — и «Зову к себе».
 func (h *Handler) mine(w http.ResponseWriter, r *http.Request) {
 	user, ok := authmw.FromContext(r.Context())
 	if !ok {
@@ -207,8 +185,6 @@ func (h *Handler) mine(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// enter is «Интересно — войти в пул» (§6): бесплатно, безлимитно и в один тап,
-// поэтому повторный тап — не ошибка.
 func (h *Handler) enter(w http.ResponseWriter, r *http.Request) {
 	h.membership(w, r, h.points.Enter)
 }
@@ -217,9 +193,6 @@ func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 	h.membership(w, r, h.points.Leave)
 }
 
-// close снимает точку с ленты рукой создателя: квартиру сдали, сосед нашёлся.
-// Чужая точка отвечает 404 — закрыть её не только нельзя, но и знать о ней
-// нечего (§5); уже закрытая проходит молча.
 func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 	h.membership(w, r, h.points.Close)
 }
@@ -271,9 +244,6 @@ func (h *Handler) toCard(fp pointsrepo.FeedPoint) Card {
 	return toCard(fp, h.photos, toZoneDTO(zone))
 }
 
-// searchZone names the zone a pool member is searching in — «ищет на красной
-// ветке». Поиска может не быть, и зона, которой справочник больше не знает,
-// строку не ломает: карточка просто едет без неё.
 func (h *Handler) searchZone(m points.MemberView) *zoneDTO {
 	if m.Search == nil {
 		return nil

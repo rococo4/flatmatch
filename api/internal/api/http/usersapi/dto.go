@@ -37,8 +37,6 @@ type ownProfile struct {
 	OnboardingStep int           `json:"onboarding_step"`
 	CreatedAt      time.Time     `json:"created_at"`
 
-	// BotUsername is where the share links point. Absent while getMe has not
-	// answered (and forever with polling off) — the client has a fallback.
 	BotUsername string `json:"bot_username,omitempty"`
 }
 

@@ -38,7 +38,7 @@ func TestIncomingHidesAnsweredAndInvisible(t *testing.T) {
 	if _, err := repo.Create(t.Context(), answered, me, zoneCtx(testZone)); err != nil {
 		t.Fatalf("Create() of the answered like failed: %v", err)
 	}
-	// Ответ закрыл мэтч — отвечать больше не на что, входящий уходит из списка.
+
 	if _, err := repo.Create(t.Context(), me, answered, LikeContext{}); err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
 	}
@@ -49,8 +49,7 @@ func TestIncomingHidesAnsweredAndInvisible(t *testing.T) {
 	if _, err := repo.Create(t.Context(), narrowed, me, narrowedCtx); err != nil {
 		t.Fatalf("Create() of the narrowed liker failed: %v", err)
 	}
-	// Лайк уже стоял, когда его автор сузил круг до своего пола: с этого момента
-	// друг для друга они не существуют нигде, входящие — не исключение (§4).
+
 	if _, err := pool.Exec(t.Context(),
 		`UPDATE users SET gender = 'female', gender_pref = 'same' WHERE id = $1`, narrowed); err != nil {
 		t.Fatalf("narrow the liker's preference: %v", err)
@@ -60,7 +59,7 @@ func TestIncomingHidesAnsweredAndInvisible(t *testing.T) {
 	if len(incoming) != 2 {
 		t.Fatalf("Incoming() returned %d likes, want 2: %+v", len(incoming), incoming)
 	}
-	// Свежие сверху.
+
 	if incoming[0].From.ID != waited[1] || incoming[1].From.ID != waited[0] {
 		t.Errorf("Incoming() order = %s, %s; want %s, %s",
 			incoming[0].From.ID, incoming[1].From.ID, waited[1], waited[0])
@@ -79,12 +78,11 @@ func TestIncomingHidesAnsweredAndInvisible(t *testing.T) {
 	if got.From.Name != "test" || got.From.Status != entity.StatusActive {
 		t.Errorf("liker card = %+v, want a named active person", got.From)
 	}
-	// Приватность: контакты живут только на экране мэтча (§2.3).
+
 	if got.From.Username != "" || got.From.TelegramID != 0 {
 		t.Errorf("Incoming() leaked contacts: username=%q tg_id=%d", got.From.Username, got.From.TelegramID)
 	}
 
-	// Мэтч виден обеим сторонам, но входящим не остаётся ни у кого.
 	if answeredIncoming := mustIncoming(t, repo, answered); len(answeredIncoming) != 0 {
 		t.Errorf("the answering side has %d incoming likes, want 0", len(answeredIncoming))
 	}
@@ -105,8 +103,6 @@ func TestIncomingNotSearchingFlag(t *testing.T) {
 		t.Fatalf("Incoming() = %+v, want one like without the mark", incoming)
 	}
 
-	// Лайк не сгорает ни от чего (§2.3) — закрытый поиск лишь добавляет
-	// адресату серую пометку «сейчас не в поиске».
 	if _, err := pool.Exec(t.Context(), `
 		UPDATE searches SET status = 'closed', close_reason = 'found_here'
 		WHERE user_id = $1`, liker); err != nil {
@@ -146,7 +142,7 @@ func TestBetweenReportsBothDirections(t *testing.T) {
 		t.Fatalf("Create() failed: %v", err)
 	}
 	assert("one-sided", first, second, true, false)
-	// Порядок аргументов задаёт, что есть «мой лайк», а что — «меня лайкнули».
+
 	assert("one-sided, mirrored", second, first, false, true)
 
 	if _, err := repo.Create(t.Context(), second, first, LikeContext{}); err != nil {

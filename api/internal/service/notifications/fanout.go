@@ -79,8 +79,6 @@ func (s *Service) PoolNew(ctx context.Context, pointID, enteredUserID uuid.UUID)
 	s.many(ctx, entity.NotifPoolNew, rows)
 }
 
-// announceSearches рассказывает пулам о человеке, которого только что одобрили:
-// по строке на каждый его активный поиск, как если бы он сохранил их сейчас.
 func (s *Service) announceSearches(ctx context.Context, userID uuid.UUID) {
 	searches, err := s.searches.ActiveByUser(detached(ctx), userID)
 	if err != nil {

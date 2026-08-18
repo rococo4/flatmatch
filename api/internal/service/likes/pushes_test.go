@@ -11,8 +11,6 @@ import (
 	"flatmatch/api/internal/service/notifications"
 )
 
-// Сервис уведомлений обязан оставаться тем, кого этот пакет просит: расхождение
-// должно ломать сборку здесь, а не в проводке.
 var _ Pushes = (*notifications.Service)(nil)
 
 type likedCall struct {
@@ -63,8 +61,6 @@ func TestSpentLikeTellsTheAddressee(t *testing.T) {
 	}
 }
 
-// Ответный лайк слота не тратит и адресату не новость — он сам его вызвал; ему
-// придёт «у тебя мэтч» (§7).
 func TestReplyPushesTheMatchOnly(t *testing.T) {
 	match := entity.Match{ID: uuid.New(), AID: uuid.New(), BID: uuid.New()}
 	pushes := &fakePushes{}
@@ -85,7 +81,6 @@ func TestReplyPushesTheMatchOnly(t *testing.T) {
 	}
 }
 
-// Повторный тап ничего не создал: строка лайка уже была, слот не тратился.
 func TestRepeatedTapStaysSilent(t *testing.T) {
 	pushes := &fakePushes{}
 	svc := New(&fakeRepo{result: &entity.LikeResult{

@@ -8,7 +8,7 @@ CREATE TABLE searches (
     price_max    int NOT NULL,
     rooms_min    int NULL,
     rooms_max    int NULL,
-    move_in      date NULL, -- first day of the move-in month
+    move_in      date NULL,
     term         text NULL CHECK (term IN ('half_year', 'year', 'open')),
     has_stuff    text[] NOT NULL DEFAULT '{}',
     status       text NOT NULL DEFAULT 'active'

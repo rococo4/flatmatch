@@ -1,7 +1,5 @@
 -- +goose Up
 
--- У точки много фото (решение от 2026-08-14): скрины объявления или несколько
--- ракурсов комнаты. Первое — обложка карточки и кадр для модерации.
 ALTER TABLE points ADD COLUMN photo_keys text[] NOT NULL DEFAULT '{}';
 
 UPDATE points SET photo_keys = ARRAY[photo_key] WHERE photo_key IS NOT NULL;

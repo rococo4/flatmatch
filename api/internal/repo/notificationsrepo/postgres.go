@@ -46,8 +46,6 @@ func (r *Repo) InsertMany(ctx context.Context, ns []entity.Notification) (int, e
 		failed = err
 	}
 	if failed != nil {
-		// Батч уходит одним Sync: упавший запрос отменяет и остальные, так что
-		// счётчик уцелевших строк был бы враньём.
 		return 0, fmt.Errorf("insert %d notifications: %w", len(ns), failed)
 	}
 	return inserted, nil
@@ -78,8 +76,6 @@ func (r *Repo) Pending(ctx context.Context, limit int) ([]entity.Notification, e
 }
 
 func (r *Repo) MarkSent(ctx context.Context, ids []uuid.UUID, at time.Time) error {
-	// sent_at IS NULL: второй проход не должен сдвигать окно агрегата, которое
-	// уже посчитано по этой отправке.
 	_, err := r.pool.Exec(ctx, `
 		UPDATE notifications SET sent_at = $2
 		WHERE id = ANY($1) AND sent_at IS NULL`, ids, at)

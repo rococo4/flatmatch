@@ -1,5 +1,3 @@
-// Package pgtest connects DB tests to TEST_DATABASE_URL. Skipping without the
-// variable keeps `go test ./...` runnable with nothing but a Go toolchain.
 package pgtest
 
 import (

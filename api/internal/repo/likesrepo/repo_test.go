@@ -15,16 +15,13 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// Test users live in their own negative tg_id range so leftovers never collide
-// with real accounts or with the other repos' tests.
 const testTGBase int64 = -996000000
 
 const testZone = "d-khamovniki"
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	// pgx uses the extended protocol: one statement per Exec, no semicolons.
-	// Order follows the foreign keys — matches and likes reference users.
+
 	clean := func() {
 		for _, q := range []string{
 			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -45,8 +42,6 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Cleanup(clean)
 }
 
-// seedUser inserts a user directly: the like gate is about status/gender
-// combinations that repo methods cannot produce on demand.
 func seedUser(t *testing.T, pool *pgxpool.Pool, n int64, status, gender, pref string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
@@ -60,9 +55,6 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, n int64, status, gender, pref st
 	return id
 }
 
-// seedSearch writes the search directly too: the like only asks whether ANY
-// active one exists (§2.3), and a closed one — which searchesrepo.Create cannot
-// produce in a single call — is the interesting negative case.
 func seedSearch(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, status string) {
 	t.Helper()
 	var reason *string
@@ -77,8 +69,6 @@ func seedSearch(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID, status strin
 	}
 }
 
-// zoneCtx is how a zone like arrives from the service: the context zone is
-// always among the zones a search may pay for it with.
 func zoneCtx(zoneID string) LikeContext {
 	return LikeContext{ZoneID: zoneID, ContextZones: []string{zoneID}}
 }
@@ -124,7 +114,7 @@ func TestLikeSpendsBudget(t *testing.T) {
 	if res.Budget.Remaining != entity.MaxDailyLikes-1 {
 		t.Errorf("remaining = %d, want %d", res.Budget.Remaining, entity.MaxDailyLikes-1)
 	}
-	// Слот вернётся ровно через окно после траты — это и есть «следующий через N ч».
+
 	want := res.Like.CreatedAt.Add(entity.LikeWindow)
 	if res.Budget.NextFreeAt == nil || !res.Budget.NextFreeAt.Equal(want) {
 		t.Errorf("next_free_at = %v, want %v", res.Budget.NextFreeAt, want)
@@ -137,7 +127,7 @@ func TestLikeSpendsBudget(t *testing.T) {
 	if budget.Remaining != entity.MaxDailyLikes-1 {
 		t.Errorf("Budget() remaining = %d, want %d", budget.Remaining, entity.MaxDailyLikes-1)
 	}
-	// Бюджет тратит только лайкающий: у адресата остаток полный и срок не назначен.
+
 	targetBudget, err := repo.Budget(t.Context(), target)
 	if err != nil {
 		t.Fatalf("Budget() of the target failed: %v", err)
@@ -162,7 +152,7 @@ func TestLikeRequiresActiveSearch(t *testing.T) {
 	if _, err := repo.Create(t.Context(), liker, target, zoneCtx(testZone)); !errors.Is(err, entity.ErrNeedSearch) {
 		t.Errorf("Create() without a search = %v, want ErrNeedSearch", err)
 	}
-	// Закрытый поиск — не skin in the game: он не открывает лайк.
+
 	seedSearch(t, pool, liker, "closed")
 	if _, err := repo.Create(t.Context(), liker, target, zoneCtx(testZone)); !errors.Is(err, entity.ErrNeedSearch) {
 		t.Errorf("Create() with a closed search = %v, want ErrNeedSearch", err)
@@ -182,14 +172,14 @@ func TestReplyIsFreeAndUnconditional(t *testing.T) {
 	cleanTestUsers(t, pool)
 	repo := New(pool)
 	first := seedUser(t, pool, 1, "active", "male", "any")
-	// У отвечающего нет ни поиска, ни потраченного слота — ответ не требует их (§2.3).
+
 	second := seedUser(t, pool, 2, "active", "male", "any")
 	seedSearch(t, pool, first, "active")
 
 	if _, err := repo.Create(t.Context(), first, second, zoneCtx(testZone)); err != nil {
 		t.Fatalf("first Create() failed: %v", err)
 	}
-	// Отвечают из «Тебя лайкнули», где зоны под рукой нет — контекст пустой.
+
 	res, err := repo.Create(t.Context(), second, first, LikeContext{})
 	if err != nil {
 		t.Fatalf("reply Create() failed: %v", err)
@@ -244,11 +234,11 @@ func TestMatchContextIsFirstLike(t *testing.T) {
 	if res.Match == nil {
 		t.Fatal("reply did not produce a match")
 	}
-	// «Пересеклись в пуле X» — X берётся у того, кто позвал, а не у ответившего.
+
 	if res.Match.ContextZone != testZone {
 		t.Errorf("match context = %q, want %q", res.Match.ContextZone, testZone)
 	}
-	// Свою зону ответный лайк при этом сохраняет — она его собственный контекст.
+
 	if res.Like.ZoneID != "line-1" {
 		t.Errorf("reply zone = %q, want %q", res.Like.ZoneID, "line-1")
 	}
@@ -266,7 +256,7 @@ func TestRepeatedLikeIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
-	// Второй тап приходит с другой зоной: перезапись контекста была бы видна здесь.
+
 	again, err := repo.Create(t.Context(), liker, target, zoneCtx("line-1"))
 	if err != nil {
 		t.Fatalf("repeated Create() failed: %v", err)
@@ -292,8 +282,6 @@ func TestRepeatedLikeIsIdempotent(t *testing.T) {
 	}
 }
 
-// Повтор — не трата, поэтому гейты траты его не касаются: иначе двойной тап по
-// пятому за сутки отвечал бы «лимит», хотя лайк давно стоит.
 func TestRepeatIdempotentDespiteExhaustedBudget(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -321,8 +309,6 @@ func TestRepeatIdempotentDespiteExhaustedBudget(t *testing.T) {
 	}
 }
 
-// Та же идемпотентность с другой стороны: поиск, который оплатил лайк, закрыт —
-// повтор всё равно ничего не меняет и не требует нового поиска.
 func TestRepeatIdempotentDespiteClosedSearch(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -353,8 +339,6 @@ func TestRepeatIdempotentDespiteClosedSearch(t *testing.T) {
 	}
 }
 
-// В draft и pending можно листать и сохранять поиски, но не ставить дорогие
-// лайки (§5): человек ещё не прошёл проверку.
 func TestLikeNeedsApprovedProfile(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -399,7 +383,6 @@ func TestLikeInvisiblePersonIs404(t *testing.T) {
 		name   string
 		target uuid.UUID
 	}{
-		// Пол обоюден: она никого, кроме женщин, не хочет — значит и её нет (§4).
 		{"gender mismatch", seedUser(t, pool, 3, "active", "female", "same")},
 		{"not approved yet", seedUser(t, pool, 4, "draft", "male", "any")},
 		{"banned", seedUser(t, pool, 5, "banned", "male", "any")},
@@ -414,8 +397,6 @@ func TestLikeInvisiblePersonIs404(t *testing.T) {
 		})
 	}
 
-	// Ни одного лайка и ни одного потраченного слота: невидимость — не отказ
-	// «попробуй ещё», а отсутствие человека.
 	if n := countRows(t, pool, `SELECT count(*) FROM likes_users WHERE from_id = $1`, liker); n != 0 {
 		t.Errorf("database holds %d likes, want 0", n)
 	}
@@ -452,7 +433,6 @@ func TestBudgetWindowSlides(t *testing.T) {
 		t.Fatalf("Create() over the limit = %v, want ErrLikeLimit", err)
 	}
 
-	// Пока все пять в окне, освободится первый из них.
 	budget, err := repo.Budget(t.Context(), liker)
 	if err != nil {
 		t.Fatalf("Budget() failed: %v", err)
@@ -462,7 +442,6 @@ func TestBudgetWindowSlides(t *testing.T) {
 		t.Errorf("next_free_at = %v, want %v", budget.NextFreeAt, oldest.Add(entity.LikeWindow))
 	}
 
-	// Состариваем самый первый лайк: он выпадает из окна, слот возвращается.
 	if _, err := pool.Exec(t.Context(), `
 		UPDATE likes_users SET created_at = now() - interval '25 hours'
 		WHERE from_id = $1 AND to_id = $2`, liker, targets[0]); err != nil {
@@ -476,8 +455,7 @@ func TestBudgetWindowSlides(t *testing.T) {
 	if budget.Remaining != 1 {
 		t.Errorf("remaining = %d, want 1", budget.Remaining)
 	}
-	// Срок теперь считается от второго по старшинству: выпавший лайк не должен
-	// тянуть next_free_at в прошлое.
+
 	second := likeCreatedAt(t, pool, liker, targets[1])
 	if budget.NextFreeAt == nil || !budget.NextFreeAt.Equal(second.Add(entity.LikeWindow)) {
 		t.Errorf("next_free_at = %v, want %v", budget.NextFreeAt, second.Add(entity.LikeWindow))
@@ -499,17 +477,12 @@ func TestLikeLimitUnderConcurrency(t *testing.T) {
 	liker := seedUser(t, pool, 1, "active", "male", "any")
 	seedSearch(t, pool, liker, "active")
 
-	// Семь лайков РАЗНЫМ людям: спорят они только за бюджет, не за строку лайка.
 	const attempts = entity.MaxDailyLikes + 2
 	targets := make([]uuid.UUID, attempts)
 	for i := range targets {
 		targets[i] = seedUser(t, pool, int64(10+i), "active", "male", "any")
 	}
 
-	// Прогрев пула: установка соединения — это TCP и аутентификация, миллисекунды.
-	// Без прогрева горутины расходятся по времени настолько, что первая успевает
-	// закоммититься до старта последней, и гонки, ради которой тест написан,
-	// попросту не происходит.
 	conns := make([]*pgxpool.Conn, attempts)
 	for i := range conns {
 		c, err := pool.Acquire(t.Context())
@@ -522,7 +495,6 @@ func TestLikeLimitUnderConcurrency(t *testing.T) {
 		c.Release()
 	}
 
-	// Барьер: горутины ждут на закрытии канала и стартуют разом.
 	errs := make([]error, attempts)
 	start := make(chan struct{})
 	var wg sync.WaitGroup
@@ -552,8 +524,6 @@ func TestLikeLimitUnderConcurrency(t *testing.T) {
 		t.Errorf("ok=%d limited=%d, want %d/%d", ok, limited, entity.MaxDailyLikes, attempts-entity.MaxDailyLikes)
 	}
 
-	// Главная проверка — состояние базы, а не счёт ошибок: протёкший лимит виден
-	// здесь, даже если вызовы отчитались как надо.
 	spent := countRows(t, pool, `SELECT count(*) FROM likes_users WHERE from_id = $1 AND spent`, liker)
 	if spent != entity.MaxDailyLikes {
 		t.Errorf("database holds %d spent likes, want %d", spent, entity.MaxDailyLikes)
@@ -569,14 +539,10 @@ func TestMutualRaceMakesOneMatch(t *testing.T) {
 	repo := New(pool)
 	first := seedUser(t, pool, 1, "active", "male", "any")
 	second := seedUser(t, pool, 2, "active", "male", "any")
-	// Поиски обоим: кто из них окажется первым, решает планировщик Postgres.
+
 	seedSearch(t, pool, first, "active")
 	seedSearch(t, pool, second, "active")
 
-	// Гейт: держим замок пары, пока ОБА лайка не встанут за ним в очередь. Без
-	// гейта «одновременно» зависело бы от планировщика горутин — успей первая
-	// транзакция закоммититься и дочитать мэтч раньше, чем вторая дойдёт до
-	// замка, и гонки, ради которой тест написан, не случилось бы.
 	gate, err := pool.Begin(t.Context())
 	if err != nil {
 		t.Fatalf("open the gate transaction: %v", err)
@@ -623,8 +589,7 @@ func TestMutualRaceMakesOneMatch(t *testing.T) {
 	if n := countRows(t, pool, `SELECT count(*) FROM matches WHERE a_id = $1 OR b_id = $1`, first); n != 1 {
 		t.Errorf("database holds %d matches, want 1", n)
 	}
-	// Один из двух лайков обязан оказаться ответным: пара сериализуется, и
-	// второй видит первый лайк уже закоммиченным.
+
 	spent := countRows(t, pool,
 		`SELECT count(*) FROM likes_users WHERE from_id IN ($1, $2) AND spent`, first, second)
 	if spent != 1 {
@@ -632,12 +597,6 @@ func TestMutualRaceMakesOneMatch(t *testing.T) {
 	}
 }
 
-// waitBlockedBy ждёт, пока n сессий встанут в очередь именно за pid: считать
-// «все заблокированные» нельзя — по той же базе параллельно идут тесты других
-// пакетов, и их ожидания досрочно открыли бы гейт.
-//
-// Очередь считается на два уровня: второй ждущий строки стоит за первым (он
-// держит tuple-замок), и pg_blocking_pids называет ему первого, а не гейт.
 func waitBlockedBy(t *testing.T, pool *pgxpool.Pool, pid, n int) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)

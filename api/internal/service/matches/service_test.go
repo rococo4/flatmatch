@@ -16,8 +16,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// The real repositories must keep satisfying the interfaces this package
-// declares: drift should break the build here, not at the Task 5 wiring.
 var (
 	_ Repository = (*matchesrepo.Repo)(nil)
 	_ Searches   = (*searchesrepo.Repo)(nil)
@@ -128,7 +126,6 @@ func newFixture(t *testing.T) *fixture {
 	return f
 }
 
-// atPoint переводит мэтч фикстуры на точечный контекст: зоны у такого мэтча нет.
 func (f *fixture) atPoint(p entity.Point) uuid.UUID {
 	p.ID = uuid.New()
 	f.points[p.ID] = p
@@ -146,8 +143,6 @@ func (f *fixture) detail(t *testing.T) (matchesrepo.MatchWithPeer, Summary) {
 	return match, summary
 }
 
-// A match is irreversible and stays in both lists (§2.3), but the contacts it
-// hands over are the one thing a ban or a block must take away (§5).
 func TestDetailHidesContactsOfUnreachablePeer(t *testing.T) {
 	cases := map[string]struct {
 		status   entity.Status

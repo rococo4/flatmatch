@@ -16,7 +16,7 @@ import (
 )
 
 type fakeRepo struct {
-	existing      *entity.Search // what ByID answers; nil → ErrNotFound
+	existing      *entity.Search
 	created       *entity.SearchParams
 	updated       *entity.SearchParams
 	createErr     error
@@ -27,8 +27,6 @@ type fakeRepo struct {
 	reactivateCalls int
 }
 
-// The real repository must keep satisfying the interface this package declares:
-// drift should break the build here, not at the Task 9 handler wiring.
 var _ Repository = (*searchesrepo.Repo)(nil)
 
 func (f *fakeRepo) Create(_ context.Context, _ uuid.UUID, p entity.SearchParams) (entity.Search, error) {
@@ -112,8 +110,6 @@ func TestCreateRejectsBadParams(t *testing.T) {
 	}
 }
 
-// An empty zone is already entity's complaint; the directory lookup must not
-// pile a second "zone_id" onto the same list.
 func TestCreateEmptyZoneReportsOnce(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, testDir(t), nil)
@@ -186,8 +182,6 @@ func TestUpdateValidatesLikeCreate(t *testing.T) {
 	}
 }
 
-// The zone is the search's identity (§3): re-zoning is a new search, not an
-// edit. Everything else stays freely editable.
 func TestUpdateRejectsZoneChange(t *testing.T) {
 	repo := &fakeRepo{existing: &entity.Search{
 		SearchParams: entity.SearchParams{ZoneID: "d-khamovniki", PriceMax: 45000},
@@ -241,8 +235,6 @@ func TestUpdateNormalisesAndPassesThrough(t *testing.T) {
 	}
 }
 
-// Every class of bad reason must be named as a field here, not surface as a raw
-// CHECK violation from Postgres (§3: закрытие — только с причиной).
 func TestCloseRejectsBadReasons(t *testing.T) {
 	bad := map[string]entity.CloseReason{
 		"empty":    "",

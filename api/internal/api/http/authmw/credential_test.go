@@ -14,7 +14,7 @@ func TestInitDataFromHeader(t *testing.T) {
 		wantOK bool
 	}{
 		{"our scheme", "tma auth_date=1&hash=ab", "auth_date=1&hash=ab", true},
-		// RFC 9110 makes the scheme case-insensitive, and clients do vary.
+
 		{"scheme upper case", "TMA auth_date=1", "auth_date=1", true},
 		{"scheme mixed case", "TmA auth_date=1", "auth_date=1", true},
 		{"padded value", "tma   auth_date=1  ", "auth_date=1", true},
@@ -23,8 +23,7 @@ func TestInitDataFromHeader(t *testing.T) {
 		{"another scheme", "Bearer eyJhbGciOi", "", false},
 		{"scheme without a value", "tma", "", false},
 		{"scheme with a blank value", "tma   ", "", false},
-		// A bare credential is not something to salvage — accepting it would
-		// mean the scheme is decoration rather than part of the contract.
+
 		{"value without a scheme", "auth_date=1&hash=ab", "", false},
 	}
 

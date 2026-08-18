@@ -199,9 +199,6 @@ func (r *Repo) StaleForTTL(ctx context.Context, quiet, afterMatch time.Duration)
 	return out, nil
 }
 
-// ClearTTLAsked — ответ «Да, ищу»: свежесть проставляется в обход часового
-// гейта Touch, иначе поиск того, кто заходил в приложение меньше часа назад,
-// остался бы с активностью старше вопроса и попал под PauseUnanswered.
 func (r *Repo) ClearTTLAsked(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE searches SET last_active_at = now(), ttl_asked_at = NULL
@@ -264,30 +261,12 @@ func (r *Repo) oneEditable(ctx context.Context, userID, id uuid.UUID, query stri
 	case status == string(entity.SearchClosed):
 		return entity.Search{}, entity.ErrSearchClosed
 	default:
-		// Someone edited the row between the two statements; nothing to report
-		// beyond «the update you asked for did not happen».
+
 		return entity.Search{}, entity.ErrNotFound
 	}
 }
 
-// lockAndCheckSlots serialises slot accounting: concurrent creations queue on
-// the user row, so two of them cannot both see the same free slot and take it.
-// The lock has to sit on users rather than on the user's searches — locking
-// the searches would lock nothing at all for a user who has none yet, which is
-// exactly the case where a fourth search slips through.
-//
-// It also rests on READ COMMITTED, the default level these transactions run at,
-// and on the count being a SEPARATE statement from the lock. Under READ
-// COMMITTED every statement takes its own snapshot, so the count issued AFTER
-// the lock wait ends sees the rows the transaction that held the lock has just
-// committed. Merge the two into one statement, or raise the level to
-// REPEATABLE READ, and the count would read the snapshot taken before the wait
-// — the concurrent search would be invisible, both transactions would see the
-// same free slot, and the ≤3 limit (§2.1) would break silently, without an
-// error anywhere.
 func lockAndCheckSlots(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
-	// FOR NO KEY UPDATE, not FOR UPDATE: it excludes other slot checks but
-	// still lets unrelated rows reference this user by foreign key meanwhile.
 	var locked uuid.UUID
 	if err := tx.QueryRow(ctx,
 		`SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE`, userID).Scan(&locked); err != nil {

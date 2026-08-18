@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// goldenIDs is the frozen zone id list. Zone ids end up in searches.zone_id, so
-// a regeneration that renames a slug orphans every saved search pointing at it —
-// and hh has already renamed a station once (Коммунарка → Новомосковская).
-// Nothing else in the suite would notice, hence this file.
 const goldenIDs = "testdata/moscow_ids.txt"
 
 func TestMoscowLoads(t *testing.T) {
@@ -22,8 +18,7 @@ func TestMoscowLoads(t *testing.T) {
 	for _, z := range d.All() {
 		byKind[z.Kind]++
 	}
-	// Orders of magnitude of the real Moscow, not exact numbers: the file gets
-	// regenerated when a line opens, and the test must not break on that.
+
 	if byKind[KindLine] < 12 {
 		t.Errorf("only %d lines", byKind[KindLine])
 	}
@@ -34,8 +29,6 @@ func TestMoscowLoads(t *testing.T) {
 		t.Errorf("only %d station zones", byKind[KindStation])
 	}
 
-	// Counts alone are blind to a whole family going missing: drop all four
-	// diameters and 16 lines still clear the threshold above.
 	for _, id := range []string{
 		"line-1", "line-11", "line-mck",
 		"line-d1", "line-d2", "line-d3", "line-d4",
@@ -51,9 +44,6 @@ func TestMoscowLoads(t *testing.T) {
 	}
 }
 
-// TestMoscowZoneIDsAreFrozen diffs the directory against the golden id list.
-// Run with UPDATE_ZONE_IDS=1 to rewrite that list — deliberately, after reading
-// what changed.
 func TestMoscowZoneIDsAreFrozen(t *testing.T) {
 	d, err := Load()
 	if err != nil {
@@ -124,9 +114,6 @@ func TestMoscowSpotChecks(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Exact strings, not just the preposition: a prefix check cannot tell
-	// «в Строгине» from «в Строгино», and the declined literary form is the
-	// whole point of hand-writing declensions.json.
 	for id, want := range map[string][2]string{
 		"d-khamovniki":            {"в Хамовниках", "Хамовников"},
 		"d-strogino":              {"в Строгине", "Строгина"},
@@ -146,8 +133,7 @@ func TestMoscowSpotChecks(t *testing.T) {
 			t.Errorf("%s: name_in %q name_gen %q, want %q / %q", id, z.NameIn, z.NameGen, want[0], want[1])
 		}
 	}
-	// The red line runs through Khamovniki — the plain geographic fact the
-	// whole intersection model rests on.
+
 	if !slices.Contains(d.Intersecting("d-khamovniki"), "line-1") {
 		t.Error("line-1 must intersect d-khamovniki")
 	}
@@ -155,8 +141,7 @@ func TestMoscowSpotChecks(t *testing.T) {
 	for _, z := range d.All() {
 		switch z.Kind {
 		case KindStation:
-			// Split-off МЦД platforms are «у станции … (МЦД)»; -mcd and the
-			// wording imply each other.
+
 			if strings.HasSuffix(z.ID, "-mcd") != strings.HasPrefix(z.NameIn, "у станции ") ||
 				(!strings.HasPrefix(z.NameIn, "у метро ") && !strings.HasPrefix(z.NameIn, "у станции ")) {
 				t.Errorf("station zone %s: name_in %q", z.ID, z.NameIn)
@@ -170,9 +155,6 @@ func TestMoscowSpotChecks(t *testing.T) {
 	}
 }
 
-// TestMoscowInvariants guards what zone ids mean rather than what they contain:
-// the slugs are frozen into searches.zone_id forever, so a regeneration that
-// renamed or duplicated one would orphan saved searches.
 func TestMoscowInvariants(t *testing.T) {
 	d, err := Load()
 	if err != nil {
@@ -180,10 +162,7 @@ func TestMoscowInvariants(t *testing.T) {
 	}
 
 	seenID := map[string]bool{}
-	// All three names are checked, not just Name: the picker reads Name, but
-	// every pool headline and «пул {зоны}» is built from the declensions, so
-	// two zones sharing NameIn are indistinguishable exactly where it matters.
-	// line-8 and line-8a were that case — both «на жёлтой ветке».
+
 	seen := map[string]map[Kind]map[string]bool{
 		"name": {}, "name_in": {}, "name_gen": {},
 	}
@@ -212,8 +191,7 @@ func TestMoscowInvariants(t *testing.T) {
 		if z.NameIn == "" || z.NameGen == "" {
 			t.Errorf("zone %s: empty declension", z.ID)
 		}
-		// The engine tolerates a repeated station; the data file must not have
-		// one, or «N станций» in the UI would lie.
+
 		inZone := map[string]bool{}
 		for _, st := range z.Stations {
 			if inZone[st] {
@@ -237,8 +215,6 @@ func TestMoscowInvariants(t *testing.T) {
 	}
 }
 
-// TestMoscowGeography pins a handful of facts a broken generator would get
-// wrong silently: a bad point-in-polygon still produces a valid file.
 func TestMoscowGeography(t *testing.T) {
 	d, err := Load()
 	if err != nil {
@@ -265,9 +241,7 @@ func TestMoscowGeography(t *testing.T) {
 			t.Errorf("d-khamovniki must contain %s", st)
 		}
 	}
-	// Сокол is a Замоскворецкая station standing in the district of the same
-	// name — the case that proves station zones and district zones are built
-	// from the same station ids.
+
 	if !contains("line-2", "st:2:sokol") {
 		t.Error("line-2 must contain st:2:sokol")
 	}
@@ -277,19 +251,17 @@ func TestMoscowGeography(t *testing.T) {
 	if !contains("d-sokol", "st:2:sokol") {
 		t.Error("d-sokol must contain st:2:sokol")
 	}
-	// The БКЛ is the biggest line in the network; a truncated source would show
-	// up here first.
+
 	if n := len(stationNames("line-11")); n < 25 {
 		t.Errorf("line-11 (БКЛ) has only %d stations", n)
 	}
-	// Central districts must never end up station-less through a polygon bug.
+
 	for _, id := range []string{"d-arbat", "d-yakimanka", "d-tverskoi", "d-basmannyi"} {
 		if n := len(stationNames(id)); n == 0 {
 			t.Errorf("%s has no stations", id)
 		}
 	}
-	// Бутово is served by its own light metro and by nothing else — the check
-	// that outlying districts are not quietly attached to the centre.
+
 	if !slices.Contains(d.Intersecting("d-yuzhnoe-butovo"), "line-12") {
 		t.Error("line-12 must intersect d-yuzhnoe-butovo")
 	}

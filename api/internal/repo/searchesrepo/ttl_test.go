@@ -18,7 +18,6 @@ var (
 	ttlAnswer     = time.Duration(entity.TTLAnswerDays) * 24 * time.Hour
 )
 
-// backdate стареет поиск: TTL считается от отметок, а не от нашего терпения.
 func backdate(t *testing.T, pool *pgxpool.Pool, id uuid.UUID, column string, ago time.Duration) {
 	t.Helper()
 	_, err := pool.Exec(t.Context(),
@@ -59,7 +58,6 @@ func staleIDs(t *testing.T, repo *Repo, owners ...uuid.UUID) []uuid.UUID {
 	}
 	var out []uuid.UUID
 	for _, s := range stale {
-		// Тесты соседних пакетов идут параллельно и в ту же таблицу.
 		if slices.Contains(owners, s.UserID) {
 			out = append(out, s.ID)
 		}
@@ -67,8 +65,6 @@ func staleIDs(t *testing.T, repo *Repo, owners ...uuid.UUID) []uuid.UUID {
 	return out
 }
 
-// Touch зовётся на каждом авторизованном запросе, поэтому пишет он не чаще раза
-// в час: условие живёт в SQL, а не в памяти процесса (§1 спеки).
 func TestTouchMovesFreshnessAtMostHourly(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -93,8 +89,6 @@ func TestTouchMovesFreshnessAtMostHourly(t *testing.T) {
 		t.Errorf("Touch() rewrote a fresh mark: %v -> %v", fresh, got)
 	}
 
-	// Полчаса — всё ещё внутри гейта: запись на каждый запрос стоила бы дороже,
-	// чем даёт точность отметки.
 	backdate(t, pool, mine.ID, "last_active_at", 30*time.Minute)
 	halfHourAgo := lastActiveAt(t, pool, mine.ID)
 	if err := repo.Touch(t.Context(), me); err != nil {
@@ -112,7 +106,6 @@ func TestTouchMovesFreshnessAtMostHourly(t *testing.T) {
 		t.Errorf("last_active_at = %v, want now", got)
 	}
 
-	// Чужие подписки заход в приложение не освежает.
 	backdate(t, pool, theirs.ID, "last_active_at", 90*time.Minute)
 	if err := repo.Touch(t.Context(), me); err != nil {
 		t.Fatalf("Touch() failed: %v", err)
@@ -121,7 +114,6 @@ func TestTouchMovesFreshnessAtMostHourly(t *testing.T) {
 		t.Errorf("another user's search was touched: %v", got)
 	}
 
-	// Закрытый поиск свежести не имеет: он не в пулах и пушей по нему нет.
 	closed, err := repo.Close(t.Context(), me, mine.ID, entity.CloseChangedMind)
 	if err != nil {
 		t.Fatalf("Close() failed: %v", err)
@@ -135,8 +127,6 @@ func TestTouchMovesFreshnessAtMostHourly(t *testing.T) {
 	}
 }
 
-// «Ещё ищешь?» — три ветки: молчание, повторный вопрос после своего окна и
-// дедлайн после мэтча (§3).
 func TestStaleForTTLBranches(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -161,15 +151,11 @@ func TestStaleForTTLBranches(t *testing.T) {
 	}
 	owners := []uuid.UUID{fresh, quiet, asked, longAsked, matched, justMatched, visited}
 
-	// Свежий поиск спрашивать не о чем.
 	create(fresh)
 
-	// Ветка 1: молчит дольше окна, вопрос не задавали.
 	quietSearch := create(quiet)
 	backdate(t, pool, quietSearch.ID, "last_active_at", ttlQuiet+time.Hour)
 
-	// Ветка 2: спросили — ждём ответа, второй раз не дёргаем; а когда протухнет
-	// и вопрос, спросим снова.
 	askedSearch := create(asked)
 	backdate(t, pool, askedSearch.ID, "last_active_at", ttlQuiet+time.Hour)
 	backdate(t, pool, askedSearch.ID, "ttl_asked_at", time.Hour)
@@ -177,17 +163,14 @@ func TestStaleForTTLBranches(t *testing.T) {
 	backdate(t, pool, longAskedSearch.ID, "last_active_at", 2*ttlQuiet)
 	backdate(t, pool, longAskedSearch.ID, "ttl_asked_at", ttlQuiet+time.Hour)
 
-	// Ветка 3: после мэтча дедлайн короче — мэтч старше afterMatch и случился
-	// позже последней активности.
 	matchedSearch := create(matched)
 	backdate(t, pool, matchedSearch.ID, "last_active_at", ttlAfterMatch+2*time.Hour)
 	seedMatch(t, pool, matched, peer, ttlAfterMatch+time.Hour)
-	// Свежий мэтч ещё не повод: пара только начала переписываться.
+
 	justMatchedSearch := create(justMatched)
 	backdate(t, pool, justMatchedSearch.ID, "last_active_at", ttlAfterMatch)
 	seedMatch(t, pool, justMatched, peer, time.Hour)
-	// А старый мэтч, после которого человек заходил, вопроса не стоит: на него
-	// уже ответили ногами.
+
 	visitedSearch := create(visited)
 	backdate(t, pool, visitedSearch.ID, "last_active_at", 24*time.Hour)
 	seedMatch(t, pool, visited, peer, ttlAfterMatch+2*24*time.Hour)
@@ -203,8 +186,6 @@ func TestStaleForTTLBranches(t *testing.T) {
 		}
 	}
 
-	// Ответ «Да, ищу» — это свежая активность: поиск уходит из выборки, а метка
-	// вопроса возвращает его туда, только протухнув.
 	if err := repo.MarkTTLAsked(t.Context(), quietSearch.ID); err != nil {
 		t.Fatalf("MarkTTLAsked() failed: %v", err)
 	}
@@ -212,7 +193,6 @@ func TestStaleForTTLBranches(t *testing.T) {
 		t.Errorf("a just-asked search is still stale: %v", got)
 	}
 
-	// Пауза и закрытие выводят поиск из TTL: спрашивать больше не о чем.
 	paused, err := repo.Close(t.Context(), matched, matchedSearch.ID, entity.CloseFoundHere)
 	if err != nil {
 		t.Fatalf("Close() failed: %v", err)
@@ -241,19 +221,17 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 		return s
 	}
 
-	// Спросили и не дождались.
 	silentSearch := create(silent)
 	backdate(t, pool, silentSearch.ID, "last_active_at", 2*ttlAnswer)
 	backdate(t, pool, silentSearch.ID, "ttl_asked_at", ttlAnswer+time.Hour)
-	// Ответили — активность свежее вопроса.
+
 	answeredSearch := create(answered)
 	backdate(t, pool, answeredSearch.ID, "ttl_asked_at", ttlAnswer+time.Hour)
-	// Спросили только что — дедлайн ещё не вышел.
+
 	waitingSearch := create(waiting)
 	backdate(t, pool, waitingSearch.ID, "last_active_at", 2*ttlAnswer)
 	backdate(t, pool, waitingSearch.ID, "ttl_asked_at", time.Hour)
-	// Не спрашивали вовсе: молчание само по себе поиск не гасит — гасит
-	// неотвеченный вопрос.
+
 	neverSearch := create(never)
 	backdate(t, pool, neverSearch.ID, "last_active_at", 10*ttlAnswer)
 
@@ -289,7 +267,6 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 		}
 	}
 
-	// Второй проход того же поиска не находит: он уже не активен.
 	again, err := repo.PauseUnanswered(t.Context(), ttlAnswer)
 	if err != nil {
 		t.Fatalf("PauseUnanswered() failed: %v", err)
@@ -299,9 +276,6 @@ func TestPauseUnansweredGasesOnlySilence(t *testing.T) {
 	}
 }
 
-// Ответ «Да, ищу» снимает вопрос и обновляет свежесть в обход часового гейта:
-// иначе тот, кто заходил в приложение полчаса назад, остался бы с активностью
-// старше вопроса — и погас бы по молчанию, ответив.
 func TestClearTTLAskedAnswersTheQuestion(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -341,8 +315,6 @@ func TestClearTTLAskedAnswersTheQuestion(t *testing.T) {
 	}
 }
 
-// Реактивация — это «ищу снова»: старый неотвеченный вопрос вместе с ней не
-// воскресает, иначе поднятый из паузы поиск гаснет обратно первым же проходом.
 func TestReactivateResetsTheTTLQuestion(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

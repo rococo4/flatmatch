@@ -86,9 +86,6 @@ func (r *Repo) Feed(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) (
 	return points, nil
 }
 
-// CardByID is the card of one point, counters and all — the same row the feed
-// builds, so an open card cannot say something the list did not. Status is not
-// filtered: точка на проверке принадлежит создателю (§5), и решает это сервис.
 func (r *Repo) CardByID(ctx context.Context, viewerID, pointID uuid.UUID) (FeedPoint, error) {
 	points, err := r.feed(ctx,
 		`p.id = $2 AND (p.created_by = $1 OR `+cardShown()+`)`, viewerID, pointID)
@@ -102,9 +99,6 @@ func (r *Repo) CardByID(ctx context.Context, viewerID, pointID uuid.UUID) (FeedP
 }
 
 func (r *Repo) Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []FeedPoint, err error) {
-
-	// Отклонённая модератором остаётся в списке с пометкой — иначе точка
-	// пропадала бы молча (§5); «Скрыть» создателя переводит причину в 'closed'.
 	created, err = r.feed(ctx, `p.created_by = $1
 		  AND (p.status <> 'closed' OR p.close_reason = 'rejected')`, viewerID)
 	if err != nil {
@@ -176,9 +170,6 @@ func (r *Repo) CountActiveIn(ctx context.Context, zoneIDs []string) (int, error)
 	return n, nil
 }
 
-// SetStatus applies a moderator's verdict and reports whether it landed: only a
-// point still on review moves, so a second tap on a stale button in the chat is
-// a no-op and answers «уже обработано» (§5).
 func (r *Repo) SetStatus(ctx context.Context, id uuid.UUID, status entity.PointStatus, closeReason *string) (bool, error) {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE points SET status = $2, close_reason = $3, edited_at = now()
@@ -189,8 +180,6 @@ func (r *Repo) SetStatus(ctx context.Context, id uuid.UUID, status entity.PointS
 	return tag.RowsAffected() > 0, nil
 }
 
-// PendingModeration is the points queue (§5). Источники без человека приходят
-// сразу активными (§8), поэтому здесь всегда пользовательские формы.
 func (r *Repo) PendingModeration(ctx context.Context) ([]entity.Point, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT `+pointColumns+` FROM points WHERE status = 'pending' ORDER BY created_at, id`)
@@ -208,9 +197,6 @@ func (r *Repo) PendingModeration(ctx context.Context) ([]entity.Point, error) {
 	return out, nil
 }
 
-// Enter отвечает, вошёл ли человек ИМЕННО СЕЙЧАС: повторный тап по кнопке
-// ошибкой не является (§2.2), но и пуша пулу не заказывает — новичка в нём не
-// прибавилось.
 func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) (bool, error) {
 	var entered bool
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
@@ -235,14 +221,6 @@ func (r *Repo) Enter(ctx context.Context, userID, pointID uuid.UUID) (bool, erro
 	return entered, nil
 }
 
-// Close снимает точку по воле создателя: квартира снята, соседа нашли,
-// передумал. Чужая точка отвечает тем же ErrNotFound, что и несуществующая —
-// закрытие принадлежит тому, кто подал (§5), — а уже закрытая проходит молча:
-// второй тап приходит с перерисованного экрана.
-//
-// Причина проставляется вместе со статусом: закрытая точка без неё нарушает
-// CHECK, и словаря причин у точек нет — в отличие от поисков, где причина
-// закрытия и есть главная метрика (§3).
 func (r *Repo) Close(ctx context.Context, userID, pointID uuid.UUID) error {
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
@@ -332,31 +310,18 @@ func (r *Repo) feed(ctx context.Context, where string, args ...any) ([]FeedPoint
 	return out, nil
 }
 
-// cardShown decides whether a card exists for the viewer at all. Автор «к себе»
-// и есть карточка: при несовпадении gender_pref человека нет нигде (§4),
-// поэтому его комната в чужую выдачу не попадает, а смэтченный уходит из
-// discovery (§2.3). У квартиры с рынка автора нет — она обезличена и видна
-// всем. The viewer is always $1.
 func cardShown() string {
 	return `(p.type = 'flat'
 	       OR (EXISTS (SELECT 1 FROM visible_people($1) vp WHERE vp = p.created_by)
 	           AND ` + notMatchedWith("p.created_by") + `))`
 }
 
-// notMatchedWith is the filter searchesrepo.PoolCandidates carries too: the
-// person you already matched with is out of discovery (§2.3), and a pool of a
-// point is discovery as much as a zone pool is. The viewer is always $1.
 func notMatchedWith(userColumn string) string {
 	return `NOT EXISTS (SELECT 1 FROM matches m
 			      WHERE m.a_id = least($1::uuid, ` + userColumn + `)
 			        AND m.b_id = greatest($1::uuid, ` + userColumn + `))`
 }
 
-// enterOwnPool makes «ты первый в пуле» (§6) true: тот, кто принёс квартиру,
-// в её пуле уже стоит — и видит каждого входящего, не тапая «Интересно» по
-// собственной находке. Той же транзакцией, иначе финал формы обещал бы пул, в
-// котором создателя нет. У «к себе» пула не бывает (§2.2), у парсера и досыпки
-// нет создателя (§8).
 func enterOwnPool(ctx context.Context, tx pgx.Tx, p entity.Point) error {
 	if p.Type != entity.PointFlat || p.CreatedBy == nil {
 		return nil

@@ -24,9 +24,6 @@ type Users interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.User, error)
 }
 
-// Points feeds the ГДЕ block of a point match. The point may well be closed by
-// now — the context of a match is historical (§2.3), so nothing here filters
-// by status.
 type Points interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
 }
@@ -67,8 +64,7 @@ func (s *Service) Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo
 
 func (s *Service) summary(ctx context.Context, viewer entity.User, match matchesrepo.MatchWithPeer) (Summary, error) {
 	out := Summary{SharedAnswers: viewer.Profile.Shared(match.Peer.Profile)}
-	// Блок ГДЕ один: точка конкретнее зоны, и если контекст точечный —
-	// рассказывает она.
+
 	if match.Match.ContextPoint != nil {
 		point, err := s.pointContext(ctx, *match.Match.ContextPoint)
 		if err != nil {
@@ -93,9 +89,6 @@ func (s *Service) summary(ctx context.Context, viewer entity.User, match matches
 	return out, nil
 }
 
-// pointContext builds «на комнату Кати · м. Сокол» / «квартира у м. Сокол».
-// Точка, которой больше нет, саммари не ломает: мэтч необратим, а его контекст
-// исторический (§2.3) — блок ГДЕ просто не показывается.
 func (s *Service) pointContext(ctx context.Context, pointID uuid.UUID) (*PointContext, error) {
 	point, err := s.points.ByID(ctx, pointID)
 	if errors.Is(err, entity.ErrNotFound) {

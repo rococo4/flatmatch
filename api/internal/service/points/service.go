@@ -18,8 +18,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// Автовалидация до модератора (§5): вилка отсекает опечатку в нуле раньше, чем
-// её увидит человек.
 const (
 	MinPrice = 20_000
 	MaxPrice = 300_000
@@ -27,13 +25,9 @@ const (
 
 var ErrInvalidForm = errors.New("point form has invalid fields")
 
-// ErrDuplicateURL is the form's answer «эта квартира уже есть, в пуле N —
-// войти?» (§6): the link is not free, but the point behind it is somewhere the
-// author can go.
 type ErrDuplicateURL struct {
 	Existing entity.Point
-	// PoolCount is «в пуле N» существующей точки — то самое N предложения
-	// войти, и оно персонально, как и всякий счётчик пула (§4).
+
 	PoolCount int
 }
 
@@ -51,32 +45,22 @@ type Repository interface {
 	InPool(ctx context.Context, userID, pointID uuid.UUID) (bool, error)
 }
 
-// Searches is the viewer's own side of the verdict chips: пул квартиры несёт
-// их, только если смотрящему есть чем сравнивать (§6).
 type Searches interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
 }
 
-// Notifier is the moderation chat (§5). Ошибка отправки создание точки не
-// отменяет: очередь всегда можно дослать командой /queue.
 type Notifier interface {
 	PointPending(ctx context.Context, p entity.Point)
 }
 
-// Pushes — лог уведомлений (§7): пул квартиры узнаёт о каждом новом
-// присмотревшемся. nil молча ничего не делает — пуш не часть входа.
 type Pushes interface {
 	PoolNew(ctx context.Context, pointID, enteredUserID uuid.UUID)
 }
 
-// PhotoStore keeps the picture the form uploads before the point exists: скрин
-// объявления или фото комнаты. Ключ формы — как у анкеты, но своей записи в
-// users он не трогает.
 type PhotoStore interface {
 	Put(ctx context.Context, key string, r io.Reader, contentType string) error
 }
 
-// CreateFlat is «Найди, с кем снять эту квартиру» (§6) — ссылка с рынка.
 type CreateFlat struct {
 	URL          string
 	ZoneID       string
@@ -90,8 +74,6 @@ type CreateFlat struct {
 	Deposit      *int
 }
 
-// CreateIntentHome is «Зову соседа к себе» (§2.2): цена здесь — доля
-// въезжающего, а фото — из квартиры, а не скрин объявления.
 type CreateIntentHome struct {
 	Stage        entity.PointStage
 	ZoneID       string
@@ -106,8 +88,7 @@ type CreateIntentHome struct {
 
 type MemberView struct {
 	pointsrepo.Member
-	// Chips are empty when either side has no active search — сравнивать
-	// нечего, карточка идёт без вердиктов (§6).
+
 	Chips         []pools.Chip
 	SharedAnswers int
 }
@@ -159,16 +140,12 @@ func (s *Service) Feed(ctx context.Context, viewerID uuid.UUID, zoneID string) (
 	return s.repo.Feed(ctx, viewerID, s.dir.Intersecting(zoneID))
 }
 
-// Point is one card. Всё, кроме одобренной точки, видит только создатель: она
-// ему видна сразу, «на проверке», а в общую ленту уходит после аппрува (§5).
 func (s *Service) Point(ctx context.Context, viewerID, pointID uuid.UUID) (pointsrepo.FeedPoint, error) {
 	card, err := s.repo.CardByID(ctx, viewerID, pointID)
 	if err != nil {
 		return pointsrepo.FeedPoint{}, err
 	}
-	// Создателя сравниваем явным разыменованием: у досыпки и парсера его нет
-	// вовсе (§8), и «пустой создатель равен пустому смотрящему» открывал бы
-	// такую точку кому попало.
+
 	if card.Point.Status != entity.PointActive &&
 		(card.Point.CreatedBy == nil || *card.Point.CreatedBy != viewerID) {
 		return pointsrepo.FeedPoint{}, entity.ErrNotFound
@@ -176,10 +153,6 @@ func (s *Service) Point(ctx context.Context, viewerID, pointID uuid.UUID) (point
 	return card, nil
 }
 
-// SavePhoto stores the picture of a form that has not been submitted yet: у
-// точки ещё нет id, а фото уже выбрано, поэтому ключ случайный и ни к кому не
-// привязан. Модерация смотрит его вместе с точкой (§5) — отдельного статуса у
-// него нет, и анкеты автора он не касается.
 func (s *Service) SavePhoto(ctx context.Context, file io.ReadSeeker) (string, error) {
 	contentType, ext, err := imagetype.Sniff(file)
 	if err != nil {
@@ -198,17 +171,13 @@ func (s *Service) Enter(ctx context.Context, userID, pointID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	// Повторный тап по кнопке никого в пул не добавил — и рассказывать о нём
-	// пулу нечего.
+
 	if entered && s.pushes != nil {
 		s.pushes.PoolNew(ctx, pointID, userID)
 	}
 	return nil
 }
 
-// Close is «закрыть» из «Моих поисков»: квартиру сдали, сосед нашёлся,
-// передумал. Точка смертна вместе с предложением автора (§2.2), и слот, за
-// которым следит лимит, освобождается вместе с ней.
 func (s *Service) Close(ctx context.Context, userID, pointID uuid.UUID) error {
 	return s.repo.Close(ctx, userID, pointID)
 }
@@ -217,8 +186,6 @@ func (s *Service) Leave(ctx context.Context, userID, pointID uuid.UUID) error {
 	return s.repo.Leave(ctx, userID, pointID)
 }
 
-// Pool is the list of everyone who entered — «в пуле N — увидишь после входа»
-// (§6): вход бесплатен и безлимитен, поэтому гейт стоит на нём, а не на поиске.
 func (s *Service) Pool(ctx context.Context, viewer entity.User, pointID uuid.UUID) (PoolView, error) {
 	card, err := s.Point(ctx, viewer.ID, pointID)
 	if err != nil {
@@ -256,8 +223,6 @@ func (s *Service) Mine(ctx context.Context, viewerID uuid.UUID) (created, entere
 	return s.repo.Mine(ctx, viewerID)
 }
 
-// CountIn answers «M квартир под эти параметры» (§6) — тизер выдачи на карточке
-// поиска, поэтому считает то же, что показала бы лента этой зоны.
 func (s *Service) CountIn(ctx context.Context, zoneID string) (int, error) {
 	zoneIDs := s.dir.Intersecting(zoneID)
 	if len(zoneIDs) == 0 {
@@ -266,7 +231,6 @@ func (s *Service) CountIn(ctx context.Context, zoneID string) (int, error) {
 	return s.repo.CountActiveIn(ctx, zoneIDs)
 }
 
-// create runs the dedup §6 promises and hands the point to the moderator.
 func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, error) {
 	if p.URLNorm != nil {
 		existing, err := s.repo.ByURLNorm(ctx, *p.URLNorm)
@@ -279,8 +243,7 @@ func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, err
 	}
 
 	created, err := s.repo.Create(ctx, p)
-	// Гонка двух подач одной ссылки: проигравший обязан услышать тот же дедуп,
-	// что и опоздавший на секунду, а не ошибку базы.
+
 	if errors.Is(err, pointsrepo.ErrURLTaken) && p.URLNorm != nil {
 		if existing, e := s.repo.ByURLNorm(ctx, *p.URLNorm); e == nil && existing != nil {
 			return entity.Point{}, s.duplicate(ctx, p, *existing)
@@ -291,20 +254,11 @@ func (s *Service) create(ctx context.Context, p entity.Point) (entity.Point, err
 	}
 
 	if s.notify != nil {
-		// Отменённый запрос не отменяет модерацию: точка уже создана, и
-		// сообщение в чат ей нужно (§5).
 		s.notify.PointPending(context.WithoutCancel(ctx), created)
 	}
 	return created, nil
 }
 
-// duplicate дособирает «в пуле N» к предложению войти. Счётчик — украшение
-// отказа: не прочитался — 409 всё равно уходит, с нулём.
-//
-// У точки, которая ещё на проверке, счётчик не спрашивают вовсе: войти в неё
-// некуда (до аппрува её видит только подавший, §5), а пул персонален (§4) —
-// «в пуле 1» против «в пуле 0» на чужой ссылке рассказывало бы, видим ли
-// спрашивающему её создатель.
 func (s *Service) duplicate(ctx context.Context, mine entity.Point, existing entity.Point) error {
 	dup := &ErrDuplicateURL{Existing: existing}
 	if existing.Status != entity.PointActive {
@@ -316,9 +270,6 @@ func (s *Service) duplicate(ctx context.Context, mine entity.Point, existing ent
 	return dup
 }
 
-// searchNear picks the search the chips speak for: зона точки — станция, так
-// что пересечение значит «его зона содержит эту станцию». Свежайший из
-// подходящих, как и в зонном пуле.
 func (s *Service) searchNear(ctx context.Context, viewerID uuid.UUID, zoneID string) (*entity.Search, error) {
 	mine, err := s.searches.ListByUser(ctx, viewerID)
 	if err != nil {

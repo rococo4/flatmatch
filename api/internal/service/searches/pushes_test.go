@@ -11,8 +11,6 @@ import (
 	"flatmatch/api/internal/service/notifications"
 )
 
-// Сервис уведомлений обязан оставаться тем, кого этот пакет просит: расхождение
-// должно ломать сборку здесь, а не в проводке.
 var _ Pushes = (*notifications.Service)(nil)
 
 type fakePushes struct {
@@ -41,8 +39,6 @@ func TestCreateAnnouncesTheSearch(t *testing.T) {
 	}
 }
 
-// Правка параметров пуша не заказывает: подписчики уже знают об этом человеке,
-// а пул виртуален и никого не дёргает (§3).
 func TestUpdateStaysSilent(t *testing.T) {
 	repo := &fakeRepo{existing: &entity.Search{
 		SearchParams: entity.SearchParams{ZoneID: "d-khamovniki", PriceMax: 45000},
@@ -61,7 +57,6 @@ func TestUpdateStaysSilent(t *testing.T) {
 	}
 }
 
-// Реактивация — тот же приход человека в пул, что и создание (§3).
 func TestReactivateAnnouncesTheSearch(t *testing.T) {
 	repo := &fakeRepo{existing: &entity.Search{
 		SearchParams: entity.SearchParams{ZoneID: "line-1", PriceMax: 40000},
@@ -78,8 +73,7 @@ func TestReactivateAnnouncesTheSearch(t *testing.T) {
 	if len(pushes.zoneNew) != 1 {
 		t.Fatalf("ZoneNew called %d times, want 1", len(pushes.zoneNew))
 	}
-	// Фан-аут строит пул по зоне: анонсировать надо ровно тот поиск, что вернул
-	// репозиторий, а не форму запроса.
+
 	if got := pushes.zoneNew[0]; got.ZoneID != revived.ZoneID || got.ZoneID != "line-1" {
 		t.Errorf("ZoneNew got the search of zone %q, want %q", got.ZoneID, revived.ZoneID)
 	}
@@ -114,7 +108,6 @@ func TestFailedCreateAnnouncesNothing(t *testing.T) {
 	}
 }
 
-// Стенд без лога уведомлений — рабочий стенд: пуши не часть операции.
 func TestNilPushesAreSilent(t *testing.T) {
 	svc := New(&fakeRepo{}, testDir(t), nil)
 

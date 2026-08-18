@@ -11,8 +11,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// moveInMonth is the wire format of a move-in date. Only the month is a
-// product concept (§2.1 — «месяц заезда»), so the day never travels.
 const moveInMonth = "2006-01"
 
 type paramsRequest struct {
@@ -21,7 +19,7 @@ type paramsRequest struct {
 	PriceMax int      `json:"price_max"`
 	RoomsMin *int     `json:"rooms_min"`
 	RoomsMax *int     `json:"rooms_max"`
-	MoveIn   *string  `json:"move_in"` // «2026-09»
+	MoveIn   *string  `json:"move_in"`
 	Term     *string  `json:"term"`
 	HasStuff []string `json:"has_stuff"`
 }
@@ -30,8 +28,6 @@ type closeRequest struct {
 	Reason string `json:"reason"`
 }
 
-// zoneDTO carries the declensions the front-end needs to write «в Хамовниках»
-// or «пул Хамовников» without a morphology library of its own.
 type zoneDTO struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -46,21 +42,17 @@ type searchResponse struct {
 	PriceMax    int       `json:"price_max"`
 	RoomsMin    *int      `json:"rooms_min,omitempty"`
 	RoomsMax    *int      `json:"rooms_max,omitempty"`
-	MoveIn      *string   `json:"move_in,omitempty"` // «2026-09»
+	MoveIn      *string   `json:"move_in,omitempty"`
 	Term        *string   `json:"term,omitempty"`
 	HasStuff    []string  `json:"has_stuff"`
 	Status      string    `json:"status"`
 	CloseReason *string   `json:"close_reason,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 
-	// Pool counters are filled in by the list handler only. In the answers to
-	// mutations the zeroes do not lie, they are simply not counted: the
-	// front-end refetches the list after every mutation.
 	People    int `json:"people"`
 	FullMatch int `json:"full_match"`
 	NewCount  int `json:"new_count"`
-	// PointsCount is «M квартир под эти параметры»: считает то же, что показала
-	// бы лента этой зоны — точки режет только зона (§8).
+
 	PointsCount int `json:"points_count"`
 }
 
@@ -95,10 +87,6 @@ func toZoneDTO(z zones.Zone) zoneDTO {
 	return zoneDTO{ID: z.ID, Name: z.Name, NameIn: z.NameIn, NameGen: z.NameGen}
 }
 
-// toParams turns the request into domain parameters. Enum values are parsed,
-// not validated: an unrecognised one becomes the package's sentinel, which
-// entity.InvalidFields then reports by name. Only the date has to be checked
-// here — a string that is not a month cannot be represented at all.
 func (b paramsRequest) toParams() (entity.SearchParams, error) {
 	p := entity.SearchParams{
 		ZoneID:   b.ZoneID,
@@ -109,11 +97,6 @@ func (b paramsRequest) toParams() (entity.SearchParams, error) {
 		HasStuff: make([]entity.StuffChip, 0, len(b.HasStuff)),
 	}
 
-	// An empty string means «неважно», the same as an absent field: the promo
-	// block posts the feed's filters back verbatim, and there `move_in=` is
-	// exactly how «месяц не выбран» travels. Rejecting it here would turn the
-	// one button that saves a search into a 400. A string that is present and
-	// malformed («2026-13», «sept») is still an error.
 	if b.MoveIn != nil && *b.MoveIn != "" {
 		month, err := time.Parse(moveInMonth, *b.MoveIn)
 		if err != nil {
@@ -122,10 +105,7 @@ func (b paramsRequest) toParams() (entity.SearchParams, error) {
 		}
 		p.MoveIn = &month
 	}
-	// Same rule for the term, and here it is not only about symmetry: an empty
-	// string parses to an empty Term, which InvalidFields does not call unknown
-	// and the CHECK on searches.term then rejects — a 500 for a filter the user
-	// simply did not fill in.
+
 	if b.Term != nil && *b.Term != "" {
 		p.Term = pointer.To(entity.ParseTerm(*b.Term))
 	}

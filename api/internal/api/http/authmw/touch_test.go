@@ -15,7 +15,6 @@ import (
 	"flatmatch/api/internal/tma"
 )
 
-// Кладовая поисков обязана оставаться той, кого просит middleware.
 var _ Touches = (*searchesrepo.Repo)(nil)
 
 type fakeValidator struct {
@@ -58,7 +57,7 @@ func TestThrottleLetsOneTouchThroughPerWindow(t *testing.T) {
 	if gate.allow(user, now.Add(touchEvery-time.Second)) {
 		t.Error("a request inside the window touched the database")
 	}
-	// Соседний человек ждать чужого окна не обязан.
+
 	if !gate.allow(other, now) {
 		t.Error("another user did not touch")
 	}
@@ -90,8 +89,6 @@ func TestMiddlewareTouchesOncePerWindow(t *testing.T) {
 	}
 }
 
-// Отбитый запрос — не активность: чужие или протухшие initData не должны
-// двигать поиски человека, которого в них назвали.
 func TestRefusedRequestDoesNotTouch(t *testing.T) {
 	touches := &fakeTouches{}
 	mw := New(fakeValidator{err: errors.New("bad hash")}, fakeAccounts{
@@ -113,7 +110,6 @@ func TestRefusedRequestDoesNotTouch(t *testing.T) {
 	}
 }
 
-// Незаписанная активность стоит лишнего вопроса «ещё ищешь?» — не экрана.
 func TestFailedTouchDoesNotBreakTheRequest(t *testing.T) {
 	touches := &fakeTouches{err: errors.New("database is away")}
 	mw := New(fakeValidator{}, fakeAccounts{

@@ -12,8 +12,6 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// Visibility needs several accounts at once, so these tests get their own
-// tg_id range instead of the single fixed account the rest of the package uses.
 const visibilityTGBase int64 = -994000000
 
 func cleanVisibilityUsers(t *testing.T, pool *pgxpool.Pool) {
@@ -28,8 +26,6 @@ func cleanVisibilityUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Cleanup(clean)
 }
 
-// seedVisibilityUser inserts a user directly: repo methods cannot produce
-// arbitrary status/gender combinations, and those are the whole subject here.
 func seedVisibilityUser(t *testing.T, pool *pgxpool.Pool, n int64, status, gender, pref string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
@@ -62,11 +58,10 @@ func TestVisibleByID(t *testing.T) {
 		name string
 		id   uuid.UUID
 	}{
-		// Пол обоюден: она никого, кроме женщин, не хочет — значит её нет (§4).
 		{"gender mismatch", seedVisibilityUser(t, pool, 3, "active", "female", "same")},
 		{"not approved yet", seedVisibilityUser(t, pool, 4, "draft", "female", "any")},
 		{"banned", seedVisibilityUser(t, pool, 5, "banned", "female", "any")},
-		// Свой профиль читают через ByID: видимость — про других.
+
 		{"myself", viewer},
 		{"nobody", uuid.New()},
 	}
@@ -92,7 +87,7 @@ func TestVisibleBetween(t *testing.T) {
 		want bool
 	}{
 		{"visible", seedVisibilityUser(t, pool, 12, "active", "female", "any"), true},
-		// Пол обоюден: она хочет только женщин — её нет ни в пулах, ни в пушах (§4).
+
 		{"gender mismatch", seedVisibilityUser(t, pool, 13, "active", "female", "same"), false},
 		{"not approved yet", seedVisibilityUser(t, pool, 14, "pending", "male", "any"), false},
 		{"banned", seedVisibilityUser(t, pool, 15, "banned", "male", "any"), false},
@@ -111,7 +106,6 @@ func TestVisibleBetween(t *testing.T) {
 		})
 	}
 
-	// Блок обоюден, и вопрос «видит ли a b» отвечает одинаково с любой стороны.
 	blocked := seedVisibilityUser(t, pool, 16, "active", "male", "any")
 	if _, err := pool.Exec(t.Context(),
 		`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, blocked, viewer); err != nil {

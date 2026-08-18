@@ -29,15 +29,12 @@ func TestSearchParamsValidPassesValidation(t *testing.T) {
 }
 
 func TestSearchParamsMinimalIsValid(t *testing.T) {
-	// «до» обязательно, всё остальное «неважно» (§2.1).
 	p := SearchParams{ZoneID: "line-1", PriceMax: 40000}
 	if bad := p.InvalidFields(); len(bad) != 0 {
 		t.Errorf("InvalidFields() = %v, want none", bad)
 	}
 }
 
-// TestSearchParamsRoomsCapIsInclusive pins the boundary itself: RoomsCap is a
-// valid answer, not the first rejected one.
 func TestSearchParamsRoomsCapIsInclusive(t *testing.T) {
 	p := validParams()
 	p.RoomsMin, p.RoomsMax = pointer.To(RoomsCap), pointer.To(RoomsCap)
@@ -59,10 +56,9 @@ func TestSearchParamsInvalidFields(t *testing.T) {
 		{"negative min", func(p *SearchParams) { *p.PriceMin = -1 }, "price_min"},
 		{"rooms inverted", func(p *SearchParams) { *p.RoomsMin = 4 }, "rooms_min"},
 		{"rooms zero", func(p *SearchParams) { *p.RoomsMax = 0 }, "rooms_max"},
-		// Без верхней границы такое число проходит валидацию и падает уже в
-		// int4-кодировщике pgx — 500 вместо 400.
+
 		{"rooms_max above cap", func(p *SearchParams) { *p.RoomsMax = 3_000_000_000 }, "rooms_max"},
-		// RoomsMax убран, чтобы сработал именно потолок, а не «min > max».
+
 		{"rooms_min above cap", func(p *SearchParams) {
 			p.RoomsMin, p.RoomsMax = pointer.To(RoomsCap+1), nil
 		}, "rooms_min"},

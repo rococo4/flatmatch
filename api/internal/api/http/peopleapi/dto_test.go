@@ -10,10 +10,6 @@ import (
 	"flatmatch/api/internal/entity"
 )
 
-// TestProfileCarriesNoContacts pins the privacy rule structurally (§3): the
-// match screen is the only place a way to reach a person exists, so no field
-// of this DTO may grow into a contact — not even by accident, when somebody
-// serialises the whole entity.User the handler already has in hand.
 func TestProfileCarriesNoContacts(t *testing.T) {
 	target := entity.User{
 		ID:         uuid.New(),
@@ -41,9 +37,6 @@ func TestProfileCarriesNoContacts(t *testing.T) {
 	}
 }
 
-// TestProfileLikeDirectionsAreNotSwapped: the two flags read the same pair from
-// opposite ends and mean opposite screens — «Ответить — мэтч сразу» against
-// «уже лайкнул». Asymmetric values are the only way to catch them crossed.
 func TestProfileLikeDirectionsAreNotSwapped(t *testing.T) {
 	const myLike, likedMe = true, false
 

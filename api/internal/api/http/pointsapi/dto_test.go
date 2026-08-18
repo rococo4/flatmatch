@@ -48,8 +48,6 @@ func fullCard() pointsrepo.FeedPoint {
 	}
 }
 
-// Квартира с рынка обезличена (§2.2): created_by — provenance, лимиты и
-// модерация, и в продуктовую выдачу он не попадает ни полем, ни значением.
 func TestCardCarriesNoCreator(t *testing.T) {
 	card := fullCard()
 
@@ -65,8 +63,6 @@ func TestCardCarriesNoCreator(t *testing.T) {
 	}
 }
 
-// Словари едут кодами: русские подписи чипов и стадий — дело фронта, а по
-// проводу ходит то же, что лежит в базе.
 func TestCardKeepsDictionaryCodes(t *testing.T) {
 	card := fullCard()
 	card.Point.Type = entity.PointIntentHome
@@ -84,18 +80,16 @@ func TestCardKeepsDictionaryCodes(t *testing.T) {
 	if got.MoveIn != "2026-09-15" {
 		t.Errorf("MoveIn = %q, want 2026-09-15", got.MoveIn)
 	}
-	// «Добавлена N дней назад» — точность до дня (§8).
+
 	if got.CreatedDaysAgo != 3 {
 		t.Errorf("CreatedDaysAgo = %d, want 3", got.CreatedDaysAgo)
 	}
-	// Ссылка на оригинал — то, что хранит схема: исходной строки у точки нет.
+
 	if got.URL != "https://avito.ru/1" || got.PhotoURLs[0] != "/media/points/flat.jpg" {
 		t.Errorf("link or photo lost: %+v", got)
 	}
 }
 
-// Витрина «к себе» несёт лицо и привычки — и ни одного способа связаться:
-// контакты живут на экране мэтча и больше нигде (§3).
 func TestAuthorCarriesNoContacts(t *testing.T) {
 	card := fullCard()
 	card.Point.Type = entity.PointIntentHome
@@ -123,17 +117,12 @@ func TestAuthorCarriesNoContacts(t *testing.T) {
 		t.Errorf("approved author photo did not travel:\n%s", raw)
 	}
 
-	// Неодобренное фото человека вместо адреса отдаёт пустоту (§5) — в отличие
-	// от фото самой точки, которое модератор одобряет вместе с ней.
 	card.Author.PhotoStatus = entity.ModerationPending
 	if got := toCard(card, stubPhotos{}, zoneDTO{}); got.Author.PhotoURL != "" {
 		t.Errorf("unapproved author photo leaked: %q", got.Author.PhotoURL)
 	}
 }
 
-// Форма шлёт коды словарей, ручка переводит их в доменные значения без
-// проверок: незнакомое становится сентинелом, и назовёт его по имени сервис —
-// одним списком с остальными полями формы.
 func TestRequestParsesDictionaries(t *testing.T) {
 	body := createRequest{
 		Type:         "flat",
@@ -160,7 +149,7 @@ func TestRequestParsesDictionaries(t *testing.T) {
 	if got := unknown.toFlat().Bathrooms; got == nil || *got != entity.BathroomsUnknown {
 		t.Errorf("unknown bathrooms = %v, want the sentinel", got)
 	}
-	// Пустая строка — «не указано», а не мусор: поле формы можно не заполнять.
+
 	empty := body
 	empty.Bathrooms = pointer.To("")
 	if got := empty.toFlat().Bathrooms; got != nil {
@@ -187,8 +176,6 @@ func TestIntentHomeRequestReadsTheMoveInDay(t *testing.T) {
 		t.Errorf("intent_home form lost the stage or the day: %+v", in)
 	}
 
-	// Дата, которой не бывает, — единственное, что ручка отбивает сама: её
-	// нечем передать дальше.
 	broken := body
 	broken.MoveIn = pointer.To("15 сентября")
 	var fields *entity.FieldsError

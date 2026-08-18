@@ -34,8 +34,6 @@ func TestPathResolvesStoredFile(t *testing.T) {
 	}
 }
 
-// Ключ приходит из базы, а путь по нему собирается на диске: модерационная
-// отправка читает этот файл, поэтому ../ обязан остаться внутри хранилища.
 func TestPathStaysInsideTheStore(t *testing.T) {
 	root := t.TempDir()
 	dir, err := NewDir(root, "https://example.org/photos")

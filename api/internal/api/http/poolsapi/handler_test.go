@@ -27,8 +27,6 @@ type fakePools struct{}
 
 type fakeSearches struct{}
 
-// fakePoints records the zone the feed asked about: выдачу точек режет только
-// зона (§8), и спросить она обязана про ту, что в фильтрах.
 type fakePoints struct {
 	list  []pointsrepo.FeedPoint
 	zones []string
@@ -42,8 +40,6 @@ type fakeValidator struct{}
 
 type fakeAccounts struct{ user entity.User }
 
-// Лента — промо-блок людей и ниже единый список точек (§6). Пустой массив
-// вместо карточек означал бы, что квартир в зоне нет.
 func TestFeedCarriesThePointsOfTheZone(t *testing.T) {
 	flat := pointsrepo.FeedPoint{
 		Point: entity.Point{
@@ -70,7 +66,6 @@ func TestFeedCarriesThePointsOfTheZone(t *testing.T) {
 	}
 }
 
-// Кривые фильтры до точек не доходят: считать по ним нечего, и ответ про поле.
 func TestFeedRefusesBrokenFiltersBeforeCounting(t *testing.T) {
 	points := &fakePoints{}
 

@@ -10,8 +10,6 @@ import (
 	"flatmatch/api/internal/entity"
 )
 
-// candidate fabricates a pool row: ranking cares about the search and the id,
-// nothing else, so the rest of the person stays zero.
 func candidate(created time.Time, p entity.SearchParams) entity.PoolCandidate {
 	return entity.PoolCandidate{
 		User:   entity.User{ID: uuid.New()},
@@ -19,9 +17,6 @@ func candidate(created time.Time, p entity.SearchParams) entity.PoolCandidate {
 	}
 }
 
-// The cap cuts the tail of «не совпали» (§6) and nothing else: hiding a full
-// match is the one thing a pool must never do. A crowd of both kinds is
-// cheaper to build here than in the database.
 func TestRankedSectionsCapOnlyCutsTheNoneTail(t *testing.T) {
 	mine := entity.SearchParams{PriceMin: pointer.To(35000), PriceMax: 45000, MoveIn: &moveSept}
 	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
@@ -44,15 +39,11 @@ func TestRankedSectionsCapOnlyCutsTheNoneTail(t *testing.T) {
 	}
 }
 
-// Inside a section the freshest search comes first (§6), so the cut tail of
-// «не совпали» is the stalest part of it.
 func TestRankedSectionsSortFreshestFirst(t *testing.T) {
 	mine := entity.SearchParams{PriceMin: pointer.To(35000), PriceMax: 45000, MoveIn: &moveSept}
 	theirs := entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000, MoveIn: &moveSept}
 	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
-	// Fed in the wrong order on purpose: the service must not rely on the
-	// repository's ORDER BY for the section it builds.
 	oldest := candidate(base, theirs)
 	newest := candidate(base.Add(2*time.Hour), theirs)
 	middle := candidate(base.Add(time.Hour), theirs)
@@ -71,15 +62,13 @@ func TestRankedSectionsSortFreshestFirst(t *testing.T) {
 	}
 }
 
-// Совпавшие по зоне — выше в секции; вложение множеств станций тоже совпадение.
 func TestRankedSectionsBoostZoneMatch(t *testing.T) {
 	mine := entity.SearchParams{ZoneID: "pz-district", PriceMin: pointer.To(35000), PriceMax: 45000}
 	theirs := entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000}
 	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
-	// Пересекает район (north), но тянется наружу (west) — не совпадение.
 	crossZone := candidate(base.Add(3*time.Hour), withZone(theirs, "pz-line-cross"))
-	// Вложена в район целиком — совпадение, как и сам район.
+
 	subsetZone := candidate(base.Add(time.Hour), withZone(theirs, "pz-line-west"))
 	sameZone := candidate(base, withZone(theirs, "pz-district"))
 
@@ -90,7 +79,7 @@ func TestRankedSectionsBoostZoneMatch(t *testing.T) {
 	if len(top) != 3 {
 		t.Fatalf("got %d cards, want 3", len(top))
 	}
-	// Совпавшие по зоне впереди (меж собой — по свежести), сквозная — последней.
+
 	wantOrder := []struct {
 		id    uuid.UUID
 		match bool

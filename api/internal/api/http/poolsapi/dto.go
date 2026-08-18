@@ -10,13 +10,8 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// moveInMonth is the wire format of a move-in date, the same one searchesapi
-// reads: only the month is a product concept (§2.1).
 const moveInMonth = "2006-01"
 
-// zoneDTO is the outbound twin of searchesapi's: same fields, same
-// declensions. Copied rather than shared because a DTO belongs to the handler
-// that serves it — the two may diverge the day one of them grows a field.
 type zoneDTO struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -24,10 +19,6 @@ type zoneDTO struct {
 	NameGen string `json:"name_gen"`
 }
 
-// promoDTO backs the pink block of the feed (§6): «N человек ищут в {зоне}»,
-// «с K полное совпадение», the avatar stack and the state of the button —
-// which is decided by my_search_id (already subscribed here) and slots_used
-// against slots_total (all three slots taken).
 type promoDTO struct {
 	Zone       zoneDTO    `json:"zone"`
 	People     int        `json:"people"`
@@ -38,10 +29,6 @@ type promoDTO struct {
 	SlotsTotal int        `json:"slots_total"`
 }
 
-// feedResponse is the third step of the feed (§6): промо-блок людей первым,
-// ниже — единый список карточек точек обоих типов. Карточка приезжает из
-// pointsapi, а не копией: одна и та же квартира открывается тапом из этого же
-// списка, и разъехаться этим двум описаниям нельзя.
 type feedResponse struct {
 	Promo  promoDTO         `json:"promo"`
 	Points []pointsapi.Card `json:"points"`
@@ -49,14 +36,10 @@ type feedResponse struct {
 
 type chipDTO struct {
 	Param string `json:"param"`
-	// Verdict is the backend's own four-value verdict: green / edge / grey /
-	// none. «Не указана» (none) is deliberately not merged into grey — the
-	// card labels the two differently.
+
 	Verdict string `json:"verdict"`
 }
 
-// paramsDTO is the outbound twin of searchesapi's paramsRequest: same fields
-// and encodings (move_in «2026-09»), zone omitted — the pool's zone is on top.
 type paramsDTO struct {
 	PriceMin *int     `json:"price_min,omitempty"`
 	PriceMax int      `json:"price_max"`
@@ -76,33 +59,27 @@ type personDTO struct {
 	Smoking       string    `json:"smoking"`
 	PetsOwn       string    `json:"pets_own"`
 	SharedAnswers int       `json:"shared_answers"`
-	Chips         []chipDTO `json:"chips,omitempty"` // ranked pools only
+	Chips         []chipDTO `json:"chips,omitempty"`
 	Params        paramsDTO `json:"params"`
-	// Zone of the person's search: «ищет на красной ветке» in the card.
+
 	Zone zoneDTO `json:"zone"`
-	// ZoneMatch: полная территориальная совместимость с поиском смотрящего.
+
 	ZoneMatch bool `json:"zone_match"`
 }
 
 type sectionDTO struct {
-	ID     string      `json:"id"` // all | partial | none
+	ID     string      `json:"id"`
 	People []personDTO `json:"people"`
 }
 
 type poolResponse struct {
 	Zone zoneDTO `json:"zone"`
-	// MySearchID is the subscription to this very zone, what the «Ты в пуле
-	// {зоны} · поиск сохранён» banner needs. Ranking is happy with a search of
-	// an intersecting zone, so ranked may be true while this is absent.
+
 	MySearchID *uuid.UUID `json:"my_search_id,omitempty"`
 	Ranked     bool       `json:"ranked"`
-	// Both lists are always present and always arrays; `ranked` says which one
-	// carries the pool — sections when true, people when false, the other one
-	// empty. No omitempty: it drops an empty slice as readily as a nil one, so
-	// an empty pool would arrive without the key the front-end iterates, and
-	// «пул пуст» would have to be told apart from «поле забыли».
-	Sections []sectionDTO `json:"sections"` // ranked
-	People   []personDTO  `json:"people"`   // unranked
+
+	Sections []sectionDTO `json:"sections"`
+	People   []personDTO  `json:"people"`
 }
 
 func toPoolResponse(p pools.Pool) poolResponse {
@@ -136,10 +113,6 @@ func toPeople(people []pools.Person) []personDTO {
 	return out
 }
 
-// toPerson serialises the mini-card. PhotoURL comes from the pool, never from
-// the user's PhotoKey: the pool hides a photo moderation has not approved
-// (§5), and Person.User is a partial record that must not be asked anything
-// else.
 func toPerson(p pools.Person) personDTO {
 	out := personDTO{
 		UserID:        p.User.ID,

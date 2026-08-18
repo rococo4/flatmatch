@@ -1,12 +1,13 @@
 package usersrepo
 
 import (
+	"errors"
 	"testing"
 	"time"
+
+	"flatmatch/api/internal/entity"
 )
 
-// Бот заблокирован — адресат выпадает из очереди пушей, и первая отметка не
-// перезаписывается: важно, когда это случилось.
 func TestMarkPushBlockedKeepsTheFirstMark(t *testing.T) {
 	pool := newTestPool(t)
 	repo := New(pool)
@@ -41,15 +42,32 @@ func TestMarkPushBlockedKeepsTheFirstMark(t *testing.T) {
 		t.Errorf("push_blocked_at moved to %v, want it kept at %v", got, first)
 	}
 
-	// /start в боте: человек вернулся, и очередь снова его берёт.
 	if err := repo.ClearPushBlocked(t.Context(), user.ID); err != nil {
 		t.Fatalf("ClearPushBlocked() failed: %v", err)
 	}
 	if got := blockedAt(); got != nil {
 		t.Errorf("push_blocked_at = %v after unblocking, want nil", got)
 	}
-	// Повтор «/start» у незаблокированного — ничего не делает и не ошибка.
+
 	if err := repo.ClearPushBlocked(t.Context(), user.ID); err != nil {
 		t.Errorf("second ClearPushBlocked() = %v, want nil", err)
+	}
+}
+
+func TestByTelegramIDFindsWithoutCreating(t *testing.T) {
+	repo := New(newTestPool(t))
+	user := seedUser(t, repo)
+
+	got, err := repo.ByTelegramID(t.Context(), testTelegramID)
+	if err != nil {
+		t.Fatalf("ByTelegramID() failed: %v", err)
+	}
+	if got.ID != user.ID {
+		t.Errorf("ByTelegramID() = %s, want %s", got.ID, user.ID)
+	}
+
+	_, err = repo.ByTelegramID(t.Context(), testTelegramID-1)
+	if !errors.Is(err, entity.ErrNotFound) {
+		t.Errorf("ByTelegramID() of a stranger = %v, want ErrNotFound", err)
 	}
 }

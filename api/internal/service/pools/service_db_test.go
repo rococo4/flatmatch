@@ -18,13 +18,8 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// Test users live in their own negative tg_id range: parallel package binaries
-// of `go test ./...` must never clean up each other's rows (searchesrepo owns
-// -998000000).
 const testTGBase int64 = -997000000
 
-// sharedByDefault is how many questionnaire answers seedUser gives everyone —
-// the floor SharedAnswers can be for two seeded people.
 const sharedByDefault = 7
 
 var (
@@ -32,20 +27,16 @@ var (
 	moveDec  = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
 )
 
-// staticPhotos is the whole PhotoURLs contract: a key becomes an address, and
-// where the file actually lives is none of this package's business.
 type staticPhotos struct{}
 
-// testUser is what a seeded person differs in; everything else is identical so
-// SharedAnswers has a known floor.
 type testUser struct {
-	n        int64 // offset inside the test tg_id range
+	n        int64
 	gender   entity.Gender
 	pref     entity.GenderPref
 	schedule entity.Schedule
 	smoking  entity.Smoking
 	photoKey string
-	photoOK  bool // photo passed moderation
+	photoOK  bool
 }
 
 func (staticPhotos) URL(key string) string {
@@ -67,8 +58,7 @@ func TestZonePoolEndToEnd(t *testing.T) {
 		schedule: entity.ScheduleOwl, smoking: entity.SmokingNo, photoKey: "full.jpg", photoOK: true})
 	partial := seedUser(t, pool, testUser{n: 3, gender: entity.GenderMale, pref: entity.GenderPrefAny,
 		schedule: entity.ScheduleLark, smoking: entity.SmokingHome, photoKey: "partial.jpg", photoOK: true})
-	// none is mid-moderation: an active person whose photo is not approved yet
-	// must show a placeholder, not the unchecked file (§5).
+
 	none := seedUser(t, pool, testUser{n: 4, gender: entity.GenderMale, pref: entity.GenderPrefAny,
 		schedule: entity.ScheduleLark, smoking: entity.SmokingHome, photoKey: "none.jpg"})
 	invisible := seedUser(t, pool, testUser{n: 5, gender: entity.GenderFemale, pref: entity.GenderPrefSame,
@@ -76,12 +66,9 @@ func TestZonePoolEndToEnd(t *testing.T) {
 
 	mine := mustCreate(t, repo, viewer.ID, zoneParams("pz-district", 35000, 45000, moveSept))
 	mustCreate(t, repo, full.ID, zoneParams("pz-district", 40000, 55000, moveSept))
-	// Second search of the same person, in an overlapping zone and deliberately
-	// mismatched: zones may overlap (§2.1), so the pool must still show one card
-	// — the better one.
+
 	mustCreate(t, repo, full.ID, zoneParams("pz-line-east", 90000, 120000, moveDec))
-	// partial and none arrive through zone intersection, not through the zone
-	// itself: both of their zones share a station with the district.
+
 	mustCreate(t, repo, partial.ID, zoneParams("pz-line-west", 60000, 80000, moveSept))
 	mustCreate(t, repo, none.ID, zoneParams("pz-station-east", 90000, 120000, moveDec))
 	mustCreate(t, repo, invisible.ID, zoneParams("pz-district", 40000, 45000, moveSept))
@@ -114,7 +101,7 @@ func TestZonePoolEndToEnd(t *testing.T) {
 	}
 
 	fullCard := assertSectionHas(t, got, SectionAll, full.ID)
-	// The card carries the better search, not the mismatched one it also has.
+
 	if fullCard.Params.PriceMax != 55000 {
 		t.Errorf("full match card shows params %+v, want the 40–55k search", fullCard.Params)
 	}
@@ -134,8 +121,7 @@ func TestZonePoolEndToEnd(t *testing.T) {
 		t.Errorf("SharedAnswers of the partial match = %d, want %d",
 			partialCard.SharedAnswers, sharedByDefault)
 	}
-	// The card names the zone the person actually searches — a whole-line
-	// searcher and a spot-on neighbour are different intents.
+
 	if partialCard.Zone.ID != "pz-line-west" || partialCard.Zone.NameIn == "" {
 		t.Errorf("partial card zone = %+v, want pz-line-west with declensions", partialCard.Zone)
 	}
@@ -157,8 +143,7 @@ func TestZonePoolEndToEnd(t *testing.T) {
 	if counts.People != 3 || counts.FullMatch != 1 || counts.NewCount != 0 {
 		t.Errorf("Counts = %+v, want people=3 full=1 new=0", counts)
 	}
-	// Avatars skip the unapproved photo, so it is two rather than three, and
-	// they arrive freshest first — partial subscribed after full did.
+
 	wantAvatars := []string{"/media/partial.jpg", "/media/full.jpg"}
 	if !slices.Equal(counts.Avatars, wantAvatars) {
 		t.Errorf("Avatars = %v, want %v — approved only, freshest first",
@@ -166,9 +151,6 @@ func TestZonePoolEndToEnd(t *testing.T) {
 	}
 }
 
-// A closed search means «исчез из пула» (§3), and a paused one — TTL silence —
-// hides its owner just the same. Both are what makes a pool a live thing
-// rather than an ever-growing list.
 func TestZonePoolHidesClosedAndPausedSearches(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -186,7 +168,7 @@ func TestZonePoolHidesClosedAndPausedSearches(t *testing.T) {
 
 	mustCreate(t, repo, viewer.ID, zoneParams("pz-district", 35000, 45000, moveSept))
 	mustCreate(t, repo, stays.ID, zoneParams("pz-district", 40000, 55000, moveSept))
-	// Same parameters as the one who stays: only the status may tell them apart.
+
 	closed := mustCreate(t, repo, quitter.ID, zoneParams("pz-district", 40000, 55000, moveSept))
 	if _, err := repo.Close(t.Context(), quitter.ID, closed.ID, entity.CloseFoundHere); err != nil {
 		t.Fatalf("Close() failed: %v", err)
@@ -211,8 +193,6 @@ func TestZonePoolHidesClosedAndPausedSearches(t *testing.T) {
 	}
 }
 
-// Ranking works off any intersecting search, but the «Ты в пуле» banner needs
-// the search of this very zone — so MySearch stays nil here (§6).
 func TestZonePoolRanksFromAnIntersectingSearch(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -239,9 +219,6 @@ func TestZonePoolRanksFromAnIntersectingSearch(t *testing.T) {
 	assertSectionHas(t, got, SectionAll, other.ID)
 }
 
-// Правило «мы увиделись» (§2.3): пул без своего пересекающего поиска не
-// отдаётся вовсе — ErrNeedSearch, анонимного режима нет; тизер зоны несёт
-// промо-блок (Counts).
 func TestZonePoolNeedsOwnSearch(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -258,17 +235,12 @@ func TestZonePoolNeedsOwnSearch(t *testing.T) {
 		t.Fatalf("ZonePool() = %v, want ErrNeedSearch — пул закрыт без своего поиска", err)
 	}
 
-	// Поиск в непересекающейся зоне пул тоже не открывает: «увиделись» — это
-	// пересечение станций, а не сам факт какого-нибудь поиска.
 	mustCreate(t, repo, viewer.ID, entity.SearchParams{ZoneID: "pz-station-west", PriceMax: 45000})
 	if _, err := svc.ZonePool(t.Context(), viewer, "pz-district"); !errors.Is(err, entity.ErrNeedSearch) {
 		t.Fatalf("ZonePool() = %v, want ErrNeedSearch — чужая зона пул не открывает", err)
 	}
 }
 
-// Смэтченные — не discovery (§2.1): пара уже нашла друг друга, её карточки в
-// пуле и счётчиках — шум. Из visible_people пара при этом НЕ выпадает —
-// контакты в деталях мэтча живы; фильтр стоит в кандидатах пула.
 func TestPoolAndCountsHideMatchedPair(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -310,8 +282,6 @@ func TestPoolAndCountsHideMatchedPair(t *testing.T) {
 	}
 }
 
-// The «M новых» badge counts searches newer than the last look; opening the
-// pool is what moves that mark (§6).
 func TestPoolSeenResetsNewCount(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -355,8 +325,6 @@ func TestPoolSeenResetsNewCount(t *testing.T) {
 	}
 }
 
-// An id outside the directory is a 404, not an empty pool: Intersecting()
-// answers nil for it, and «никого не нашли» would be a lie.
 func TestZonePoolUnknownZone(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -372,9 +340,6 @@ func TestZonePoolUnknownZone(t *testing.T) {
 	}
 }
 
-// The tail of «не совпали» is cut to a top-N and the avatar stack to four
-// (§6), while the counters stay whole: «N человек ищут» is a fact about the
-// zone, not about how much of it fits on the screen.
 func TestNoneSectionAndAvatarsAreCapped(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -390,8 +355,7 @@ func TestNoneSectionAndAvatarsAreCapped(t *testing.T) {
 		other := seedUser(t, pool, testUser{n: 10 + i, gender: entity.GenderMale,
 			pref: entity.GenderPrefAny, schedule: entity.ScheduleOwl,
 			smoking: entity.SmokingNo, photoKey: "crowd.jpg", photoOK: true})
-		// Neither price nor move-in intersects the viewer's — everyone lands in
-		// «не совпали».
+
 		mustCreate(t, repo, other.ID, zoneParams("pz-district", 90000, 120000, moveDec))
 	}
 
@@ -422,16 +386,6 @@ func TestNoneSectionAndAvatarsAreCapped(t *testing.T) {
 	}
 }
 
-// testDir loads a fixture whose zone ids exist nowhere else in the repository,
-// and that is the point rather than a naming whim. A pool sees every visible
-// person in the database, not only the ones this file seeded: a separate tg_id
-// range keeps other packages from deleting our rows, but nothing stops the
-// searchesrepo binary — running in parallel under `go test ./...` — from
-// putting its own active people into a Moscow zone we were counting. Zone ids
-// no other seeder can produce make these counts deterministic.
-//
-// The shape mirrors the zones package's mini fixture: a district spanning both
-// lines, so pz-district intersects all three other zones.
 func testDir(t *testing.T) *zones.Directory {
 	t.Helper()
 	raw, err := os.ReadFile("testdata/pool.json")
@@ -447,7 +401,7 @@ func testDir(t *testing.T) *zones.Directory {
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	// pgx uses the extended protocol: one statement per Exec, no semicolons.
+
 	clean := func() {
 		for _, q := range []string{
 			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -464,9 +418,6 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Cleanup(clean)
 }
 
-// seedUser inserts an active person with a full questionnaire and returns them
-// as the service sees them — the pool is about people who are already visible,
-// and building the row here keeps usersrepo out of these tests.
 func seedUser(t *testing.T, pool *pgxpool.Pool, spec testUser) entity.User {
 	t.Helper()
 
@@ -516,9 +467,6 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, spec testUser) entity.User {
 	}
 }
 
-// pause puts a search into the state TTL silence leaves it in (§3). No repo
-// method does it yet — that is the notifications step — so the test writes the
-// status the pool has to respect.
 func pause(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 	t.Helper()
 	if _, err := pool.Exec(t.Context(),
@@ -578,8 +526,6 @@ func assertNowhere(t *testing.T, got Pool, why string, userID uuid.UUID) {
 	}
 }
 
-// nullable keeps an unanswered question NULL rather than "", which the column
-// CHECKs reject.
 func nullable(v string) *string {
 	if v == "" {
 		return nil

@@ -1,9 +1,3 @@
-// Package likesapi serves the dear like (§2.3) — «Хочу жить вместе» — and the
-// «Тебя лайкнули» list it lands in.
-//
-// The gates behind POST / are the transaction's, not this handler's: approval,
-// visibility, the budget and the match are all decided in one place, and the
-// handler only turns their sentinels into the codes of §3.
 package likesapi
 
 import (
@@ -31,15 +25,10 @@ type Likes interface {
 	Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget, error)
 }
 
-// Photos is the §5 rule about an unapproved photo, and it lives in one place —
-// the users service — because every screen has to hide the same thing.
 type Photos interface {
 	PhotoURL(u entity.User) string
 }
 
-// Points names the point half of a like's context. Статус не проверяется:
-// лайк не сгорает ни от чего (§2.3), и его контекст переживает и закрытие
-// точки — карточка «Тебя лайкнули» обязана остаться читаемой.
 type Points interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
 }
@@ -87,9 +76,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "to_id is not a uuid", []string{"to_id"}, err)
 		return
 	}
-	// Without this the answer would be 404: visible_people never returns the
-	// viewer himself. 400 invalid_field труднее спутать с «нет такого
-	// человека» — сам себе это ошибка запроса, а не отсутствие адресата.
+
 	if toID == user.ID {
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "cannot like yourself", []string{"to_id"}, errSelfLike)
 		return
@@ -105,8 +92,6 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		pointID = &id
 	}
 
-	// Два контекста разом — ошибка запроса, и называет её сервис: там же, где
-	// живёт правило «лайк несёт один контекст» (§2.3).
 	result, err := h.likes.Like(r.Context(), user, toID, body.ZoneID, pointID)
 	if err != nil {
 		h.handleError(w, r, user.ID, err)
@@ -140,9 +125,6 @@ func (h *Handler) incoming(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, out)
 }
 
-// point names the point a like came from. Точка, которой больше нет, отнимает
-// у карточки мини-карту контекста, а не саму карточку: лайк переживает всё
-// (§2.3).
 func (h *Handler) point(ctx context.Context, id *uuid.UUID) (*pointDTO, error) {
 	if id == nil {
 		return nil, nil
@@ -158,9 +140,6 @@ func (h *Handler) point(ctx context.Context, id *uuid.UUID) (*pointDTO, error) {
 	return &pointDTO{ID: p.ID, Kind: string(p.Type), Label: pointLabel(p.Type, station.Name)}, nil
 }
 
-// zone names the pool a like came from. An id the directory no longer knows is
-// dropped: the like itself never expires (§2.3), so its context may well
-// outlive the zone, and the card simply loses its mini-card of context.
 func (h *Handler) zone(id string) *zoneDTO {
 	zone, ok := h.dir.Get(id)
 	if !ok {

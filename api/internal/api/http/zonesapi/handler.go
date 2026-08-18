@@ -1,6 +1,3 @@
-// Package zonesapi serves the zone directory: the embedded file, byte for
-// byte. The picker searches client-side (§6 — справочник конечный и
-// версионируемый, ~450 зон грузятся один раз).
 package zonesapi
 
 import (
@@ -8,8 +5,6 @@ import (
 	"net/http"
 )
 
-// ZoneDir is the directory as this handler sees it: bytes and a version to
-// hang an ETag on.
 type ZoneDir interface {
 	Raw() []byte
 	Version() int
@@ -24,8 +19,6 @@ func New(dir ZoneDir) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// The directory is versioned in the repository, so the version alone
-	// identifies the payload: a new file means a new version means a new ETag.
 	etag := fmt.Sprintf(`"zones-v%d"`, h.dir.Version())
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "public, max-age=86400")

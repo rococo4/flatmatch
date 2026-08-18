@@ -25,9 +25,6 @@ func (r *Repo) ActiveIn(ctx context.Context, zoneIDs []string) ([]entity.Search,
 	return out, nil
 }
 
-// ActiveByUser — активные поиски одного человека: аппрув анкеты доанонсирует
-// их пулам. До одобрения человека не видно нигде (§5), и фан-аут его поисков
-// был пуст — рассказать о нём можно только теперь.
 func (r *Repo) ActiveByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+searchColumns+`

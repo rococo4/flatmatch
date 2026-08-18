@@ -24,8 +24,6 @@ type fakeSearches struct{ list []entity.Search }
 
 type fakePools struct{}
 
-// fakePoints answers «M квартир под эти параметры» and records the zone it was
-// asked about: тизер обязан считать точки зоны поиска, а не какой-нибудь ещё.
 type fakePoints struct {
 	count int
 	zones []string
@@ -37,8 +35,6 @@ type fakeValidator struct{}
 
 type fakeAccounts struct{ user entity.User }
 
-// Строка «M квартир под эти параметры» — мостик с карточки поиска в выдачу
-// (§6): без неё карточка молчит о жилье вовсе.
 func TestListCarriesThePointsTeaser(t *testing.T) {
 	points := &fakePoints{count: 7}
 	searches := &fakeSearches{list: []entity.Search{
@@ -47,7 +43,7 @@ func TestListCarriesThePointsTeaser(t *testing.T) {
 			SearchParams: entity.SearchParams{ZoneID: zoneID, PriceMax: 45000},
 			Status:       entity.SearchActive,
 		},
-		// Закрытый поиск вне всякой выдачи (§3) — его счётчики нули без вопросов.
+
 		{
 			ID:           uuid.New(),
 			SearchParams: entity.SearchParams{ZoneID: zoneID, PriceMax: 45000},

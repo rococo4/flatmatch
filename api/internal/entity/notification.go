@@ -49,9 +49,6 @@ const (
 	PollFailed  PollAnswer = "failed"
 )
 
-// Notification — строка лога пушей. ActorKey несёт дедуп «один актор — одно
-// событие», ContextKey — склейку агрегата (зона подписчика или точка); пустая
-// строка в обоих значит «нет».
 type Notification struct {
 	ID     uuid.UUID
 	UserID uuid.UUID
@@ -83,16 +80,10 @@ func ParsePollAnswer(raw string) PollAnswer {
 	return parseEnum(raw, PollMoving, PollTalking, PollFailed)
 }
 
-// PersonalPushTypes — те, что уходят поштучно и считаются предохранителем
-// MaxPersonalPushesPerDay. Опросные пуши воркера (still_searching, post_match) в
-// счёт не идут: их и так по одному на поиск и на мэтч, а агрегируемые держит
-// своё окно.
 func PersonalPushTypes() []NotificationType {
 	return slices.Clone(personalPushTypes)
 }
 
-// Aggregated — склеивается ли тип по (адресат, контекст) в окне
-// AggregateWindow; остальные уходят поштучно.
 func (t NotificationType) Aggregated() bool {
 	return t == NotifZoneNew || t == NotifPoolNew
 }

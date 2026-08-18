@@ -1,4 +1,3 @@
-// Package searchesrepo stores searches and answers pool queries (§2.1).
 package searchesrepo
 
 import "github.com/jackc/pgx/v5/pgxpool"

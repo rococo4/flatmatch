@@ -25,14 +25,12 @@ func TestSharedAnswers(t *testing.T) {
 	if got := a.SharedAnswers(b); got != 2 {
 		t.Errorf("SharedAnswers() = %d, want 2", got)
 	}
-	// Пустые поля не совпадение: две недозаполненные анкеты дают 0, не 9.
+
 	if got := (Profile{}).SharedAnswers(Profile{}); got != 0 {
 		t.Errorf("empty SharedAnswers() = %d, want 0", got)
 	}
 }
 
-// Ровно девять полей привычек из §4 — возраст, пол, занятость и «о себе»
-// в счётчик «N совпадений анкеты» не входят.
 func TestSharedAnswersCountsNineHabitFields(t *testing.T) {
 	a, b := filledProfile(), filledProfile()
 	a.Age, b.Age = 25, 25
@@ -56,8 +54,6 @@ func TestSharedAnswersEmptyOnOneSideNeverCounts(t *testing.T) {
 	}
 }
 
-// Саммари мэтча называет совпавшие ответы («вы оба совы»), поэтому Shared
-// отдаёт именно их — поле и значение, в порядке анкеты.
 func TestSharedNamesTheMatchedFields(t *testing.T) {
 	a := Profile{Schedule: ScheduleOwl, Smoking: SmokingNo, Noise: NoiseSilence}
 	b := Profile{Schedule: ScheduleOwl, Smoking: SmokingNo, Noise: NoiseLoud}

@@ -33,7 +33,7 @@ func TestSetStatusMovesOnlyPendingPoints(t *testing.T) {
 	if err != nil || !changed {
 		t.Fatalf("SetStatus(active) = %v, %v, want true, nil", changed, err)
 	}
-	// Второй тап по устаревшей кнопке в чате ничего не двигает (§5).
+
 	changed, err = repo.SetStatus(t.Context(), approved.ID, entity.PointClosed, pointer.To("rejected"))
 	if err != nil || changed {
 		t.Errorf("SetStatus() of an approved point = %v, %v, want false, nil", changed, err)
@@ -80,7 +80,7 @@ func TestPendingModerationListsBothForms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(intent_home) failed: %v", err)
 	}
-	// Досыпка и парсер приходят активными (§8) — очередь их не касается.
+
 	live, err := repo.Create(t.Context(),
 		flatPoint(nil, entity.SourceManual, "https://cian.ru/1", entity.PointActive))
 	if err != nil {
@@ -103,9 +103,6 @@ func TestPendingModerationListsBothForms(t *testing.T) {
 	}
 }
 
-// Карточка по id — та же строка, что и в ленте: счётчики и флаг входа не имеют
-// права разойтись со списком. Статус здесь не фильтруется — «на проверке
-// только создателю» решает сервис.
 func TestCardByIDMatchesTheFeed(t *testing.T) {
 	pool, repo := newFeedRepo(t)
 
@@ -134,11 +131,7 @@ func TestCardByIDMatchesTheFeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(pending) failed: %v", err)
 	}
-	// Чужая точка на проверке приезжает отсюда как есть: статус репозиторий не
-	// фильтрует. ЭТО ПИН, А НЕ ПОЗВОЛЕНИЕ — «на проверке только создателю» (§5)
-	// стоит в points.Point(), и любой новый вызывающий CardByID обязан привезти
-	// этот гейт с собой, иначе чужая pending-квартира откроется по прямой
-	// ссылке.
+
 	stranger, err := repo.CardByID(t.Context(), viewer, pending.ID)
 	if err != nil || stranger.Point.ID != pending.ID || stranger.Point.Status != entity.PointPending {
 		t.Errorf("CardByID() of a pending point = %+v, %v; want the row itself — гейт §5 в сервисе",
@@ -150,8 +143,6 @@ func TestCardByIDMatchesTheFeed(t *testing.T) {
 	}
 }
 
-// «К себе» — это автор: кого смотрящий не видит (§4) или с кем уже смэтчился
-// (§2.3), того комнаты для него нет и по прямой ссылке. Своя остаётся всегда.
 func TestCardByIDHidesUnreachableRooms(t *testing.T) {
 	pool, repo := newFeedRepo(t)
 

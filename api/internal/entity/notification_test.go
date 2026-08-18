@@ -21,7 +21,7 @@ func TestParseNotificationEnums(t *testing.T) {
 		{"point_rejected", string(ParseNotificationType("point_rejected")), string(NotifPointRejected)},
 		{"still_searching", string(ParseNotificationType("still_searching")), string(NotifStillSearching)},
 		{"post_match", string(ParseNotificationType("post_match")), string(NotifPostMatch)},
-		// Тип из ушедшей вперёд схемы читается, но ни на что не годен.
+
 		{"type junk", string(ParseNotificationType("point_changed")), unknown},
 		{"type empty", string(ParseNotificationType("")), ""},
 
@@ -40,8 +40,6 @@ func TestParseNotificationEnums(t *testing.T) {
 	}
 }
 
-// Предохранитель считает ЛИЧНЫЕ отправки: попади в его список агрегируемый тип,
-// один зонный пуш в сутки съедал бы бюджет, из которого сворачивается хвост.
 func TestPersonalPushTypesHoldNoAggregates(t *testing.T) {
 	for _, typ := range PersonalPushTypes() {
 		if typ.Aggregated() {
@@ -51,7 +49,7 @@ func TestPersonalPushTypesHoldNoAggregates(t *testing.T) {
 	if !slices.Contains(PersonalPushTypes(), NotifLiked) {
 		t.Error("liked is not personal, and the tail is built out of exactly those")
 	}
-	// Опросы воркера — сами по одному на поиск и на мэтч, второго счётчика им не надо.
+
 	for _, typ := range []NotificationType{NotifStillSearching, NotifPostMatch} {
 		if slices.Contains(PersonalPushTypes(), typ) {
 			t.Errorf("%q should not be counted by the safeguard", typ)

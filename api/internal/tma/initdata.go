@@ -43,19 +43,15 @@ type Validator struct {
 
 var excludedFromHash = []string{"hash"}
 
-// Sentinel errors. Callers branch on these; the surrounding text is for logs.
 var (
-	// ErrMalformed means the input is not usable initData at all.
 	ErrMalformed = errors.New("initData is malformed")
-	// ErrMissingHash means the `hash` field is absent — nothing to verify.
+
 	ErrMissingHash = errors.New("initData has no hash")
-	// ErrBadHash means the signature does not match. Either the payload was
-	// tampered with, or it was signed by a different bot.
+
 	ErrBadHash = errors.New("initData signature does not match")
-	// ErrExpired means auth_date is outside the accepted window. The remedy is
-	// the same in both directions: reopen the Mini App.
+
 	ErrExpired = errors.New("initData auth_date is outside the accepted window")
-	// ErrMissingUser means there is no identifiable user in the payload.
+
 	ErrMissingUser = errors.New("initData has no user")
 )
 

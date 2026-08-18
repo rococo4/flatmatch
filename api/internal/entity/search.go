@@ -11,10 +11,6 @@ const MaxActiveSearches = 3
 
 const PriceMaxCap = 1_000_000
 
-// RoomsCap is the same kind of bound for комнатность. It exists to keep an
-// absurd number out of the database rather than to judge the flat: without it
-// a request for three billion rooms passes validation and dies deeper down, in
-// the int4 encoder, as a 500 instead of a 400.
 const RoomsCap = 20
 
 type Term string
@@ -42,7 +38,7 @@ type CloseReason string
 const (
 	CloseReasonUnknown CloseReason = unknown
 
-	CloseFoundHere      CloseReason = "found_here" // ГЛАВНАЯ МЕТРИКА (§3)
+	CloseFoundHere      CloseReason = "found_here"
 	CloseFoundElsewhere CloseReason = "found_elsewhere"
 	CloseChangedMind    CloseReason = "changed_mind"
 )
@@ -62,7 +58,7 @@ type SearchParams struct {
 	PriceMax int
 	RoomsMin *int
 	RoomsMax *int
-	MoveIn   *time.Time // first day of the move-in month
+	MoveIn   *time.Time
 	Term     *Term
 	HasStuff []StuffChip
 }
@@ -72,7 +68,7 @@ type Search struct {
 	UserID uuid.UUID
 	SearchParams
 	Status       SearchStatus
-	CloseReason  CloseReason // "" unless Status is closed
+	CloseReason  CloseReason
 	PoolSeenAt   time.Time
 	LastActiveAt time.Time
 	TTLAskedAt   *time.Time

@@ -9,9 +9,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// TestPoolResponseListsAreAlwaysArrays pins the one thing the front-end may
-// assume about an empty pool: both keys are there and both are arrays. An
-// absent key would make «пул пуст» look like a field the server forgot.
 func TestPoolResponseListsAreAlwaysArrays(t *testing.T) {
 	zone := zones.Zone{ID: "d-khamovniki", Kind: zones.KindDistrict, Name: "Хамовники"}
 

@@ -141,7 +141,7 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 			name: "fresh questionnaire approved",
 			user: func(u entity.User) entity.User { return u },
 			op:   opOK, ack: ackApproved,
-			// «Проявляется везде разом» (§5).
+
 			want: &setCall{
 				status: pointer.To(entity.StatusActive),
 				photo:  pointer.To(entity.ModerationOK),
@@ -161,8 +161,6 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 				about:  pointer.To(entity.ModerationOK)},
 		},
 		{
-			// Не прошедшая проверку анкета без фото не показывается никому —
-			// возврат в draft, дорога назад одна: «загрузи другое» (§5).
 			name: "photo rejected before approval",
 			user: func(u entity.User) entity.User { return u },
 			op:   opPhoto, ack: ackPhotoRejected,
@@ -171,8 +169,6 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 				photo:  pointer.To(entity.ModerationRejected)},
 		},
 		{
-			// У одобренной статус не трогаем: правка фото не должна выкидывать
-			// человека из пулов (§5).
 			name: "photo rejected on an approved profile",
 			user: func(u entity.User) entity.User {
 				u = active(u)
@@ -206,9 +202,6 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 			op:   opOK, ack: ackDone,
 		},
 		{
-			// Состояние после «фото не ок»: анкета в draft, «о себе» так и
-			// висит pending. Кнопка «ок» из соседнего сообщения не имеет права
-			// её воскресить — дорога назад одна, «загрузи другое» (§5).
 			name: "stale approval after a rejected photo",
 			user: func(u entity.User) entity.User {
 				u.Status = entity.StatusDraft
@@ -236,7 +229,6 @@ func TestUserVerdictsFollowTheTwoBranches(t *testing.T) {
 			op: opPhoto, ack: ackDone,
 		},
 		{
-			// Бан — исход разбора жалобы, кнопка очереди его не отменяет (§5).
 			name: "banned account",
 			user: func(u entity.User) entity.User {
 				u.Status = entity.StatusBanned
@@ -362,16 +354,13 @@ func TestUserPendingCarriesTheThreeVerdicts(t *testing.T) {
 			t.Errorf("button %d = %q, want %q", i, got.buttons[i][0], label)
 		}
 	}
-	// Кнопка должна доехать обратно: данные, которые шлём, обязан понимать
-	// собственный парсер.
+
 	for _, b := range got.buttons {
 		if _, err := s.HandleCallback(t.Context(), b[1]); err != nil {
 			t.Errorf("HandleCallback(%q) failed: %v", b[1], err)
 		}
 	}
 
-	// Правка одобренной анкеты — вторая очередь: модератор должен видеть не
-	// только что перед ним не новичок, но и что именно перепроверяют (§5).
 	edits := []struct {
 		photo, about entity.ModerationStatus
 		want         string
@@ -435,8 +424,6 @@ func TestPointPendingCaptionsByType(t *testing.T) {
 	}
 }
 
-// Очередь живёт в базе, а не в чате: молчащий чат — это warn и повод для
-// /queue, но не ошибка, из-за которой не создастся точка.
 func TestSendingIsBestEffort(t *testing.T) {
 	user := submitted()
 	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol",

@@ -12,8 +12,6 @@ import (
 const notificationColumns = `n.id, n.user_id, n.type, n.actor_key, n.context_key,
 	n.payload, n.created_at, n.sent_at, n.failed_at, n.attempts`
 
-// Заблокировавший бота не получает даже строки (§3 спеки): проверка стоит
-// внутри вставки — отдельным чтением адресата фан-аут ошибался бы на гонке.
 const insertQuery = `
 	INSERT INTO notifications (user_id, type, actor_key, context_key, payload)
 	SELECT $1::uuid, $2::text, $3::text, $4::text, $5::jsonb
@@ -22,7 +20,7 @@ const insertQuery = `
 	ON CONFLICT DO NOTHING`
 
 type TailMessage struct {
-	ID        uuid.UUID // строка-носитель хвоста
+	ID        uuid.UUID
 	MessageID int
 	Count     int
 }
@@ -56,8 +54,6 @@ func (r notificationRow) toEntity() entity.Notification {
 }
 
 func insertArgs(n entity.Notification) []any {
-	// Пустая карта вместо nil: nil уехал бы в jsonb как json null, а по нему
-	// payload->>'…' уже не спросишь.
 	payload := n.Payload
 	if payload == nil {
 		payload = map[string]any{}

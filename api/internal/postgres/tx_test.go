@@ -10,11 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// newTxTestPool connects to TEST_DATABASE_URL and creates a scratch table.
-//
-// The table is temporary in name only — it is a real one, dropped on cleanup —
-// because a TEMP table lives per connection, and a pool hands out a different
-// connection to almost every statement here.
 func newTxTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
@@ -79,8 +74,7 @@ func TestInTxRollsBackOnError(t *testing.T) {
 		if _, err := tx.Exec(t.Context(), `INSERT INTO tx_probe (n) VALUES (1)`); err != nil {
 			return err
 		}
-		// The write above is real inside the transaction; returning an error
-		// has to undo it.
+
 		return wantErr
 	})
 	if !errors.Is(err, wantErr) {
@@ -93,8 +87,6 @@ func TestInTxRollsBackOnError(t *testing.T) {
 }
 
 func TestInTxRollsBackOnPanic(t *testing.T) {
-	// This is the case the deferred rollback exists for: without it the
-	// connection would go back to the pool with an open transaction.
 	pool := newTxTestPool(t)
 
 	func() {
@@ -118,10 +110,6 @@ func TestInTxRollsBackOnPanic(t *testing.T) {
 }
 
 func TestInTxNestsThroughSavepoints(t *testing.T) {
-	// A nested Begin on a pgx.Tx opens a savepoint, so a repository method that
-	// opens its own transaction still composes inside a wider one. §12 step 4
-	// depends on this: a like, its budget row and the match it produces must
-	// land together (§2.3).
 	pool := newTxTestPool(t)
 
 	err := InTx(t.Context(), pool, func(outer pgx.Tx) error {
@@ -129,8 +117,6 @@ func TestInTxNestsThroughSavepoints(t *testing.T) {
 			return err
 		}
 
-		// An inner failure rolls back to the savepoint without killing the
-		// outer transaction.
 		inner := InTx(t.Context(), outer, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(t.Context(), `INSERT INTO tx_probe (n) VALUES (2)`); err != nil {
 				return err
@@ -148,7 +134,6 @@ func TestInTxNestsThroughSavepoints(t *testing.T) {
 		t.Fatalf("outer InTx() failed: %v", err)
 	}
 
-	// Rows 1 and 3 survive; row 2 was undone by the savepoint rollback.
 	if got := countProbeRows(t, pool); got != 2 {
 		t.Errorf("found %d rows, want 2 — the savepoint should have removed only the inner write", got)
 	}

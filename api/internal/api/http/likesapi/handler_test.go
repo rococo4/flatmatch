@@ -20,8 +20,6 @@ import (
 
 const station = "st-sokol"
 
-// fakeLikes records the context a like arrived with and keeps the service's own
-// rule about the two of them: один лайк — один контекст (§2.3).
 type fakeLikes struct {
 	toID     uuid.UUID
 	zoneID   string
@@ -40,9 +38,6 @@ type fakeValidator struct{}
 
 type fakeAccounts struct{ user entity.User }
 
-// Контекст лайка — это то, ГДЕ пересеклись: он переживёт в мэтче, в саммари и
-// в «Тебя лайкнули». Потерять его по дороге от тела запроса к сервису — значит
-// молча превратить отклик на комнату в лайк из ниоткуда.
 func TestLikeCarriesItsContextToTheService(t *testing.T) {
 	point := uuid.New()
 	to := uuid.New()
@@ -82,8 +77,6 @@ func TestLikeCarriesItsContextToTheService(t *testing.T) {
 	}
 }
 
-// Два контекста разом называет сервис — по именам обоих полей; ручка обязана
-// довезти их до него, а не проглотить один.
 func TestLikeRefusesTwoContexts(t *testing.T) {
 	likes := &fakeLikes{}
 	body := `{"to_id":"` + uuid.NewString() + `","zone_id":"` + station + `","point_id":"` + uuid.NewString() + `"}`
@@ -100,8 +93,6 @@ func TestLikeRefusesTwoContexts(t *testing.T) {
 	}
 }
 
-// Мусор вместо идентификатора точки до сервиса не доезжает: это ошибка
-// запроса, и называется она полем.
 func TestLikeRefusesABrokenPointID(t *testing.T) {
 	likes := &fakeLikes{}
 
@@ -118,8 +109,6 @@ func TestLikeRefusesABrokenPointID(t *testing.T) {
 	}
 }
 
-// «На твою комнату» (§2.2): контекст входящего отклика приезжает мини-картой,
-// и по её виду карточка отличает отклик от лайка из общего пула.
 func TestIncomingCarriesThePointCard(t *testing.T) {
 	room := entity.Point{
 		ID: uuid.New(), Type: entity.PointIntentHome, Status: entity.PointActive, ZoneID: station,
@@ -167,7 +156,7 @@ func newRouter(likes *fakeLikes, points fakePoints, viewer uuid.UUID) chi.Router
 func (f *fakeLikes) Like(_ context.Context, _ entity.User, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
 	f.calls++
 	f.toID, f.zoneID, f.pointID = toID, zoneID, pointID
-	// Правило сервиса, повторённое здесь: контекст у лайка один (§2.3).
+
 	if zoneID != "" && pointID != nil {
 		return entity.LikeResult{}, &entity.FieldsError{
 			Err: likes.ErrInvalidParams, Fields: []string{"zone_id", "point_id"}}

@@ -13,17 +13,13 @@ import (
 	"flatmatch/api/internal/repo/likesrepo"
 )
 
-// Test users live in their own negative tg_id range so leftovers never collide
-// with real accounts or with the other repos' tests.
 const testTGBase int64 = -995000000
 
 const testZone = "d-khamovniki"
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	// pgx uses the extended protocol: one statement per Exec, no semicolons.
-	// Order follows the foreign keys — polls reference matches, matches and
-	// likes reference users.
+
 	clean := func() {
 		for _, q := range []string{
 			`DELETE FROM match_polls WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -42,8 +38,6 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Cleanup(clean)
 }
 
-// seedUser gives everyone a @username: the point of these tests is where it
-// does and does not come back.
 func seedUser(t *testing.T, pool *pgxpool.Pool, n int64, name string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
@@ -76,9 +70,6 @@ func mustList(t *testing.T, repo *Repo, userID uuid.UUID) []MatchWithPeer {
 	return list
 }
 
-// matchPair closes a match the only way one is ever born — with mutual dear
-// likes. The reply costs the second side neither a slot nor a search (§2.3),
-// so only the one who calls first needs one.
 func matchPair(t *testing.T, likes *likesrepo.Repo, first, second uuid.UUID, zone string) uuid.UUID {
 	t.Helper()
 	if _, err := likes.Create(t.Context(), first, second,
@@ -95,9 +86,6 @@ func matchPair(t *testing.T, likes *likesrepo.Repo, first, second uuid.UUID, zon
 	return res.Match.ID
 }
 
-// Мэтч необратим и переживает всё (§2.3): контакты у забаненного или
-// заблокированного пира отбирает сервис, но сам мэтч из списков не пропадает —
-// а статус и блок приезжают из базы живыми фактами, а не догадкой.
 func TestBannedAndBlockedPeerKeepsTheMatch(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -137,7 +125,6 @@ func TestBannedAndBlockedPeerKeepsTheMatch(t *testing.T) {
 	}
 	both("a banned peer", entity.StatusBanned, false)
 
-	// Блок — факт пары, а не одной стороны: обе записи читаются одинаково.
 	for _, pair := range [][2]uuid.UUID{{me, peer}, {peer, me}} {
 		if _, err := pool.Exec(t.Context(),
 			`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, pair[0], pair[1]); err != nil {
@@ -170,13 +157,13 @@ func TestListAndByID(t *testing.T) {
 	if len(mine) != 2 {
 		t.Fatalf("ListByUser() returned %d matches, want 2", len(mine))
 	}
-	// Свежие сверху.
+
 	if mine[0].Match.ID != newer || mine[1].Match.ID != matchID {
 		t.Errorf("ListByUser() order = %s, %s; want %s, %s",
 			mine[0].Match.ID, mine[1].Match.ID, newer, matchID)
 	}
 	got := mine[1]
-	// Контекст исторический: он приехал из ПЕРВОГО лайка пары (§2.3).
+
 	if got.Match.ContextZone != testZone {
 		t.Errorf("context zone = %q, want %q", got.Match.ContextZone, testZone)
 	}
@@ -186,12 +173,11 @@ func TestListAndByID(t *testing.T) {
 	if got.Peer.Status != entity.StatusActive {
 		t.Errorf("peer status = %q, want %q", got.Peer.Status, entity.StatusActive)
 	}
-	// ПРИВАТНОСТЬ: контакты отдаёт только ByID — экран мэтча, и никакой список.
+
 	if got.Peer.Username != "" || got.Peer.TelegramID != 0 {
 		t.Errorf("ListByUser() leaked contacts: username=%q tg_id=%d", got.Peer.Username, got.Peer.TelegramID)
 	}
 
-	// Мэтч приватен для пары, но видят его обе стороны — каждая противоположную.
 	theirs := mustList(t, repo, peer)
 	if len(theirs) != 1 || theirs[0].Match.ID != matchID || theirs[0].Peer.ID != me {
 		t.Errorf("the other side sees %+v, want the same match with the opposite peer", theirs)
@@ -207,7 +193,7 @@ func TestListAndByID(t *testing.T) {
 	if detail.Match.ID != matchID || detail.Peer.ID != peer {
 		t.Errorf("ByID() returned %+v, want the match with the peer", detail)
 	}
-	// «Написать @username» — единственное место, где контакты существуют.
+
 	if detail.Peer.Username != "peer_tg" {
 		t.Errorf("peer username = %q, want %q", detail.Peer.Username, "peer_tg")
 	}
@@ -215,8 +201,6 @@ func TestListAndByID(t *testing.T) {
 		t.Errorf("peer tg_id = %d, want %d", detail.Peer.TelegramID, testTGBase-2)
 	}
 
-	// Чужой мэтч — не «нельзя», а «нет такого»: существование пары посторонним
-	// не раскрывается (§2.3, мэтч приватен для пары).
 	if _, err := repo.ByID(t.Context(), stranger, matchID); !errors.Is(err, entity.ErrNotFound) {
 		t.Errorf("ByID() of a stranger's match = %v, want ErrNotFound", err)
 	}

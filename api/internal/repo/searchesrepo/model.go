@@ -44,16 +44,8 @@ type searchRow struct {
 	UpdatedAt    time.Time  `db:"updated_at"`
 }
 
-// candidateRow carries exactly what a pool card needs, not a whole user: the
-// questionnaire fields behind «N совпадений анкеты» and the привычки-строка,
-// plus the photo and «был сегодня». Fields the row leaves zero — GenderPref,
-// Username, TelegramID — are NOT unknown data to be re-derived: the query has
-// already resolved visibility through visible_people (§4), and re-checking it
-// downstream is exactly the duplication that function exists to prevent.
-// Status is the exception: it is not selected either, but it is filled in from
-// what visible_people guarantees rather than left zero (see toEntity).
 type candidateRow struct {
-	searchRow // s.* columns, unprefixed
+	searchRow
 
 	UID          uuid.UUID `db:"u_id"`
 	UName        string    `db:"u_name"`
@@ -126,10 +118,7 @@ func (r candidateRow) toEntity() entity.PoolCandidate {
 			PhotoKey:    pointer.Get(r.UPhotoKey),
 			PhotoStatus: entity.ParseModerationStatus(r.UPhotoStatus),
 			LastSeen:    r.ULastSeen,
-			// Not read from the row: visible_people only ever returns active
-			// people (§4), so this states that guarantee instead of leaving a
-			// zero behind, which would make User.Visible() lie about a person
-			// the pool has already decided is visible.
+
 			Status: entity.StatusActive,
 		},
 		Search: r.searchRow.toEntity(),

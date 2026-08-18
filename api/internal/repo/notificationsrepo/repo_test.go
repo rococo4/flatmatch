@@ -12,17 +12,11 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// Test users live in their own negative tg_id range so leftovers never collide
-// with real accounts or with the other repos' tests: each cleanup wipes its
-// whole window, so a shared base makes parallel packages delete each other's
-// rows. Taken: -993 points, -994 usersrepo, -995 matchesrepo, -996 likesrepo,
-// -997 pools, -998 searchesrepo.
 const testTGBase int64 = -992000000
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	// pgx uses the extended protocol: one statement per Exec, no semicolons.
-	// Order follows the foreign keys — notifications reference users.
+
 	clean := func() {
 		for _, q := range []string{
 			`DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -71,8 +65,6 @@ func mustInsert(t *testing.T, repo *Repo, n entity.Notification) bool {
 	return inserted
 }
 
-// pendingFor фильтрует общую очередь до своих адресатов: тесты соседних пакетов
-// идут параллельно и в ту же таблицу.
 func pendingFor(t *testing.T, repo *Repo, users ...uuid.UUID) []entity.Notification {
 	t.Helper()
 	all, err := repo.Pending(t.Context(), 200)
@@ -118,9 +110,6 @@ func sentAt(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) *time.Time {
 	return at
 }
 
-// Дубли невозможны на уровне БД (§7) — но КОНТЕКСТ входит в ключ: подписчик, у
-// которого зону новичка пересекают два поиска, ждёт двух пушей, по одному на
-// свой пул, и схлопывать их в один нельзя.
 func TestInsertDedupsByActorWithinOneContext(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -138,16 +127,15 @@ func TestInsertDedupsByActorWithinOneContext(t *testing.T) {
 	if !mustInsert(t, repo, notif(me, entity.NotifZoneNew, actor, "line-1")) {
 		t.Error("the same actor in another context was swallowed as a duplicate")
 	}
-	// Дедуп персональный: событие одного актора уходит всем подписчикам.
+
 	if !mustInsert(t, repo, notif(other, entity.NotifZoneNew, actor, "d-khamovniki")) {
 		t.Error("another addressee was swallowed as a duplicate")
 	}
-	// Тип — часть ключа: лайк и мэтч от одного человека не одно событие.
+
 	if !mustInsert(t, repo, notif(me, entity.NotifLiked, actor, "")) {
 		t.Error("another type was swallowed as a duplicate")
 	}
 
-	// Без актора дедупа нет — частичный индекс такие строки не покрывает.
 	for range 2 {
 		if !mustInsert(t, repo, notif(me, entity.NotifStillSearching, "", "")) {
 			t.Error("a row without an actor was deduplicated")
@@ -175,7 +163,7 @@ func TestInsertManyCountsOnlyNewRows(t *testing.T) {
 	batch := []entity.Notification{
 		first,
 		notif(me, entity.NotifPoolNew, actor, "point-2"),
-		// Повтор внутри батча: фан-аут не должен ломаться от него.
+
 		notif(me, entity.NotifPoolNew, actor, "point-1"),
 	}
 	inserted, err := repo.InsertMany(t.Context(), batch)
@@ -194,7 +182,7 @@ func TestInsertManyCountsOnlyNewRows(t *testing.T) {
 	for _, n := range queue {
 		byContext[n.ContextKey] = n
 	}
-	// Payload доезжает как есть: воркер берёт из него текст, а не собирает заново.
+
 	stored := byContext["point-1"]
 	if got := stored.Payload["station"]; got != "Фрунзенская" {
 		t.Errorf("payload station = %v, want Фрунзенская", got)
@@ -203,14 +191,12 @@ func TestInsertManyCountsOnlyNewRows(t *testing.T) {
 		stored.Attempts != 0 || stored.SentAt != nil || stored.FailedAt != nil {
 		t.Errorf("row lost its identity: %+v", stored)
 	}
-	// Строка без payload читается пустой картой, а не json null.
+
 	if second := byContext["point-2"]; len(second.Payload) != 0 {
 		t.Errorf("payload of a plain row = %v, want empty", second.Payload)
 	}
 }
 
-// Забаненный и заблокировавший бота из очереди выпадают: первое — правило
-// видимости (§4), второе — заведомо мёртвая отправка.
 func TestPendingSkipsUnreachableAddressees(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -220,7 +206,7 @@ func TestPendingSkipsUnreachableAddressees(t *testing.T) {
 	banned := seedUser(t, pool, 2, "banned")
 	blocked := seedUser(t, pool, 3, "active")
 	blockBot(t, pool, blocked)
-	// Черновик и «на проверке» пуши получают: вердикт модератора приходит именно им.
+
 	draft := seedUser(t, pool, 4, "draft")
 
 	for _, user := range []uuid.UUID{live, banned, blocked, draft} {
@@ -237,7 +223,6 @@ func TestPendingSkipsUnreachableAddressees(t *testing.T) {
 		}
 	}
 
-	// Лимит — это порция одного прохода воркера, а не фильтр.
 	got, err := repo.Pending(t.Context(), 1)
 	if err != nil {
 		t.Fatalf("Pending() failed: %v", err)
@@ -247,8 +232,6 @@ func TestPendingSkipsUnreachableAddressees(t *testing.T) {
 	}
 }
 
-// Заблокировавший бота не получает и строки (§3 спеки): очередь незачем копить
-// тому, кому её не доставить.
 func TestInsertSkipsBlockedAddressees(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -275,7 +258,6 @@ func TestInsertSkipsBlockedAddressees(t *testing.T) {
 		t.Errorf("InsertMany() inserted %d rows, want 1 — заблокировавший в фан-аут не входит", inserted)
 	}
 
-	// Вернулся к боту — очередь снова его берёт.
 	if _, err := pool.Exec(t.Context(),
 		`UPDATE users SET push_blocked_at = NULL WHERE id = $1`, blocked); err != nil {
 		t.Fatalf("unblock the bot: %v", err)
@@ -320,7 +302,6 @@ func TestMarkSentKeepsTheFirstMarkAndBumpCounts(t *testing.T) {
 		t.Fatalf("queue holds %d rows, want 2", len(queue))
 	}
 
-	// Ретрай: попытки считаются на строке, чтобы после пятой её погасить.
 	failing := queue[0].ID
 	for range 2 {
 		if err := repo.Bump(t.Context(), failing); err != nil {
@@ -347,7 +328,7 @@ func TestMarkSentKeepsTheFirstMarkAndBumpCounts(t *testing.T) {
 	if got := sentAt(t, pool, failing); got == nil || !got.Equal(at) {
 		t.Fatalf("sent_at = %v, want %v", got, at)
 	}
-	// Второй проход не должен сдвигать окно агрегата, посчитанное по отправке.
+
 	if err := repo.MarkSent(t.Context(), ids(queue), time.Now()); err != nil {
 		t.Fatalf("second MarkSent() failed: %v", err)
 	}
@@ -355,8 +336,6 @@ func TestMarkSentKeepsTheFirstMarkAndBumpCounts(t *testing.T) {
 		t.Errorf("sent_at moved to %v, want it kept at %v", got, at)
 	}
 
-	// Отправленную строку MarkFailed не трогает — иначе успех превратился бы в
-	// провал.
 	if err := repo.MarkFailed(t.Context(), ids(queue)); err != nil {
 		t.Fatalf("MarkFailed() failed: %v", err)
 	}
@@ -365,7 +344,6 @@ func TestMarkSentKeepsTheFirstMarkAndBumpCounts(t *testing.T) {
 		t.Errorf("%d sent rows were marked failed", n)
 	}
 
-	// А ждущую — гасит: пятая неудача выводит строку из очереди навсегда.
 	mustInsert(t, repo, notif(me, entity.NotifPointOK, uuid.NewString(), ""))
 	last := pendingFor(t, repo, me)
 	if len(last) != 1 {
@@ -398,7 +376,6 @@ func TestLastSentAtIsPerContext(t *testing.T) {
 		t.Errorf("LastSentAt() before anything was sent = %v, want nil", at)
 	}
 
-	// Ждущая строка окно не открывает: агрегат считается по отправкам.
 	mustInsert(t, repo, notif(me, entity.NotifZoneNew, uuid.NewString(), "d-khamovniki"))
 	pending := pendingFor(t, repo, me)
 	if at := lastSent(entity.NotifZoneNew, "d-khamovniki"); at != nil {
@@ -412,7 +389,7 @@ func TestLastSentAtIsPerContext(t *testing.T) {
 	if at := lastSent(entity.NotifZoneNew, "d-khamovniki"); at == nil || !at.Equal(old) {
 		t.Errorf("LastSentAt() = %v, want %v", at, old)
 	}
-	// Соседняя зона своё окно не наследует, как и другой тип.
+
 	if at := lastSent(entity.NotifZoneNew, "line-1"); at != nil {
 		t.Errorf("LastSentAt() of another context = %v, want nil", at)
 	}
@@ -420,7 +397,6 @@ func TestLastSentAtIsPerContext(t *testing.T) {
 		t.Errorf("LastSentAt() of another type = %v, want nil", at)
 	}
 
-	// Свежая отправка по тому же контексту закрывает окно заново.
 	mustInsert(t, repo, notif(me, entity.NotifZoneNew, uuid.NewString(), "d-khamovniki"))
 	fresh := time.Now().UTC().Truncate(time.Millisecond)
 	if err := repo.MarkSent(t.Context(), ids(pendingFor(t, repo, me)), fresh); err != nil {
@@ -431,8 +407,6 @@ func TestLastSentAtIsPerContext(t *testing.T) {
 	}
 }
 
-// Предохранитель считает ЛИЧНЫЕ отправки: зонные и пуловые держит своё окно, а
-// сворачивать в хвост можно только то, что уходило поштучно.
 func TestSentPersonalCountCountsOnlyPersonalSends(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -463,7 +437,6 @@ func TestSentPersonalCountCountsOnlyPersonalSends(t *testing.T) {
 	}
 	day := time.Now().Add(-entity.AggregateWindow)
 
-	// Ждущие строки не считаются: предохранитель про доставленное.
 	if n := count(day); n != 0 {
 		t.Errorf("SentPersonalCount() before any send = %d, want 0", n)
 	}
@@ -475,11 +448,11 @@ func TestSentPersonalCountCountsOnlyPersonalSends(t *testing.T) {
 	if n := count(day); n != len(personal) {
 		t.Errorf("SentPersonalCount() = %d, want %d — агрегируемые в счёт не идут", n, len(personal))
 	}
-	// Окно скользящее: что ушло раньше since, бюджет уже не держит.
+
 	if n := count(time.Now().Add(-time.Minute)); n != 0 {
 		t.Errorf("SentPersonalCount() inside a minute = %d, want 0", n)
 	}
-	// Счётчик персональный: чужие отправки в него не попадают.
+
 	if err := repo.MarkSent(t.Context(), ids(pendingFor(t, repo, other)), sent); err != nil {
 		t.Fatalf("MarkSent() failed: %v", err)
 	}
@@ -511,7 +484,7 @@ func TestFailAllPendingEmptiesOneQueue(t *testing.T) {
 	if left := pendingFor(t, repo, me); len(left) != 0 {
 		t.Errorf("queue still holds %d rows", len(left))
 	}
-	// Отправленное остаётся отправленным: воркер не переписывает историю.
+
 	if got := sentAt(t, pool, sentRow.ID); got == nil || !got.Equal(at) {
 		t.Errorf("sent_at = %v, want %v", got, at)
 	}
@@ -519,14 +492,12 @@ func TestFailAllPendingEmptiesOneQueue(t *testing.T) {
 		`SELECT count(*) FROM notifications WHERE user_id = $1 AND failed_at IS NOT NULL`, me); n != 2 {
 		t.Errorf("%d rows failed, want 2", n)
 	}
-	// Чужая очередь не тронута: блокировка бота — личное дело адресата.
+
 	if left := pendingFor(t, repo, other); len(left) != 1 {
 		t.Errorf("another user's queue holds %d rows, want 1", len(left))
 	}
 }
 
-// Хвост «И ещё N лайков за сегодня» живёт в payload отправленной строки:
-// message_id — что редактировать, tail_count — сколько лайков сведено.
 func TestLikedTailLivesInTheSentRow(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -553,8 +524,7 @@ func TestLikedTailLivesInTheSentRow(t *testing.T) {
 	if err := repo.MarkSent(t.Context(), []uuid.UUID{carrier.ID}, sent); err != nil {
 		t.Fatalf("MarkSent() failed: %v", err)
 	}
-	// Отправленный лайк без запомненного message_id носителем не становится:
-	// редактировать нечего.
+
 	if got := tail(day); got != nil {
 		t.Errorf("LastLikedTail() without a message_id = %+v, want nil", got)
 	}
@@ -567,8 +537,6 @@ func TestLikedTailLivesInTheSentRow(t *testing.T) {
 		t.Fatalf("LastLikedTail() = %+v, want the carrier with message 4242 and count 1", got)
 	}
 
-	// Свёрнутый лайк уходит без своего сообщения — носитель остаётся тем же, а
-	// счётчик растёт.
 	mustInsert(t, repo, notif(me, entity.NotifLiked, uuid.NewString(), ""))
 	swallowed := pendingFor(t, repo, me)[0]
 	if err := repo.MarkSent(t.Context(), []uuid.UUID{swallowed.ID}, time.Now()); err != nil {
@@ -581,7 +549,6 @@ func TestLikedTailLivesInTheSentRow(t *testing.T) {
 		t.Errorf("LastLikedTail() = %+v, want the same carrier with count 2", got)
 	}
 
-	// «За сегодня» — окно: вчерашнее сообщение редактировать поздно, пойдёт новое.
 	if got := tail(time.Now().Add(-time.Hour)); got != nil {
 		t.Errorf("LastLikedTail() outside the window = %+v, want nil", got)
 	}

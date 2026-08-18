@@ -15,9 +15,6 @@ import (
 	"flatmatch/api/internal/entity"
 )
 
-// fakeRepo records what the service asked for and returns what the test wants.
-// Hand-written rather than generated: a fake that can be read in ten seconds
-// beats a mock that cannot.
 type fakeRepo struct {
 	got  entity.TelegramIdentity
 	user entity.User
@@ -54,10 +51,8 @@ func (f *fakeRepo) SetStatus(_ context.Context, _ uuid.UUID, s entity.Status) (e
 	return f.user, f.err
 }
 
-// jpegFile is the shortest thing that gets recognised as a photo.
 var jpegFile = []byte("\xff\xd8\xff\xe0")
 
-// fakeStore swallows uploads. Nothing here cares what the bytes were.
 type fakeStore struct{ put string }
 
 func (f *fakeStore) Put(_ context.Context, key string, _ io.Reader, _ string) error {
@@ -67,8 +62,6 @@ func (f *fakeStore) Put(_ context.Context, key string, _ io.Reader, _ string) er
 func (f *fakeStore) Delete(context.Context, string) error { return nil }
 func (f *fakeStore) URL(key string) string                { return "/media/" + key }
 
-// fakeNotifier is the moderation chat: what matters is only whether a
-// questionnaire was put in front of the moderator, and which one.
 type fakeNotifier struct {
 	queued []entity.User
 	ctxs   []context.Context
@@ -79,8 +72,6 @@ func (f *fakeNotifier) UserPending(ctx context.Context, u entity.User) {
 	f.ctxs = append(f.ctxs, ctx)
 }
 
-// newService leaves the notifier nil on purpose: a stand without a bot is a
-// valid setup, and every test that does not mention moderation covers it.
 func newService(repo *fakeRepo) *Service { return New(repo, &fakeStore{}, nil) }
 
 func newModeratedService(repo *fakeRepo) (*Service, *fakeNotifier) {
@@ -88,8 +79,6 @@ func newModeratedService(repo *fakeRepo) (*Service, *fakeNotifier) {
 	return New(repo, &fakeStore{}, notifier), notifier
 }
 
-// completeProfile is an answer to every question in §4, so tests about one
-// missing field can remove exactly that one.
 func completeProfile() entity.Profile {
 	return entity.Profile{
 		Age:        28,
@@ -127,8 +116,6 @@ func TestEnsureFromTelegramPassesIdentityThrough(t *testing.T) {
 }
 
 func TestEnsureFromTelegramSubstitutesAnEmptyName(t *testing.T) {
-	// Telegram guarantees a first name, but an empty one would leave the
-	// greeting blank and violate the NOT NULL on name.
 	repo := &fakeRepo{user: entity.User{Status: entity.StatusDraft}}
 
 	if _, err := newService(repo).EnsureFromTelegram(t.Context(), entity.TelegramIdentity{ID: 42}); err != nil {
@@ -183,7 +170,7 @@ func TestUpdateProfileRejectsAValueOutsideTheSet(t *testing.T) {
 	if !slices.Equal(fields.Fields, []string{"schedule"}) {
 		t.Errorf("Fields = %v, want [schedule]", fields.Fields)
 	}
-	// Nothing may reach the database once a value has been refused.
+
 	if repo.patched.Schedule != nil {
 		t.Error("the repository was called despite an invalid patch")
 	}
@@ -200,9 +187,7 @@ func TestSubmitNamesEverythingStillMissing(t *testing.T) {
 	if !errors.As(err, &fields) || !errors.Is(err, ErrIncomplete) {
 		t.Fatalf("Submit() error = %v, want ErrIncomplete", err)
 	}
-	// The photo lives on the account, not the questionnaire, and is just as
-	// mandatory (§4 шаг 11) — a list that forgot it would send someone back to
-	// a screen they already finished.
+
 	if !slices.Equal(fields.Fields, []string{"about", "photo"}) {
 		t.Errorf("Fields = %v, want [about photo]", fields.Fields)
 	}
@@ -227,8 +212,6 @@ func TestSubmitSendsACompleteDraftToModeration(t *testing.T) {
 }
 
 func TestSubmitLeavesAnApprovedAccountActive(t *testing.T) {
-	// Editing must not drop someone out of the pools while a moderator gets to
-	// them: the photo and «о себе» carry their own statuses for that (§5).
 	repo := &fakeRepo{user: entity.User{
 		Status:   entity.StatusActive,
 		Profile:  completeProfile(),
@@ -248,8 +231,6 @@ func TestSubmitLeavesAnApprovedAccountActive(t *testing.T) {
 }
 
 func TestSetPhotoKeepsOneObjectPerUser(t *testing.T) {
-	// A key derived from the id means a re-upload overwrites rather than
-	// littering the bucket with files nobody will ever look for.
 	store := &fakeStore{}
 	repo := &fakeRepo{}
 	id := uuid.New()
@@ -268,9 +249,6 @@ func TestSetPhotoKeepsOneObjectPerUser(t *testing.T) {
 }
 
 func TestSetPhotoRefusesWhatIsNotAnImage(t *testing.T) {
-	// The check belongs to the service, not to the one handler that happens to
-	// call it today: nothing may reach storage or the row until the file has
-	// been recognised.
 	store := &fakeStore{}
 	repo := &fakeRepo{}
 
@@ -290,12 +268,10 @@ func TestPhotoURLHidesAnUnreviewedPhoto(t *testing.T) {
 	svc := newService(&fakeRepo{})
 	user := entity.User{PhotoKey: "photos/x.jpg", PhotoStatus: entity.ModerationPending}
 
-	// Others see nothing and get a placeholder…
 	if got := svc.PhotoURL(user); got != "" {
 		t.Errorf("PhotoURL() = %q, want empty until a moderator has looked", got)
 	}
-	// …while the owner still sees what they uploaded, or they could not judge
-	// whether to replace it.
+
 	if got := svc.OwnPhotoURL(user); got == "" {
 		t.Error("OwnPhotoURL() is empty, the owner must see their own upload")
 	}
@@ -310,8 +286,6 @@ func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
 	}}
 	svc, notifier := newModeratedService(repo)
 
-	// Запрос отменён на полпути: анкета уже отправлена, и сообщение модератору
-	// ей нужно — иначе она молча зависнет в очереди до /queue.
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -330,8 +304,6 @@ func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
 }
 
 func TestResubmitDoesNotDuplicateTheCard(t *testing.T) {
-	// Уже отправленная анкета в очереди есть; второй тап по «готово» не должен
-	// класть модератору вторую карточку.
 	repo := &fakeRepo{user: entity.User{
 		Status:   entity.StatusPending,
 		Profile:  completeProfile(),
@@ -348,8 +320,6 @@ func TestResubmitDoesNotDuplicateTheCard(t *testing.T) {
 }
 
 func TestPhotoEditOfAnApprovedProfileGoesBackToTheModerator(t *testing.T) {
-	// Правка одобренной анкеты уходит на перепроверку — ровно фото и «о себе»
-	// (§5), а очередь узнаёт об этом здесь.
 	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
 	svc, notifier := newModeratedService(repo)
 
@@ -362,8 +332,6 @@ func TestPhotoEditOfAnApprovedProfileGoesBackToTheModerator(t *testing.T) {
 }
 
 func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
-	// В очередь модерации попадают только отправленные (§5): черновик модератор
-	// не видит, даже когда фото уже загружено.
 	repo := &fakeRepo{user: entity.User{Status: entity.StatusDraft}}
 	svc, notifier := newModeratedService(repo)
 
@@ -376,8 +344,6 @@ func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
 }
 
 func TestOnlyAboutSendsAnApprovedProfileBackToTheModerator(t *testing.T) {
-	// «Сова → жаворонок» не должна выкидывать человека из пулов и не касается
-	// модератора (§5).
 	for _, tc := range []struct {
 		name  string
 		patch entity.ProfilePatch

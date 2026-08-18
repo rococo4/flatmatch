@@ -2,7 +2,7 @@
 
 CREATE TABLE notifications (
     id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES users (id), -- адресат
+    user_id uuid NOT NULL REFERENCES users (id),
 
     type text NOT NULL CHECK (type IN (
         'zone_new', 'pool_new', 'liked', 'matched',

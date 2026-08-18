@@ -34,8 +34,7 @@ func TestParsePointEnums(t *testing.T) {
 		{"bathrooms combined", string(ParseBathrooms("combined")), string(BathroomsCombined)},
 		{"bathrooms separate", string(ParseBathrooms("separate")), string(BathroomsSeparate)},
 		{"bathrooms two", string(ParseBathrooms("two")), string(BathroomsTwo)},
-		// Форма отдаёт код, а не число: «1» осмысленно только вместе с
-		// раздельностью и валидным ответом не является.
+
 		{"bathrooms count", string(ParseBathrooms("1")), unknown},
 		{"bathrooms empty", string(ParseBathrooms("")), ""},
 

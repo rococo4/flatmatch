@@ -1,6 +1,3 @@
-// Package searchesapi serves «Мои поиски» (§6): the list with its pool
-// counters and the whole life cycle of a search — create, edit, close with a
-// reason, reactivate from the archive (§3).
 package searchesapi
 
 import (
@@ -30,14 +27,10 @@ type Searches interface {
 	Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Search, error)
 }
 
-// Pools is the counter half of the pool service: the list shows «N ищут · с K
-// полное совпадение» and the «M новых» badge for every active search.
 type Pools interface {
 	Counts(ctx context.Context, viewerID uuid.UUID, params entity.SearchParams, newSince *time.Time) (pools.Counts, error)
 }
 
-// Points backs the tappable line «M квартир под эти параметры» (§6) — мостик с
-// карточки поиска в выдачу.
 type Points interface {
 	CountIn(ctx context.Context, zoneID string) (int, error)
 }
@@ -85,14 +78,12 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	out := make([]searchResponse, 0, len(all))
 	for _, s := range all {
 		item := toSearchResponse(s, h.zone(s.ZoneID))
-		// Paused and closed searches are outside every pool (§3), so their
-		// counters are zero without asking.
+
 		if s.Status == entity.SearchActive {
 			counts, err := h.pools.Counts(r.Context(), user.ID, s.SearchParams, &s.PoolSeenAt)
 			switch {
 			case errors.Is(err, entity.ErrNotFound):
-				// The zone disappeared from a newer directory. The search still
-				// has to be listable — otherwise its owner cannot close it.
+
 			case err != nil:
 				handleError(w, r, err)
 				return
@@ -176,8 +167,6 @@ func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The reason is parsed, not validated: the service rejects the sentinel by
-	// name, so an unknown string comes back as invalid_field fields:["reason"].
 	closed, err := h.searches.Close(r.Context(), user.ID, id, entity.ParseCloseReason(body.Reason))
 	if err != nil {
 		handleError(w, r, err)
@@ -210,8 +199,6 @@ func (h *Handler) respond(w http.ResponseWriter, r *http.Request, status int, s 
 	httpx.JSON(w, r, status, toSearchResponse(s, h.zone(s.ZoneID)))
 }
 
-// readParams decodes the parameter body and reports the failure itself; the
-// second result says whether the caller may go on.
 func (h *Handler) readParams(w http.ResponseWriter, r *http.Request) (entity.SearchParams, bool) {
 	var body paramsRequest
 	if !decode(w, r, &body) {
@@ -226,9 +213,6 @@ func (h *Handler) readParams(w http.ResponseWriter, r *http.Request) (entity.Sea
 	return params, true
 }
 
-// zone names a stored zone id. A search whose zone the directory no longer
-// knows keeps the id in every field: the row must stay readable and closable,
-// and a blank name would leave the front-end printing «N ищут в ».
 func (h *Handler) zone(id string) zoneDTO {
 	z, ok := h.dir.Get(id)
 	if !ok {

@@ -15,7 +15,6 @@ func TestPlural(t *testing.T) {
 		}
 	}
 
-	// Формы разной длины ловят перепутанные few и many: «2 лайка», «5 лайков».
 	forms := map[int]string{1: "лайк", 2: "лайка", 5: "лайков", 21: "лайк", 24: "лайка"}
 	for n, want := range forms {
 		if got := Plural(n, "лайк", "лайка", "лайков"); got != want {

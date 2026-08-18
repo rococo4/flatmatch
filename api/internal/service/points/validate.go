@@ -11,13 +11,8 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// listingHosts — единственные разрешённые площадки (§5). Авито и Циан мы не
-// парсим (§8): ссылка приносит квартиру с горячим искателем внутри, и знать,
-// откуда она, нужно ровно для того, чтобы отсечь всё остальное.
 var listingHosts = []string{"avito.ru", "cian.ru"}
 
-// hostAliases — мобильные и www-зеркала тех же площадок: ссылка из приложения
-// приходит с m., ссылка с десктопа — с www., квартира за ними одна.
 var hostAliases = []string{"www.", "m."}
 
 func (s *Service) validFlat(in CreateFlat) (entity.Point, error) {
@@ -76,7 +71,7 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 
 	bad := invalidFields([]check{
 		{"stage", !known(in.Stage, entity.PointStageUnknown, entity.ParsePointStage)},
-		// «Договорился и заезжаю» без даты заезда — не тот кейс (§2.2).
+
 		{"move_in", in.Stage == entity.StageMovingIn && in.MoveIn == nil},
 		{"price_share", in.PriceShare < MinPrice || in.PriceShare > MaxPrice},
 		{"restrictions", !restrictionsOK},
@@ -88,13 +83,9 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 	return p, nil
 }
 
-// commonInvalid — то, что обе формы спрашивают одинаково: метро из справочника
-// (§5) и фото, без которых карточку не показать.
 func (s *Service) commonInvalid(zoneID string, photoKeys []string, rooms, deposit *int) []string {
 	zone, ok := s.dir.Get(zoneID)
 	return invalidFields([]check{
-		// Точка стоит на станции: зона выдачи — район или ветка — собирается из
-		// станций, и точка на «ветке» не пересеклась бы с районом (§8).
 		{"zone_id", !ok || zone.Kind != zones.KindStation},
 		{"photo_keys", !validPhotoKeys(photoKeys)},
 		{"rooms", rooms != nil && (*rooms < 1 || *rooms > entity.RoomsCap)},
@@ -129,17 +120,12 @@ func invalidFields(checks []check) []string {
 	return bad
 }
 
-// normalizeURL turns a pasted link into the key the dedup is built on: схема
-// всегда https, зеркала m./www. сведены к одному хосту, проценты в пути
-// раскрыты, хвостовые слэши и query отброшены — иначе одна и та же квартира
-// заводится трижды (§6). Регистр пути остаётся как есть: слить два разных
-// объявления в одно хуже, чем пропустить обход дедупа.
 func normalizeURL(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", false
 	}
-	// Ссылку копируют и без схемы; отказывать из-за этого — терять квартиру.
+
 	if !strings.Contains(raw, "://") {
 		raw = "https://" + raw
 	}
@@ -155,8 +141,7 @@ func normalizeURL(raw string) (string, bool) {
 	if !slices.Contains(listingHosts, host) {
 		return "", false
 	}
-	// Голый хост — не квартира: без пути ссылка ведёт на главную площадки, и
-	// первый же такой «дубль» запер бы весь домен.
+
 	path := strings.TrimRight(u.Path, "/")
 	if path == "" {
 		return "", false
@@ -164,8 +149,6 @@ func normalizeURL(raw string) (string, bool) {
 	return "https://" + host + path, true
 }
 
-// validRestrictions drops repeats: чипы «без животных» дважды — один и тот же
-// факт, а в базе они лежат массивом кодов.
 func validRestrictions(in []entity.Restriction) ([]entity.Restriction, bool) {
 	out := make([]entity.Restriction, 0, len(in))
 	for _, r := range in {
@@ -179,8 +162,6 @@ func validRestrictions(in []entity.Restriction) ([]entity.Restriction, bool) {
 	return out, true
 }
 
-// known: значение из словаря, а не пустое и не «unknown» — иначе CHECK в базе
-// ответит пятисоткой на то, что должно быть 400.
 func known[T ~string](v, unknown T, parse func(string) T) bool {
 	return v != "" && v != unknown && parse(string(v)) == v
 }

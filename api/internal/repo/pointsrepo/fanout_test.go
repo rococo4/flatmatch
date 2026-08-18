@@ -17,7 +17,7 @@ func TestPoolMemberIDs(t *testing.T) {
 	author := seedPerson(t, pool, 2, "male", "any")
 	mate := seedPerson(t, pool, 3, "male", "any")
 	matched := seedPerson(t, pool, 4, "male", "any")
-	// Чужой пол — человека нет нигде, и пуш о нём тоже никуда не идёт (§4).
+
 	hidden := seedPerson(t, pool, 5, "female", "same")
 
 	point, err := repo.Create(t.Context(),
@@ -37,7 +37,6 @@ func TestPoolMemberIDs(t *testing.T) {
 		t.Fatalf("PoolMemberIDs() failed: %v", err)
 	}
 
-	// Создатель в пуле своей точки с рождения (§2.2) — он первый адресат пуша.
 	for _, want := range []uuid.UUID{author, mate} {
 		if !slices.Contains(got, want) {
 			t.Errorf("PoolMemberIDs() = %v, lost the member %s", got, want)

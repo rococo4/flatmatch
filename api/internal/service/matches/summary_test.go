@@ -57,8 +57,7 @@ func TestParamsOverlap(t *testing.T) {
 				{Param: ParamRooms, Min: 2, Max: 2},
 			},
 		},
-		// «Неважно» о комнатах нечего рассказывать: в саммари попадает то, о чём
-		// договорились обе стороны, а не то, что одна не указала.
+
 		"rooms unstated on one side": {
 			mine:   entity.SearchParams{PriceMax: 45000, RoomsMin: pointer.To(1), RoomsMax: pointer.To(2)},
 			theirs: entity.SearchParams{PriceMax: 55000},
@@ -125,8 +124,7 @@ func TestSummaryReadsTheFreshestActiveSearchOfBothSides(t *testing.T) {
 		active(entity.SearchParams{ZoneID: "line-1", PriceMin: pointer.To(35000), PriceMax: 45000}),
 		active(entity.SearchParams{ZoneID: "line-2", PriceMin: pointer.To(90000), PriceMax: 120000}),
 	}
-	// Закрытый поиск в списке идёт первым нарочно: свежесть считается среди
-	// активных, а не по всему архиву.
+
 	f.searches[f.peer.ID] = []entity.Search{
 		closed(entity.SearchParams{ZoneID: "line-1", PriceMin: pointer.To(90000), PriceMax: 120000}),
 		active(entity.SearchParams{ZoneID: "line-1", PriceMin: pointer.To(40000), PriceMax: 55000}),
@@ -140,8 +138,6 @@ func TestSummaryReadsTheFreshestActiveSearchOfBothSides(t *testing.T) {
 	}
 }
 
-// Лайк не сгорает и мэтч не умирает от закрытого поиска (§2.3): саммари просто
-// молчит о параметрах, которых больше нет.
 func TestSummaryWithoutActiveSearchOnOneSide(t *testing.T) {
 	f := newFixture(t)
 	f.searches[f.viewer.ID] = []entity.Search{
@@ -161,8 +157,6 @@ func TestSummaryWithoutActiveSearchOnOneSide(t *testing.T) {
 	}
 }
 
-// Контекст-зона историческая: она из мэтча, а не из того, где человек ищет
-// сейчас (§6 — «пересеклись в пуле Хамовников»).
 func TestSummaryZoneComesFromTheMatch(t *testing.T) {
 	f := newFixture(t)
 	f.searches[f.viewer.ID] = []entity.Search{active(entity.SearchParams{ZoneID: "line-2", PriceMax: 45000})}
@@ -186,8 +180,6 @@ func TestSummaryWithoutZoneContext(t *testing.T) {
 	}
 }
 
-// Блок ГДЕ у точечного мэтча — мини-карточка точки, и зона в нём молчит:
-// контекст у лайка один (§2.3).
 func TestSummaryPointContext(t *testing.T) {
 	cases := map[string]struct {
 		point entity.Point
@@ -199,7 +191,7 @@ func TestSummaryPointContext(t *testing.T) {
 				Stage:     pointer.To(entity.StageLive),
 				Status:    entity.PointActive,
 				ZoneID:    "st-sokol",
-				CreatedBy: pointer.To(uuid.Nil), // подменяется на автора в тесте
+				CreatedBy: pointer.To(uuid.Nil),
 			},
 			want: "на комнату Кати · м. Сокол",
 		},
@@ -207,7 +199,7 @@ func TestSummaryPointContext(t *testing.T) {
 			point: entity.Point{Type: entity.PointFlat, Status: entity.PointActive, ZoneID: "st-sokol"},
 			want:  "квартира у м. Сокол",
 		},
-		// Точку закрыли, а мэтч остался: контекст исторический, саммари его помнит.
+
 		"закрытая точка всё равно рассказывает, где пересеклись": {
 			point: entity.Point{
 				Type:        entity.PointFlat,
@@ -245,8 +237,6 @@ func TestSummaryPointContext(t *testing.T) {
 	}
 }
 
-// Блок ГДЕ один: если в строке мэтча оказались оба контекста, рассказывает
-// точка — она конкретнее зоны.
 func TestSummaryPointWinsOverZone(t *testing.T) {
 	f := newFixture(t)
 	f.atPoint(entity.Point{Type: entity.PointFlat, Status: entity.PointActive, ZoneID: "st-sokol"})
@@ -259,8 +249,6 @@ func TestSummaryPointWinsOverZone(t *testing.T) {
 	}
 }
 
-// Точка могла исчезнуть из справочника зон или из базы — мэтч необратим, а
-// саммари просто теряет блок ГДЕ.
 func TestSummarySurvivesAMissingPoint(t *testing.T) {
 	f := newFixture(t)
 	gone := uuid.New()

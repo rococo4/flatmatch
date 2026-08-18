@@ -20,9 +20,6 @@ type Repository interface {
 	Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Search, error)
 }
 
-// Pushes — лог уведомлений (§7). Активный поиск и есть подписка на «в твоей
-// зоне появился ещё один человек», поэтому новый поиск зовёт фан-аут сам.
-// Пуш — не часть операции: nil молча ничего не делает, ошибки остаются внутри.
 type Pushes interface {
 	ZoneNew(ctx context.Context, search entity.Search)
 }
@@ -61,8 +58,7 @@ func (s *Service) Update(ctx context.Context, userID, id uuid.UUID, p entity.Sea
 	if err != nil {
 		return entity.Search{}, err
 	}
-	// The zone is the search's identity (§3): freshness ranking, the «M новых»
-	// badge and pushes all key on it. Changing it means a new search.
+
 	if p.ZoneID != current.ZoneID {
 		return entity.Search{}, &entity.FieldsError{Err: ErrInvalidParams, Fields: []string{"zone_id"}}
 	}
@@ -81,9 +77,6 @@ func (s *Service) Close(ctx context.Context, userID, id uuid.UUID, reason entity
 	return s.repo.Close(ctx, userID, id, reason)
 }
 
-// Reactivate возвращает поиск из архива — для пулов это тот же приход нового
-// человека, что и создание. Правка параметров пуша не заказывает: подписчики уже
-// знают об этом человеке, а пул виртуален и никого не дёргает (§3).
 func (s *Service) Reactivate(ctx context.Context, userID, id uuid.UUID) (entity.Search, error) {
 	search, err := s.repo.Reactivate(ctx, userID, id)
 	if err != nil {

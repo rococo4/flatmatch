@@ -17,22 +17,21 @@ type Config struct {
 	APIAddr  string
 	LogLevel slog.Level
 
-	// DatabaseURL is the Postgres connection string.
 	DatabaseURL string
 
-	// PhotoDir is where profile photos are written until object storage is set
-	// up. Temporary by design: the storage sits behind an interface, and moving
-	// to S3 replaces the implementation, not this path's users.
 	PhotoDir string
 
 	BotToken string
 	AppURL   string
-	// InitDataTTL is the maximum accepted age of initData's auth_date.
+
 	InitDataTTL time.Duration
 
 	BotPollingEnabled bool
 
 	ModerationChatID int64
+
+	PushWorkerEnabled bool
+	PushTick          time.Duration
 }
 
 var dotEnvCandidates = []string{".env", "../.env"}
@@ -99,6 +98,22 @@ func Load() (Config, error) {
 		} else if !strings.HasPrefix(cfg.AppURL, "https://") {
 			fail("APP_URL must be https:// for a Mini App button, got %q", cfg.AppURL)
 		}
+	}
+
+	pushes, err := parseBool(envOr("PUSH_WORKER_ENABLED", "true"))
+	if err != nil {
+		fail("PUSH_WORKER_ENABLED: %w", err)
+	}
+	cfg.PushWorkerEnabled = pushes
+
+	tick, err := time.ParseDuration(envOr("PUSH_TICK", "30s"))
+	switch {
+	case err != nil:
+		fail("PUSH_TICK: %w", err)
+	case tick <= 0:
+		fail("PUSH_TICK must be positive, got %s", tick)
+	default:
+		cfg.PushTick = tick
 	}
 
 	if raw := os.Getenv("MODERATION_CHAT_ID"); raw != "" {

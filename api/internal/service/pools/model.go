@@ -45,8 +45,8 @@ type Pool struct {
 	Zone     zones.Zone
 	MySearch *entity.Search
 	Ranked   bool
-	Sections []Section // ranked: always 3, in the order all / partial / none
-	People   []Person  // unranked: one plain list
+	Sections []Section
+	People   []Person
 }
 
 type Counts struct {

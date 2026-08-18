@@ -86,24 +86,22 @@ const (
 type Point struct {
 	ID    uuid.UUID
 	Type  PointType
-	Stage *PointStage // nil for flat
-	// Status is pending until a moderator approves it; the creator sees the
-	// point right away, the feed only after that (§5).
+	Stage *PointStage
+
 	Status PointStatus
 	Source PointSource
-	// CreatedBy is provenance, limits and moderation — never ownership (§8).
+
 	CreatedBy *uuid.UUID
 	ZoneID    string
 
-	PriceTotal   *int // flat
-	PriceShare   *int // intent_home
+	PriceTotal   *int
+	PriceShare   *int
 	Rooms        *int
 	Isolated     *bool
 	Bathrooms    *Bathrooms
 	Utilities    *Utilities
 	Restrictions []Restriction
-	// PhotoKeys — до MaxPointPhotos; первый ключ — обложка карточки и кадр,
-	// который уходит модератору.
+
 	PhotoKeys []string
 
 	URLNorm     *string

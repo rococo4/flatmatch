@@ -1,9 +1,3 @@
-// Package imagetype recognises the picture formats the product accepts.
-//
-// It exists apart from any one upload because there is more than one: the
-// profile photo today (§4 шаг 11), the screenshot of a listing and the photo of
-// a room once points arrive (§6). What counts as an image should not be decided
-// twice, in two handlers, slightly differently.
 package imagetype
 
 import (

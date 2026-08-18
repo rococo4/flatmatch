@@ -13,9 +13,6 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// seedPoint writes the point directly: the like reads its type, status and
-// author, and the interesting cases — pending, paused, closed — are states
-// pointsrepo.Create does not hand out in one call.
 func seedPoint(t *testing.T, pool *pgxpool.Pool, owner uuid.UUID, kind, status string) uuid.UUID {
 	t.Helper()
 	var stage, reason *string
@@ -51,8 +48,6 @@ func pointCtx(pointID uuid.UUID) LikeContext {
 	return LikeContext{PointID: &pointID}
 }
 
-// Пул квартиры несёт отношение сам: вошедшему лайк открыт БЕЗ единого поиска
-// (§2.3), не вошедшему точка отвечает тем же 404, что и невидимый человек.
 func TestFlatPointLikeNeedsPoolMembership(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -74,7 +69,7 @@ func TestFlatPointLikeNeedsPoolMembership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() from the pool failed: %v", err)
 	}
-	// Ни одного поиска у лайкающего нет — в зонной ветке это был бы ErrNeedSearch.
+
 	if !res.Like.Spent || res.Like.PointID == nil || *res.Like.PointID != flat {
 		t.Errorf("like = %+v, want a spent one with the point context", res.Like)
 	}
@@ -86,8 +81,6 @@ func TestFlatPointLikeNeedsPoolMembership(t *testing.T) {
 	}
 }
 
-// «Хочу эту комнату» уходит автору карточки и больше никому: чужой человек с
-// тем же point-контекстом — не наш кейс (§2.2, пула у «к себе» нет).
 func TestIntentHomeLikeReachesOnlyTheAuthor(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -110,8 +103,6 @@ func TestIntentHomeLikeReachesOnlyTheAuthor(t *testing.T) {
 	}
 }
 
-// Точка, которой человек видеть не мог, — не контекст: карточка на проверке,
-// на паузе или закрытая отвечает 404, как и несуществующая.
 func TestPointLikeNeedsALivePoint(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -123,7 +114,7 @@ func TestPointLikeNeedsALivePoint(t *testing.T) {
 	for _, status := range []string{"pending", "paused", "closed"} {
 		t.Run(status, func(t *testing.T) {
 			flat := seedPoint(t, pool, owner, "flat", status)
-			// Членство в пуле есть — отказ обязан прийти именно от статуса.
+
 			enterPool(t, pool, liker, flat)
 
 			_, err := repo.Create(t.Context(), liker, target, pointCtx(flat))
@@ -141,8 +132,6 @@ func TestPointLikeNeedsALivePoint(t *testing.T) {
 	}
 }
 
-// Автор «к себе» может не искать ничего: отклик ему прилетел, и ответ на него
-// не стоит ни слота, ни поиска (§2.3). Контекст мэтча — точка первого лайка.
 func TestReplyToAPointLikeIsFreeAndKeepsTheContext(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -172,8 +161,6 @@ func TestReplyToAPointLikeIsFreeAndKeepsTheContext(t *testing.T) {
 	}
 }
 
-// Слотов пять на человека, а не по пять на каждый вид контекста: окно считает
-// потраченные лайки, не спрашивая, откуда они (§2.3).
 func TestBudgetIsSharedAcrossContexts(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -212,8 +199,6 @@ func TestBudgetIsSharedAcrossContexts(t *testing.T) {
 	}
 }
 
-// «На твою комнату» (§2.2) начинается здесь: без point_id входящий отклик не
-// отличить от зонного лайка, и пометка на карточке взяться неоткуда.
 func TestIncomingCarriesThePointContext(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

@@ -42,9 +42,6 @@ func (s *Service) ZonePool(ctx context.Context, viewer entity.User, zoneID strin
 		}
 	}
 
-	// Правило «мы увиделись» (§2.3): пул виден только тому, кто в нём состоит —
-	// есть активный поиск, пересекающий зону. Анонимного просмотра нет; тизер
-	// зоны — промо-блок (Counts), он не гейтится.
 	if mySearch == nil {
 		return Pool{}, entity.ErrNeedSearch
 	}
@@ -162,7 +159,6 @@ func photoURL(photos PhotoURLs, u entity.User) string {
 	return photos.URL(u.PhotoKey)
 }
 
-// zoneMatchFirst: сначала совпавшие по зоне, внутри групп — свежесть.
 func zoneMatchFirst(a, b Person) int {
 	if a.ZoneMatch != b.ZoneMatch {
 		if a.ZoneMatch {
@@ -173,8 +169,6 @@ func zoneMatchFirst(a, b Person) int {
 	return freshestFirst(a, b)
 }
 
-// zoneMatch: equal zones, or every station of one inside the other — anywhere
-// they want to live suits me too (or the reverse).
 func zoneMatch(dir *zones.Directory, mineID, theirsID string) bool {
 	if mineID == theirsID {
 		return true

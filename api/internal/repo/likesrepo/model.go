@@ -26,30 +26,23 @@ const spentInWindowFilter = `from_id = $1 AND spent AND created_at > now() - mak
 
 var windowSeconds = entity.LikeWindow.Seconds()
 
-// LikeContext is where the dear like was placed from (§2.3) — a zone pool or a
-// point, never both: the service refuses a request that names two contexts.
 type LikeContext struct {
 	ZoneID string
-	// ContextZones — зоны, пересекающие зону контекста: тратящий зонный лайк
-	// оплачивается активным поиском в любой из них.
+
 	ContextZones []string
-	// PointID переносит отношение на сам контекст — пул квартиры или карточку
-	// «к себе», — и поиска тогда не требуется вовсе.
+
 	PointID *uuid.UUID
 }
 
 type IncomingLike struct {
-	From   entity.User // partial, like entity.PoolCandidate.User
+	From   entity.User
 	ZoneID string
-	// PointID is the other half of the context: у «к себе» это отклик на твою
-	// комнату (§2.2), у квартиры с рынка — общий пул.
+
 	PointID      *uuid.UUID
-	NotSearching bool // no active searches — the grey «сейчас не в поиске» mark (§2.3)
+	NotSearching bool
 	CreatedAt    time.Time
 }
 
-// lockedUser is what the pair lock brings back: the id to tell the two rows
-// apart and the status the §5 gate reads without a second statement.
 type lockedUser struct {
 	ID     uuid.UUID
 	Status string
@@ -129,9 +122,7 @@ func (r incomingRow) toEntity() IncomingLike {
 			PhotoKey:    pointer.Get(r.UPhotoKey),
 			PhotoStatus: entity.ParseModerationStatus(r.UPhotoStatus),
 			LastSeen:    r.ULastSeen,
-			// Not read from the row: the query goes through visible_people, which
-			// only ever returns active people (§4). Stating the guarantee beats
-			// leaving a zero that would make User.Visible() lie.
+
 			Status: entity.StatusActive,
 		},
 		ZoneID:       pointer.Get(r.ZoneID),

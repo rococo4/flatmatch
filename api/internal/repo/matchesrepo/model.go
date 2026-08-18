@@ -28,14 +28,11 @@ const blockedColumn = `EXISTS (
 
 type MatchWithPeer struct {
 	Match entity.Match
-	Peer  entity.User // Username and TelegramID are filled in by ByID only
-	// Blocked reports the fact only — the service decides what to withhold from
-	// a blocked pair: the pair is not to be reconnected, yet a match never dies.
+	Peer  entity.User
+
 	Blocked bool
 }
 
-// PollTarget — кому и про кого задать пост-мэтч вопрос: опрос личный, у каждой
-// стороны мэтча свой.
 type PollTarget struct {
 	Match    entity.Match
 	UserID   uuid.UUID
@@ -52,7 +49,7 @@ type matchRow struct {
 }
 
 type peerRow struct {
-	matchRow // m.* columns, unprefixed
+	matchRow
 
 	Blocked bool `db:"blocked"`
 
@@ -76,7 +73,7 @@ type peerRow struct {
 }
 
 type pollRow struct {
-	matchRow // m.* columns, unprefixed
+	matchRow
 
 	UserID   uuid.UUID `db:"user_id"`
 	PeerName string    `db:"peer_name"`

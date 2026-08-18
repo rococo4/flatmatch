@@ -12,9 +12,6 @@ import (
 	"flatmatch/api/internal/service/zones"
 )
 
-// zoneDTO is the outbound twin of searchesapi's: same fields, same
-// declensions. Copied rather than shared because a DTO belongs to the handler
-// that serves it.
 type zoneDTO struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -29,9 +26,6 @@ type peerDTO struct {
 	PhotoURL string    `json:"photo_url"`
 }
 
-// peerContactDTO is the ONLY DTO in the product that carries a way to reach a
-// person (§3). A banned peer or a blocked pair arrives here with both fields
-// empty — the service strips them, and the screen has nothing to dial.
 type peerContactDTO struct {
 	peerDTO
 
@@ -46,35 +40,23 @@ type matchDTO struct {
 	At      time.Time `json:"at"`
 }
 
-// matchDetailResponse is «Это мэтч» with its three blocks (§6): where the pair
-// crossed paths, what their parameters have in common, what their
-// questionnaires answered alike.
 type matchDetailResponse struct {
 	MatchID uuid.UUID      `json:"match_id"`
 	Peer    peerContactDTO `json:"peer"`
 	At      time.Time      `json:"at"`
 
-	// Where and WherePoint are the same ГДЕ block in two shapes: зона пула или
-	// точка. Контексты взаимоисключимы — лайк несёт один (§2.3), — поэтому
-	// приезжает ровно одно из полей, а то и ни одного: точку могли закрыть, и
-	// саммари переживает это молча (мэтч необратим).
 	Where      *zoneDTO          `json:"where,omitempty"`
 	WherePoint *pointDTO         `json:"where_point,omitempty"`
 	Params     []paramOverlapDTO `json:"params"`
 	Profile    []sharedDTO       `json:"profile"`
 }
 
-// pointDTO is the mini-card of «пересеклись на комнате Кати · м. Сокол»: the
-// label is ready to print, the kind colours the header (§6). Its twin lives in
-// the profile screen — the same phrase in the two places the context is retold.
 type pointDTO struct {
 	ID    uuid.UUID `json:"id"`
 	Kind  string    `json:"kind"`
 	Label string    `json:"label"`
 }
 
-// paramOverlapDTO is one line of the «по параметрам» block: a range («у обоих
-// 40–45к»), a month or a term — whichever the parameter is made of.
 type paramOverlapDTO struct {
 	Param string `json:"param"`
 	Min   *int   `json:"min,omitempty"`
@@ -129,10 +111,6 @@ func toPeerDTO(u entity.User, photoURL string) peerDTO {
 	return peerDTO{UserID: u.ID, Name: u.Name, Age: u.Profile.Age, PhotoURL: photoURL}
 }
 
-// toParamOverlap: only the range parameters carry bounds, and an absent max
-// means «и сколько угодно» — rooms whose upper bound neither side named. A
-// degenerate range (min == max) is what «у обоих 45к» is made of; the DTO
-// carries both numbers and the screen decides to print one.
 func toParamOverlap(o matches.ParamOverlap) paramOverlapDTO {
 	out := paramOverlapDTO{Param: o.Param, Month: o.Month, Term: o.Term}
 	switch o.Param {

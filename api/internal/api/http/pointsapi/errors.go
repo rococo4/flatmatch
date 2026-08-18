@@ -11,8 +11,6 @@ import (
 	"flatmatch/api/internal/service/points"
 )
 
-// Микрокопия отказов — та, что читает человек в форме (§6): лимит зовёт
-// закрыть лишнее, дубль предлагает войти в чужой пул, пул закрыт до входа.
 const (
 	duplicateActiveTemplate = "Эта квартира уже есть, в пуле %d — войти?"
 	duplicatePendingMessage = "Эта квартира уже добавлена и ждёт проверки"
@@ -21,9 +19,6 @@ const (
 	needEnterMessage        = "Пул откроется после входа"
 )
 
-// handleFormError adds to handleError то, чем отвечает только форма: дубль
-// ссылки и лимит. Тип формы нужен лимиту: их два, и человеку важно, в какой он
-// упёрся.
 func handleFormError(w http.ResponseWriter, r *http.Request, kind entity.PointType, err error) {
 	var duplicate *points.ErrDuplicateURL
 	switch {
@@ -36,14 +31,13 @@ func handleFormError(w http.ResponseWriter, r *http.Request, kind entity.PointTy
 	}
 }
 
-// handleError turns the service's sentinels into the codes of §3.
 func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	var fields *entity.FieldsError
 	switch {
 	case errors.Is(err, entity.ErrNeedEnter):
 		httpx.Error(w, r, http.StatusForbidden, httpx.CodeNeedEnter, needEnterMessage, err)
 	case errors.Is(err, entity.ErrNotFound):
-		// Точка на проверке для всех, кроме создателя, не существует (§5).
+
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such point", err)
 	case errors.As(err, &fields):
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "value outside the allowed set", fields.Fields, err)
@@ -52,9 +46,6 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// duplicate answers a link that already lives in the product. Активная точка
-// зовёт войти в свой пул, точка на проверке — ещё ничья, входить некуда: до
-// аппрува её видит только тот, кто подал (§5).
 func duplicateFound(w http.ResponseWriter, r *http.Request, dup *points.ErrDuplicateURL) {
 	message := duplicatePendingMessage
 	body := duplicateResponse{Status: string(dup.Existing.Status)}

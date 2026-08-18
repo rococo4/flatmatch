@@ -16,21 +16,13 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 )
 
-// Test users live in their own negative tg_id range so leftovers never collide
-// with real accounts or with the other repos' tests: each cleanup wipes its
-// whole window, so a shared base makes parallel packages delete each other's
-// rows. Taken: -994 usersrepo, -995 matchesrepo, -996 likesrepo, -997 pools,
-// -998 searchesrepo.
 const testTGBase int64 = -993000000
 
-// Точки парсера и досыпки создателя не имеют, и по тестовым юзерам их не
-// найти — поэтому все точки тестов живут в своей зоне и чистятся по ней.
 const testZone = "s-test-points"
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	// pgx uses the extended protocol: one statement per Exec, no semicolons.
-	// Order follows the foreign keys — likes_points and points reference users.
+
 	clean := func() {
 		exec := func(query string, arg any) {
 			if _, err := pool.Exec(context.Background(), query, arg); err != nil {
@@ -102,8 +94,6 @@ func intentHome(createdBy uuid.UUID, stage entity.PointStage) entity.Point {
 	return p
 }
 
-// closePoint закрывает точку в обход репо: CHECK требует причину вместе со
-// статусом, а закрытие — дело шага модерации, не этой задачи.
 func closePoint(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
@@ -140,7 +130,7 @@ func TestCreateRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
-	// Статус не задан — точка уходит на проверку, а не в ленту (§5).
+
 	if created.Status != entity.PointPending {
 		t.Errorf("status = %q, want %q", created.Status, entity.PointPending)
 	}
@@ -159,8 +149,7 @@ func TestCreateRoundtrip(t *testing.T) {
 		got.URLNorm == nil || *got.URLNorm != "https://avito.ru/1" {
 		t.Errorf("fields lost in round-trip: %+v", got)
 	}
-	// Словарные поля отдельной проверкой: подмена кода на «unknown» проходила
-	// бы условие «поле не потерялось».
+
 	if got.Bathrooms == nil || *got.Bathrooms != entity.BathroomsSeparate ||
 		got.Utilities == nil || *got.Utilities != entity.UtilitiesMeters ||
 		len(got.Restrictions) != 2 || got.Restrictions[0] != entity.RestrictionNoPets ||
@@ -179,15 +168,9 @@ func TestCreateEnforcesUserLinkLimitUnderConcurrency(t *testing.T) {
 	repo := New(pool)
 	user := seedUser(t, pool, 1)
 
-	// 6 параллельных созданий: живых должно стать ровно 5 (§8), шестое —
-	// entity.ErrPointLimit. Ссылки разные — спор идёт за слот, не за url_norm.
 	const attempts = entity.MaxUserLinkPoints + 1
 	errs := make([]error, attempts)
 
-	// Прогрев пула: установка соединения — это TCP и аутентификация, миллисекунды.
-	// Без прогрева горутины расходятся по времени настолько, что первая успевает
-	// закоммититься до старта последней, и гонки, ради которой тест написан,
-	// попросту не происходит.
 	conns := make([]*pgxpool.Conn, attempts)
 	for i := range conns {
 		c, err := pool.Acquire(t.Context())
@@ -200,7 +183,6 @@ func TestCreateEnforcesUserLinkLimitUnderConcurrency(t *testing.T) {
 		c.Release()
 	}
 
-	// Барьер: горутины ждут на закрытии канала и стартуют разом.
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for i := range errs {
@@ -231,8 +213,6 @@ func TestCreateEnforcesUserLinkLimitUnderConcurrency(t *testing.T) {
 			entity.MaxUserLinkPoints, attempts-entity.MaxUserLinkPoints)
 	}
 
-	// Главная проверка — состояние базы, а не счёт ошибок: протёкший лимит виден
-	// здесь, даже если вызовы отчитались как надо.
 	live := countRows(t, pool, `
 		SELECT count(*) FROM points
 		WHERE created_by = $1 AND status IN ('pending', 'active')`, user)
@@ -251,21 +231,20 @@ func TestIntentHomeLimitsByStage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(live) failed: %v", err)
 	}
-	// «Живу здесь» — факт, а не запасной вариант: второго такого не бывает (§2.2).
+
 	if _, err := repo.Create(t.Context(), intentHome(user, entity.StageLive)); !errors.Is(err, entity.ErrPointLimit) {
 		t.Errorf("second live = %v, want ErrPointLimit", err)
 	}
 	if _, err := repo.Create(t.Context(), intentHome(user, entity.StageMovingIn)); err != nil {
 		t.Fatalf("Create(moving_in) alongside live failed: %v", err)
 	}
-	// Суммарный кап — 2 «к себе», какой бы стадии ни была третья точка.
+
 	for _, stage := range []entity.PointStage{entity.StageLive, entity.StageMovingIn} {
 		if _, err := repo.Create(t.Context(), intentHome(user, stage)); !errors.Is(err, entity.ErrPointLimit) {
 			t.Errorf("third point (%s) = %v, want ErrPointLimit", stage, err)
 		}
 	}
-	// Слот поисков «к себе» не занимает, и пять ссылок с рынка — тоже свой счёт:
-	// все пять обязаны пройти рядом с двумя «к себе», иначе лимит их смешивает.
+
 	for i := range entity.MaxUserLinkPoints {
 		url := fmt.Sprintf("https://avito.ru/%d", i)
 		if _, err := repo.Create(t.Context(), flatPoint(&user, entity.SourceUserLink, url, entity.PointPending)); err != nil {
@@ -273,7 +252,6 @@ func TestIntentHomeLimitsByStage(t *testing.T) {
 		}
 	}
 
-	// Закрытая точка слот не держит: «живу здесь» освободилось.
 	closePoint(t, pool, live.ID)
 	if _, err := repo.Create(t.Context(), intentHome(user, entity.StageLive)); err != nil {
 		t.Errorf("Create(live) after closing the previous one failed: %v", err)
@@ -285,8 +263,6 @@ func TestIntentHomeLimitsByStage(t *testing.T) {
 	}
 }
 
-// Парсер и ручная досыпка — источник объёма (§8): у их точек нет создателя, и
-// лимиты, которые считаются на человека, к ним не применимы.
 func TestSourcesWithoutCreatorSkipLimits(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -330,8 +306,6 @@ func TestByURLNormIgnoresClosed(t *testing.T) {
 		t.Errorf("ByURLNorm() of an unknown url = %+v, %v, want nil, nil", missing, err)
 	}
 
-	// Закрытую ссылку частичный индекс уже не защищает — и дедуп не должен
-	// отвечать «эта квартира уже есть» точкой, которой никто не видит.
 	closePoint(t, pool, created.ID)
 	closed, err := repo.ByURLNorm(t.Context(), url)
 	if err != nil {
@@ -352,16 +326,11 @@ func TestByURLNormIgnoresClosed(t *testing.T) {
 		t.Errorf("ByURLNorm() = %+v, want the re-submitted point", found)
 	}
 
-	// Живую ссылку второй раз не подать. Сервис ловит дубль через ByURLNorm
-	// заранее — сюда доходит только гонка двух одновременных подач.
 	if _, err := repo.Create(t.Context(), flatPoint(&user, entity.SourceUserLink, url, entity.PointActive)); !errors.Is(err, ErrURLTaken) {
 		t.Errorf("duplicate of a live link = %v, want ErrURLTaken", err)
 	}
 }
 
-// «Ты первый в пуле» (§6) — обещание финала формы: создатель квартиры стоит в
-// её пуле с момента вставки, ещё до аппрува. У «к себе» пула нет (§2.2), у
-// точки без создателя — некому входить (§8).
 func TestCreateEntersTheCreatorIntoOwnPool(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -395,8 +364,6 @@ func TestCreateEntersTheCreatorIntoOwnPool(t *testing.T) {
 	}
 }
 
-// Пул принадлежит точке, а не пользователю: вход в одну квартиру не должен
-// делать человека участником соседней.
 func TestPoolMembershipIsPerPoint(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -432,7 +399,6 @@ func TestPoolMembershipIsPerPoint(t *testing.T) {
 			inPool(first.ID), inPool(second.ID))
 	}
 
-	// Выход из второй квартиры не выносит человека из первой.
 	if _, err := repo.Enter(t.Context(), guest, second.ID); err != nil {
 		t.Fatalf("Enter() failed: %v", err)
 	}
@@ -466,7 +432,6 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 		name  string
 		point uuid.UUID
 	}{
-		// У «к себе» пула нет: отклик — дорогой лайк автору, а не вход (§2.2).
 		{"intent_home", home.ID},
 		{"pending flat", pending.ID},
 		{"missing point", uuid.New()},
@@ -490,8 +455,7 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(active flat) failed: %v", err)
 	}
-	// Вход безлимитный и в один тап — повторный тап не должен быть ошибкой (§2.2),
-	// но и вошедшим второй раз человек не становится: пуш пулу заказывает первый.
+
 	for i := range 2 {
 		entered, err := repo.Enter(t.Context(), guest, flat.ID)
 		if err != nil {
@@ -509,7 +473,6 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 		t.Errorf("database holds %d pool rows, want 1", n)
 	}
 
-	// Выход тоже идемпотентен: второй тап приходит с перерисованного экрана.
 	for range 2 {
 		if err := repo.Leave(t.Context(), guest, flat.ID); err != nil {
 			t.Fatalf("Leave() failed: %v", err)
@@ -520,8 +483,6 @@ func TestEnterOnlyActiveFlat(t *testing.T) {
 	}
 }
 
-// Точка смертна вместе с предложением автора (§2.2): закрыть её может только
-// он, и слот, за которым следит лимит, освобождается вместе с ней.
 func TestCloseBelongsToTheCreator(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -544,7 +505,6 @@ func TestCloseBelongsToTheCreator(t *testing.T) {
 		t.Fatalf("Create(intent_home) failed: %v", err)
 	}
 
-	// Чужая точка отвечает как несуществующая — и остаётся нетронутой.
 	for _, id := range []uuid.UUID{pending.ID, active.ID, home.ID, uuid.New()} {
 		if err := repo.Close(t.Context(), stranger, id); !errors.Is(err, entity.ErrNotFound) {
 			t.Errorf("Close() by a stranger = %v, want ErrNotFound", err)
@@ -555,8 +515,6 @@ func TestCloseBelongsToTheCreator(t *testing.T) {
 		t.Fatalf("a stranger closed %d points", n)
 	}
 
-	// Своя закрывается в любом живом статусе — и «на проверке», и одобренная, и
-	// «Зову к себе».
 	for _, id := range []uuid.UUID{pending.ID, active.ID, home.ID} {
 		if err := repo.Close(t.Context(), author, id); err != nil {
 			t.Fatalf("Close() failed: %v", err)
@@ -565,18 +523,16 @@ func TestCloseBelongsToTheCreator(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ByID() failed: %v", err)
 		}
-		// Причина едет вместе со статусом: без неё падает CHECK.
+
 		if got.Status != entity.PointClosed || got.CloseReason == nil || *got.CloseReason != "closed" {
 			t.Errorf("point %s = %s / %v, want closed with a reason", id, got.Status, got.CloseReason)
 		}
 	}
 
-	// Повторный тап приходит с перерисованного экрана и проходит молча.
 	if err := repo.Close(t.Context(), author, active.ID); err != nil {
 		t.Errorf("second Close() = %v, want nil — идемпотентно", err)
 	}
 
-	// Закрытые слотов не держат: пять ссылок и две «к себе» снова свободны (§8).
 	for i := range entity.MaxUserLinkPoints {
 		url := fmt.Sprintf("https://avito.ru/after-%d", i)
 		if _, err := repo.Create(t.Context(), flatPoint(&author, entity.SourceUserLink, url, entity.PointPending)); err != nil {

@@ -10,8 +10,6 @@ import (
 	"flatmatch/api/internal/service/notifications"
 )
 
-// Сервис уведомлений обязан оставаться тем, кого этот пакет просит: расхождение
-// должно ломать сборку здесь, а не в проводке.
 var _ Pushes = (*notifications.Service)(nil)
 
 type poolNewCall struct {
@@ -45,8 +43,6 @@ func TestEnterTellsThePool(t *testing.T) {
 	}
 }
 
-// Повторный тап по «Интересно» ошибкой не является (§2.2), но в пуле от него
-// никого не прибавилось — пуш был бы про несуществующего новичка.
 func TestRepeatedEnterStaysSilent(t *testing.T) {
 	pushes := &fakePushes{}
 	s := New(&fakeRepo{entered: false}, &fakeSearches{}, &fakePhotos{}, mustDir(t), nil, pushes)

@@ -63,8 +63,6 @@ func TestToEntityMapsAKnownRow(t *testing.T) {
 }
 
 func TestToEntitySurvivesAnUnknownStatus(t *testing.T) {
-	// The case this exists for: a migration added a value the deployed binary
-	// does not know. The row still maps, so the endpoint keeps working…
 	got := userRow{
 		Name:        "Из будущего",
 		Status:      "shadow_banned",
@@ -82,20 +80,17 @@ func TestToEntitySurvivesAnUnknownStatus(t *testing.T) {
 	if got.Profile.Schedule != entity.ScheduleUnknown {
 		t.Errorf("Schedule = %q, want %q", got.Profile.Schedule, entity.ScheduleUnknown)
 	}
-	// …and the account stays hidden, rather than being shown with a meaning
-	// nothing in this binary can act on.
+
 	if got.Visible() {
 		t.Error("an account with an uninterpretable status must not be visible")
 	}
-	// Everything that does not depend on the enum still arrives intact.
+
 	if got.Name != "Из будущего" {
 		t.Errorf("Name = %q, want it mapped despite the unknown status", got.Name)
 	}
 }
 
 func TestToEntityWarnsAboutUnknownValues(t *testing.T) {
-	// Hiding a field without saying so turns a five-minute fix into a support
-	// ticket weeks later, so the warning is part of the contract.
 	var logged bytes.Buffer
 	ctx := logctx.With(t.Context(), slog.New(slog.NewJSONHandler(&logged, nil)))
 
@@ -111,8 +106,7 @@ func TestToEntityWarnsAboutUnknownValues(t *testing.T) {
 	if !strings.Contains(out, `"level":"WARN"`) {
 		t.Errorf("no warning was logged, got: %s", out)
 	}
-	// Both offending columns have to be named: one warning per row is only
-	// enough if it says everything that went wrong in it.
+
 	for _, field := range []string{"status", "cleaning"} {
 		if !strings.Contains(out, field) {
 			t.Errorf("the warning does not name %q, got: %s", field, out)

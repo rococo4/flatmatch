@@ -63,6 +63,12 @@ type Member struct {
 	Matched   bool
 }
 
+type VoteOutcome struct {
+	GoneVotes int
+	Hidden    bool
+	Closed    bool
+}
+
 type pointRow struct {
 	ID           uuid.UUID  `db:"id"`
 	Type         string     `db:"type"`

@@ -100,11 +100,12 @@ func (r *Repo) CardByID(ctx context.Context, viewerID, pointID uuid.UUID) (FeedP
 
 func (r *Repo) Mine(ctx context.Context, viewerID uuid.UUID) (created, entered []FeedPoint, err error) {
 	created, err = r.feed(ctx, `p.created_by = $1
-		  AND (p.status <> 'closed' OR p.close_reason = 'rejected')`, viewerID)
+		  AND (p.status <> 'closed'
+		       OR p.close_reason IN ('rejected', 'gone', 'expired', 'found'))`, viewerID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("points created by %s: %w", viewerID, err)
 	}
-	entered, err = r.feed(ctx, `p.status = 'active' AND p.created_by IS DISTINCT FROM $1
+	entered, err = r.feed(ctx, `p.status IN ('active', 'paused') AND p.created_by IS DISTINCT FROM $1
 		  AND EXISTS (SELECT 1 FROM likes_points lp
 		              WHERE lp.point_id = p.id AND lp.user_id = $1)`, viewerID)
 	if err != nil {
@@ -155,6 +156,19 @@ func (r *Repo) PoolMemberIDs(ctx context.Context, viewerID, pointID uuid.UUID) (
 	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
 		return nil, fmt.Errorf("pool member ids of point %s: %w", pointID, err)
+	}
+	return ids, nil
+}
+
+func (r *Repo) AllPoolMemberIDs(ctx context.Context, pointID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT user_id FROM likes_points WHERE point_id = $1 ORDER BY created_at, user_id`, pointID)
+	if err != nil {
+		return nil, fmt.Errorf("all pool member ids of point %s: %w", pointID, err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, fmt.Errorf("all pool member ids of point %s: %w", pointID, err)
 	}
 	return ids, nil
 }
@@ -225,7 +239,7 @@ func (r *Repo) Close(ctx context.Context, userID, pointID uuid.UUID) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE points SET status = 'closed', close_reason = 'closed', edited_at = now()
 			WHERE id = $1 AND created_by = $2
-			  AND (status <> 'closed' OR close_reason = 'rejected')`, pointID, userID)
+			  AND (status <> 'closed' OR close_reason <> 'closed')`, pointID, userID)
 		if err != nil {
 			return err
 		}
@@ -245,6 +259,122 @@ func (r *Repo) Close(ctx context.Context, userID, pointID uuid.UUID) error {
 	})
 	if err != nil {
 		return fmt.Errorf("close point %s: %w", pointID, err)
+	}
+	return nil
+}
+
+func (r *Repo) CloseWithReason(ctx context.Context, pointID uuid.UUID, reason entity.PointCloseReason) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE points SET status = 'closed', close_reason = $2, edited_at = now()
+		WHERE id = $1 AND status IN ('active', 'paused')`, pointID, string(reason))
+	if err != nil {
+		return false, fmt.Errorf("close point %s as %s: %w", pointID, reason, err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+func (r *Repo) Vote(ctx context.Context, userID, pointID uuid.UUID, alive bool) (VoteOutcome, error) {
+	var out VoteOutcome
+	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		var status, source string
+		var goneCount int
+		switch err := tx.QueryRow(ctx,
+			`SELECT status, source, gone_count FROM points WHERE id = $1 FOR UPDATE`,
+			pointID).Scan(&status, &source, &goneCount); {
+		case errors.Is(err, pgx.ErrNoRows):
+			return entity.ErrNotFound
+		case err != nil:
+			return err
+		}
+		if entity.ParsePointStatus(status) != entity.PointActive {
+			return entity.ErrPointNotActive
+		}
+
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO point_votes (user_id, point_id, alive) VALUES ($1, $2, $3)
+			ON CONFLICT (user_id, point_id)
+			DO UPDATE SET alive = EXCLUDED.alive, created_at = now()`,
+			userID, pointID, alive); err != nil {
+			return err
+		}
+
+		if alive {
+			if _, err := tx.Exec(ctx, `
+				UPDATE points SET last_seen_alive = now(), ping_asked_at = NULL
+				WHERE id = $1`, pointID); err != nil {
+				return err
+			}
+			return tx.QueryRow(ctx,
+				`SELECT count(*) FROM point_votes WHERE point_id = $1 AND NOT alive`,
+				pointID).Scan(&out.GoneVotes)
+		}
+
+		var poolSize int
+		if err := tx.QueryRow(ctx, `
+			SELECT (SELECT count(*) FROM point_votes WHERE point_id = $1 AND NOT alive),
+			       (SELECT count(*) FROM likes_points WHERE point_id = $1)`,
+			pointID).Scan(&out.GoneVotes, &poolSize); err != nil {
+			return err
+		}
+		if out.GoneVotes < entity.GoneThreshold(poolSize) {
+			return nil
+		}
+
+		out.Hidden = true
+		if entity.ParsePointSource(source) == entity.SourceUserLink && goneCount == 0 {
+			_, err := tx.Exec(ctx, `
+				UPDATE points SET status = 'paused', gone_count = 1, edited_at = now()
+				WHERE id = $1`, pointID)
+			return err
+		}
+		out.Closed = true
+		_, err := tx.Exec(ctx, `
+			UPDATE points SET status = 'closed', close_reason = 'gone',
+				gone_count = gone_count + 1, edited_at = now()
+			WHERE id = $1`, pointID)
+		return err
+	})
+	if err != nil {
+		return VoteOutcome{}, fmt.Errorf("vote on point %s: %w", pointID, err)
+	}
+	return out, nil
+}
+
+func (r *Repo) Restore(ctx context.Context, userID, pointID uuid.UUID) error {
+	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE points SET status = 'active', last_seen_alive = now(),
+				ping_asked_at = NULL, edited_at = now()
+			WHERE id = $1 AND created_by = $2 AND status = 'paused'`, pointID, userID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			mine, err := exists(ctx, tx,
+				`SELECT 1 FROM points WHERE id = $1 AND created_by = $2`, pointID, userID)
+			if err != nil {
+				return err
+			}
+			if !mine {
+				return entity.ErrNotFound
+			}
+			return entity.ErrPointNotPaused
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM point_votes WHERE point_id = $1`, pointID)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("restore point %s: %w", pointID, err)
+	}
+	return nil
+}
+
+func (r *Repo) TouchAlive(ctx context.Context, pointID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE points SET last_seen_alive = now(), ping_asked_at = NULL
+		WHERE id = $1 AND status = 'active'`, pointID)
+	if err != nil {
+		return fmt.Errorf("touch point %s: %w", pointID, err)
 	}
 	return nil
 }

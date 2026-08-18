@@ -307,6 +307,15 @@ func (f *fakePolls) MatchesForPostPoll(_ context.Context, olderThan time.Duratio
 type fakePointZones struct {
 	points map[uuid.UUID]entity.Point
 	err    error
+
+	forPing   []entity.Point
+	pingEvery time.Duration
+	asked     []uuid.UUID
+
+	expired         []uuid.UUID
+	expireCalls     int
+	expireQuiet     time.Duration
+	expireAfterPing time.Duration
 }
 
 func (f *fakePointZones) ByID(_ context.Context, id uuid.UUID) (entity.Point, error) {
@@ -318,6 +327,22 @@ func (f *fakePointZones) ByID(_ context.Context, id uuid.UUID) (entity.Point, er
 		return entity.Point{}, entity.ErrNotFound
 	}
 	return point, nil
+}
+
+func (f *fakePointZones) PointsForPing(_ context.Context, every time.Duration) ([]entity.Point, error) {
+	f.pingEvery = every
+	return f.forPing, nil
+}
+
+func (f *fakePointZones) MarkPingAsked(_ context.Context, id uuid.UUID) error {
+	f.asked = append(f.asked, id)
+	return nil
+}
+
+func (f *fakePointZones) Expire(_ context.Context, quiet, afterPing time.Duration) ([]uuid.UUID, error) {
+	f.expireCalls++
+	f.expireQuiet, f.expireAfterPing = quiet, afterPing
+	return f.expired, nil
 }
 
 type workerFakes struct {
@@ -821,6 +846,95 @@ func TestPostMatchQuestionCarriesThePeer(t *testing.T) {
 	w.pass(t.Context())
 	if len(f.sender.sent) != 1 {
 		t.Errorf("sent %v, want the question asked once", f.sender.texts())
+	}
+}
+
+func TestPointPingScanAsksTheCreator(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	creator := f.addressee(1001)
+	seenAlive := f.clock.at.Add(-8 * 24 * time.Hour)
+	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol", CreatedBy: &creator, LastSeenAlive: seenAlive}
+	f.points.forPing = []entity.Point{point}
+
+	w.pass(t.Context())
+
+	if got, want := f.points.pingEvery, entity.PingEveryDays*24*time.Hour; got != want {
+		t.Errorf("asked for points quiet for %s, want %s", got, want)
+	}
+	if !slices.Equal(f.points.asked, []uuid.UUID{point.ID}) {
+		t.Errorf("marked pinged %v, want [%s]", f.points.asked, point.ID)
+	}
+	if got := f.queue.count(entity.NotifPointPing); got != 1 {
+		t.Fatalf("%d point pings queued, want 1", got)
+	}
+	row := f.queue.rows[len(f.queue.rows)-1]
+	if row.UserID != creator {
+		t.Errorf("addressed to %s, want the creator %s", row.UserID, creator)
+	}
+	if want := fmt.Sprintf("%s:%d", point.ID, seenAlive.Unix()); row.ActorKey != want {
+		t.Errorf("actor = %q, want %q", row.ActorKey, want)
+	}
+	if row.ContextKey != point.ID.String() {
+		t.Errorf("context = %q, want the point %s", row.ContextKey, point.ID)
+	}
+}
+
+func TestPointWithoutACreatorIsNotPinged(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol"}
+	f.points.forPing = []entity.Point{point}
+
+	w.pass(t.Context())
+
+	if len(f.points.asked) != 0 {
+		t.Errorf("marked pinged %v, want none — the point has no creator", f.points.asked)
+	}
+	if got := f.queue.count(entity.NotifPointPing); got != 0 {
+		t.Errorf("%d point pings queued for a point without a creator, want 0", got)
+	}
+}
+
+func TestPointsExpireOncePerScan(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	f.points.expired = []uuid.UUID{uuid.New()}
+
+	w.pass(t.Context())
+	f.clock.add(30 * time.Second)
+	w.pass(t.Context())
+
+	if f.points.expireCalls != 1 {
+		t.Errorf("Expire called %d times within the hour, want 1", f.points.expireCalls)
+	}
+	if got, want := f.points.expireQuiet, entity.PointTTLDays*24*time.Hour; got != want {
+		t.Errorf("expire quiet window = %s, want %s", got, want)
+	}
+	if got, want := f.points.expireAfterPing, entity.PingAnswerDays*24*time.Hour; got != want {
+		t.Errorf("expire after-ping window = %s, want %s", got, want)
+	}
+
+	f.clock.add(scanEvery)
+	w.pass(t.Context())
+	if f.points.expireCalls != 2 {
+		t.Errorf("Expire called %d times after an hour, want 2", f.points.expireCalls)
+	}
+}
+
+func TestNoAnswersMeansNoPingOrArchive(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	w = w.WithoutAnswers()
+	creator := f.addressee(1001)
+	f.points.forPing = []entity.Point{{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol", CreatedBy: &creator}}
+
+	w.pass(t.Context())
+
+	if len(f.points.asked) != 0 {
+		t.Errorf("asked %v while the bot cannot hear answers", f.points.asked)
+	}
+	if got := f.queue.count(entity.NotifPointPing); got != 0 {
+		t.Errorf("%d point pings queued with nobody listening", got)
+	}
+	if f.points.expireCalls != 0 {
+		t.Errorf("Expire called %d times with nobody listening, want 0", f.points.expireCalls)
 	}
 }
 

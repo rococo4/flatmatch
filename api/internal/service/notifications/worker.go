@@ -87,6 +87,9 @@ type MatchPolls interface {
 
 type PointZones interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
+	PointsForPing(ctx context.Context, every time.Duration) ([]entity.Point, error)
+	MarkPingAsked(ctx context.Context, id uuid.UUID) error
+	Expire(ctx context.Context, quiet, afterPing time.Duration) ([]uuid.UUID, error)
 }
 
 type ZoneDir interface {
@@ -177,6 +180,8 @@ func (w *Worker) pass(ctx context.Context) {
 	w.askTTL(ctx)
 	w.pauseSilent(ctx)
 	w.askPostMatch(ctx)
+	w.pingPoints(ctx)
+	w.expirePoints(ctx)
 }
 
 func (w *Worker) deliverPersonal(ctx context.Context, rows []entity.Notification, unreachable map[uuid.UUID]bool) {
@@ -399,6 +404,44 @@ func (w *Worker) askPostMatch(ctx context.Context) {
 	}
 }
 
+func (w *Worker) pingPoints(ctx context.Context) {
+	due, err := w.points.PointsForPing(ctx, entity.PingEveryDays*24*time.Hour)
+	if err != nil {
+		w.log.Error("find the points to ping", "error", err)
+		return
+	}
+
+	for _, point := range due {
+		if point.CreatedBy == nil {
+			continue
+		}
+		if _, err := w.queue.Insert(ctx, entity.Notification{
+			UserID:     *point.CreatedBy,
+			Type:       entity.NotifPointPing,
+			ActorKey:   pingActor(point),
+			ContextKey: point.ID.String(),
+		}); err != nil {
+			w.log.Warn("write the point ping", "point", point.ID, "error", err)
+			continue
+		}
+
+		if err := w.points.MarkPingAsked(ctx, point.ID); err != nil {
+			w.log.Warn("mark the point pinged", "point", point.ID, "error", err)
+		}
+	}
+}
+
+func (w *Worker) expirePoints(ctx context.Context) {
+	ids, err := w.points.Expire(ctx, entity.PointTTLDays*24*time.Hour, entity.PingAnswerDays*24*time.Hour)
+	if err != nil {
+		w.log.Error("expire stale points", "error", err)
+		return
+	}
+	if len(ids) > 0 {
+		w.log.Info("points expired", "count", len(ids))
+	}
+}
+
 func (w *Worker) personalMessage(ctx context.Context, n entity.Notification) (string, []tgbot.PushButton, error) {
 	switch n.Type {
 	case entity.NotifLiked:
@@ -580,6 +623,10 @@ func (w *Worker) fail(ctx context.Context, ids []uuid.UUID) {
 
 func ttlActor(search entity.Search) string {
 	return fmt.Sprintf("%s:%d", search.ID, search.LastActiveAt.Unix())
+}
+
+func pingActor(point entity.Point) string {
+	return fmt.Sprintf("%s:%d", point.ID, point.LastSeenAlive.Unix())
 }
 
 func deepLink(text, startParam string) []tgbot.PushButton {

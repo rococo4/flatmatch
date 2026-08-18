@@ -21,6 +21,12 @@ var ErrNeedEnter = errors.New("the pool is visible to its members only")
 
 var ErrNotApproved = errors.New("profile is not approved yet")
 
+var ErrPointNotActive = errors.New("point is not active")
+
+var ErrPointNotPaused = errors.New("point is not paused")
+
+var ErrNotVotable = errors.New("only market flats with a link take votes")
+
 type FieldsError struct {
 	Err    error
 	Fields []string

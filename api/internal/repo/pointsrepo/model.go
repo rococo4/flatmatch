@@ -12,12 +12,14 @@ import (
 const pointColumns = `id, type, stage, status, source, created_by, zone_id,
 	price_total, price_share, rooms, isolated, bathrooms, utilities,
 	restrictions, photo_keys, url_norm, move_in, deposit, close_reason,
+	last_seen_alive, gone_count, ping_asked_at,
 	created_at, edited_at`
 
 const joinedPointColumns = `p.id, p.type, p.stage, p.status, p.source, p.created_by,
 	p.zone_id, p.price_total, p.price_share, p.rooms, p.isolated, p.bathrooms,
 	p.utilities, p.restrictions, p.photo_keys, p.url_norm, p.move_in, p.deposit,
-	p.close_reason, p.created_at, p.edited_at`
+	p.close_reason, p.last_seen_alive, p.gone_count, p.ping_asked_at,
+	p.created_at, p.edited_at`
 
 const personColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
 	u.gender AS u_gender, u.occupation AS u_occupation,
@@ -50,6 +52,8 @@ type FeedPoint struct {
 	Responses int
 	InPool    bool
 	Author    *entity.User
+	GoneVotes int
+	MyVote    *bool
 }
 
 type Member struct {
@@ -79,8 +83,13 @@ type pointRow struct {
 	MoveIn       *time.Time `db:"move_in"`
 	Deposit      *int       `db:"deposit"`
 	CloseReason  *string    `db:"close_reason"`
-	CreatedAt    time.Time  `db:"created_at"`
-	EditedAt     time.Time  `db:"edited_at"`
+
+	LastSeenAlive time.Time  `db:"last_seen_alive"`
+	GoneCount     int        `db:"gone_count"`
+	PingAskedAt   *time.Time `db:"ping_asked_at"`
+
+	CreatedAt time.Time `db:"created_at"`
+	EditedAt  time.Time `db:"edited_at"`
 }
 
 type personRow struct {
@@ -107,9 +116,11 @@ type feedRow struct {
 	pointRow
 	personRow
 
-	PoolCount int  `db:"pool_count"`
-	Responses int  `db:"responses"`
-	InPool    bool `db:"in_pool"`
+	PoolCount int   `db:"pool_count"`
+	Responses int   `db:"responses"`
+	InPool    bool  `db:"in_pool"`
+	GoneVotes int   `db:"gone_votes"`
+	MyVote    *bool `db:"my_vote"`
 }
 
 type memberRow struct {
@@ -150,8 +161,13 @@ func (r pointRow) toEntity() entity.Point {
 		MoveIn:      r.MoveIn,
 		Deposit:     r.Deposit,
 		CloseReason: r.CloseReason,
-		CreatedAt:   r.CreatedAt,
-		EditedAt:    r.EditedAt,
+
+		LastSeenAlive: r.LastSeenAlive,
+		GoneCount:     r.GoneCount,
+		PingAskedAt:   r.PingAskedAt,
+
+		CreatedAt: r.CreatedAt,
+		EditedAt:  r.EditedAt,
 	}
 	if r.Stage != nil {
 		p.Stage = pointer.To(entity.ParsePointStage(*r.Stage))
@@ -205,6 +221,8 @@ func (r feedRow) toEntity() FeedPoint {
 		Responses: r.Responses,
 		InPool:    r.InPool,
 		Author:    r.personRow.toEntity(),
+		GoneVotes: r.GoneVotes,
+		MyVote:    r.MyVote,
 	}
 }
 

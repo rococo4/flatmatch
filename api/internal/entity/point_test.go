@@ -57,3 +57,38 @@ func TestParsePointEnums(t *testing.T) {
 		})
 	}
 }
+
+func TestGoneThreshold(t *testing.T) {
+	tests := []struct {
+		pool int
+		want int
+	}{
+		{0, 2}, {1, 2}, {2, 2}, {3, 2}, {4, 2}, {5, 2}, {6, 2},
+		{7, 3}, {10, 3}, {20, 6},
+	}
+	for _, tt := range tests {
+		if got := GoneThreshold(tt.pool); got != tt.want {
+			t.Errorf("GoneThreshold(%d) = %d, want %d", tt.pool, got, tt.want)
+		}
+	}
+}
+
+func TestVotable(t *testing.T) {
+	url := "https://avito.ru/1"
+	tests := []struct {
+		name  string
+		point Point
+		want  bool
+	}{
+		{"flat with a link", Point{Type: PointFlat, URLNorm: &url}, true},
+		{"flat without a link", Point{Type: PointFlat}, false},
+		{"intent_home", Point{Type: PointIntentHome, URLNorm: &url}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.point.Votable(); got != tt.want {
+				t.Errorf("Votable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

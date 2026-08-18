@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,6 +84,24 @@ const (
 	RestrictionNoSmoking Restriction = "no_smoking"
 )
 
+type PointCloseReason string
+
+const (
+	CloseReasonClosed   PointCloseReason = "closed"
+	CloseReasonRejected PointCloseReason = "rejected"
+	CloseReasonGone     PointCloseReason = "gone"
+	CloseReasonExpired  PointCloseReason = "expired"
+	CloseReasonFound    PointCloseReason = "found"
+)
+
+const (
+	GoneVoteFloor  = 2
+	GoneVoteShare  = 0.3
+	PingEveryDays  = 7
+	PointTTLDays   = 14
+	PingAnswerDays = 3
+)
+
 type Point struct {
 	ID    uuid.UUID
 	Type  PointType
@@ -108,6 +127,10 @@ type Point struct {
 	MoveIn      *time.Time
 	Deposit     *int
 	CloseReason *string
+
+	LastSeenAlive time.Time
+	GoneCount     int
+	PingAskedAt   *time.Time
 
 	CreatedAt time.Time
 	EditedAt  time.Time
@@ -139,4 +162,16 @@ func ParseUtilities(raw string) Utilities {
 
 func ParseRestriction(raw string) Restriction {
 	return parseEnum(raw, RestrictionNoPets, RestrictionNoCouples, RestrictionNoSmoking)
+}
+
+func GoneThreshold(pool int) int {
+	threshold := int(math.Ceil(GoneVoteShare * float64(pool)))
+	if threshold < GoneVoteFloor {
+		return GoneVoteFloor
+	}
+	return threshold
+}
+
+func (p Point) Votable() bool {
+	return p.Type == PointFlat && p.URLNorm != nil
 }

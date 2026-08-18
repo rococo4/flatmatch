@@ -37,6 +37,9 @@ const (
 	NotifPointRejected  NotificationType = "point_rejected"
 	NotifStillSearching NotificationType = "still_searching"
 	NotifPostMatch      NotificationType = "post_match"
+
+	NotifPointGone NotificationType = "point_gone"
+	NotifPointPing NotificationType = "point_ping"
 )
 
 type PollAnswer string
@@ -68,12 +71,14 @@ var personalPushTypes = []NotificationType{
 	NotifLiked, NotifMatched,
 	NotifProfileOK, NotifPhotoRejected, NotifAboutRejected,
 	NotifPointOK, NotifPointRejected,
+	NotifPointGone,
 }
 
 func ParseNotificationType(raw string) NotificationType {
 	return parseEnum(raw, NotifZoneNew, NotifPoolNew, NotifLiked, NotifMatched,
 		NotifProfileOK, NotifPhotoRejected, NotifAboutRejected,
-		NotifPointOK, NotifPointRejected, NotifStillSearching, NotifPostMatch)
+		NotifPointOK, NotifPointRejected, NotifStillSearching, NotifPostMatch,
+		NotifPointGone, NotifPointPing)
 }
 
 func ParsePollAnswer(raw string) PollAnswer {

@@ -278,7 +278,9 @@ func (r *Repo) feed(ctx context.Context, where string, args ...any) ([]FeedPoint
 			coalesce(pool.n, 0) AS pool_count,
 			coalesce(resp.n, 0) AS responses,
 			EXISTS (SELECT 1 FROM likes_points lp
-			        WHERE lp.point_id = p.id AND lp.user_id = $1) AS in_pool
+			        WHERE lp.point_id = p.id AND lp.user_id = $1) AS in_pool,
+			(SELECT count(*) FROM point_votes v WHERE v.point_id = p.id AND NOT v.alive) AS gone_votes,
+			(SELECT v.alive FROM point_votes v WHERE v.point_id = p.id AND v.user_id = $1) AS my_vote
 		FROM points p
 		LEFT JOIN users u ON u.id = p.created_by AND p.type = 'intent_home'
 		LEFT JOIN LATERAL (

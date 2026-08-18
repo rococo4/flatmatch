@@ -125,6 +125,9 @@ func TestCardByIDMatchesTheFeed(t *testing.T) {
 	if card.PoolCount != 1 || !card.InPool || card.Author != nil {
 		t.Errorf("card = %+v, want pool 1, in_pool true and no author", card)
 	}
+	if card.GoneVotes != 0 || card.MyVote != nil {
+		t.Errorf("card = %+v, want gone_votes 0 and no vote of my own", card)
+	}
 
 	pending, err := repo.Create(t.Context(),
 		flatPoint(&author, entity.SourceUserLink, "https://avito.ru/1", entity.PointPending))

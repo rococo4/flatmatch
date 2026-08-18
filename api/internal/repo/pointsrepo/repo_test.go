@@ -30,6 +30,7 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 			}
 		}
 		for _, q := range []string{
+			`DELETE FROM point_votes WHERE point_id IN (SELECT id FROM points WHERE zone_id = $1)`,
 			`DELETE FROM likes_points WHERE point_id IN (SELECT id FROM points WHERE zone_id = $1)`,
 			`DELETE FROM points WHERE zone_id = $1`,
 		} {
@@ -37,6 +38,7 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 		}
 		for _, q := range []string{
 			`DELETE FROM likes_points WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
+			`DELETE FROM point_votes WHERE point_id IN (SELECT id FROM points WHERE created_by IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000))`,
 			`DELETE FROM likes_points WHERE point_id IN (SELECT id FROM points WHERE created_by IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000))`,
 			`DELETE FROM points WHERE created_by IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM searches WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -155,6 +157,10 @@ func TestCreateRoundtrip(t *testing.T) {
 		len(got.Restrictions) != 2 || got.Restrictions[0] != entity.RestrictionNoPets ||
 		got.Restrictions[1] != entity.RestrictionNoSmoking {
 		t.Errorf("dictionary fields lost in round-trip: %+v", got)
+	}
+
+	if got.LastSeenAlive.IsZero() || got.GoneCount != 0 {
+		t.Errorf("freshness fields = %+v, want LastSeenAlive set and GoneCount 0", got)
 	}
 
 	if _, err := repo.ByID(t.Context(), uuid.New()); !errors.Is(err, entity.ErrNotFound) {

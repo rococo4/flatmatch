@@ -31,6 +31,7 @@ func (f *fakeModeration) SendQueue(context.Context) error {
 type fakePushes struct {
 	searchTaps []buttonTap
 	pollTaps   []buttonTap
+	pointTaps  []buttonTap
 	unblocked  []int64
 	ack        string
 	err        error
@@ -48,6 +49,11 @@ func (f *fakePushes) HandleSearchCallback(_ context.Context, tgID int64, data st
 
 func (f *fakePushes) HandlePollCallback(_ context.Context, tgID int64, data string) (string, error) {
 	f.pollTaps = append(f.pollTaps, buttonTap{tgID, data})
+	return f.ack, f.err
+}
+
+func (f *fakePushes) HandlePointCallback(_ context.Context, tgID int64, data string) (string, error) {
+	f.pointTaps = append(f.pointTaps, buttonTap{tgID, data})
 	return f.ack, f.err
 }
 
@@ -240,6 +246,7 @@ func TestPushAnswersAreRoutedByPrefix(t *testing.T) {
 	}{
 		{"search", "srch:yes:1a1c1de1-0000-4000-8000-000000000001", "✓ Ищу дальше"},
 		{"poll", "poll:1a1c1de1-0000-4000-8000-000000000002:moving", "✓ Съезжаемся"},
+		{"point", "pnt:alive:1a1c1de1-0000-4000-8000-000000000003", "✓ Отмечено: актуальна"},
 	}
 
 	for _, tc := range cases {
@@ -251,14 +258,18 @@ func TestPushAnswersAreRoutedByPrefix(t *testing.T) {
 				handle(t.Context(), privateTap(188993596, tc.data))
 
 			routed := pushes.searchTaps
-			if tc.name == "poll" {
+			switch tc.name {
+			case "poll":
 				routed = pushes.pollTaps
+			case "point":
+				routed = pushes.pointTaps
 			}
 			if len(routed) != 1 || routed[0].data != tc.data || routed[0].tgID != 188993596 {
 				t.Fatalf("routed %v, want one tap of %q from 188993596", routed, tc.data)
 			}
-			if len(pushes.searchTaps)+len(pushes.pollTaps) != 1 {
-				t.Errorf("the tap reached both handlers: %v / %v", pushes.searchTaps, pushes.pollTaps)
+			if len(pushes.searchTaps)+len(pushes.pollTaps)+len(pushes.pointTaps) != 1 {
+				t.Errorf("the tap reached more than one handler: %v / %v / %v",
+					pushes.searchTaps, pushes.pollTaps, pushes.pointTaps)
 			}
 
 			answer := api.got("answerCallbackQuery")

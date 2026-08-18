@@ -41,6 +41,7 @@ type Moderation interface {
 type Pushes interface {
 	HandleSearchCallback(ctx context.Context, tgID int64, data string) (string, error)
 	HandlePollCallback(ctx context.Context, tgID int64, data string) (string, error)
+	HandlePointCallback(ctx context.Context, tgID int64, data string) (string, error)
 	ClearPushBlocked(ctx context.Context, tgID int64) error
 }
 
@@ -185,7 +186,7 @@ func (b *Bot) handleCallback(ctx context.Context, query *CallbackQuery, updateID
 	switch prefix {
 	case ModerationCallbackPrefix:
 		b.handleVerdict(ctx, query, log)
-	case SearchCallbackPrefix, PollCallbackPrefix:
+	case SearchCallbackPrefix, PollCallbackPrefix, PointCallbackPrefix:
 		b.handlePushAnswer(ctx, query, log)
 	}
 }
@@ -195,9 +196,15 @@ func (b *Bot) handlePushAnswer(ctx context.Context, query *CallbackQuery, log *s
 		return
 	}
 
-	handle := b.pushes.HandleSearchCallback
-	if strings.HasPrefix(query.Data, PollCallbackPrefix+":") {
+	prefix, _, _ := strings.Cut(query.Data, ":")
+	var handle func(context.Context, int64, string) (string, error)
+	switch prefix {
+	case PollCallbackPrefix:
 		handle = b.pushes.HandlePollCallback
+	case PointCallbackPrefix:
+		handle = b.pushes.HandlePointCallback
+	default:
+		handle = b.pushes.HandleSearchCallback
 	}
 
 	ack, answerErr := handle(ctx, query.Message.Chat.ID, query.Data)

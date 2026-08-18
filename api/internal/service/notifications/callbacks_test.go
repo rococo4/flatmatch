@@ -82,6 +82,34 @@ func (f *fakePollAnswers) SavePollAnswer(_ context.Context, matchID, userID uuid
 	return true, nil
 }
 
+type fakePointAnswers struct {
+	points      map[uuid.UUID]entity.Point
+	touched     []uuid.UUID
+	closed      map[uuid.UUID]entity.PointCloseReason
+	closeResult bool
+}
+
+func (f *fakePointAnswers) ByID(_ context.Context, id uuid.UUID) (entity.Point, error) {
+	point, ok := f.points[id]
+	if !ok {
+		return entity.Point{}, entity.ErrNotFound
+	}
+	return point, nil
+}
+
+func (f *fakePointAnswers) TouchAlive(_ context.Context, id uuid.UUID) error {
+	f.touched = append(f.touched, id)
+	return nil
+}
+
+func (f *fakePointAnswers) CloseWithReason(_ context.Context, id uuid.UUID, reason entity.PointCloseReason) (bool, error) {
+	if f.closed == nil {
+		f.closed = map[uuid.UUID]entity.PointCloseReason{}
+	}
+	f.closed[id] = reason
+	return f.closeResult, nil
+}
+
 type fakeAccounts struct {
 	byTelegram map[int64]uuid.UUID
 	unblocked  []uuid.UUID
@@ -146,7 +174,7 @@ func TestSearchCallbacks(t *testing.T) {
 				active.ID: active, paused.ID: paused, closed.ID: closed,
 			}, noSlots: tc.noSlots}
 			users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{ownerTG: owner, strangerTG: stranger}}
-			callbacks := NewCallbacks(searches, &fakePollAnswers{}, users)
+			callbacks := NewCallbacks(searches, &fakePollAnswers{}, users, &fakePointAnswers{})
 
 			ack, err := callbacks.HandleSearchCallback(t.Context(), tc.tgID, tc.data)
 			if tc.wantErr {
@@ -183,7 +211,7 @@ func TestPollCallbacks(t *testing.T) {
 	newCallbacks := func() (*Callbacks, *fakePollAnswers) {
 		polls := &fakePollAnswers{members: map[uuid.UUID][]uuid.UUID{matchID: {user}}}
 		users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{userTG: user, strangerTG: stranger}}
-		return NewCallbacks(&fakeSearchAnswers{}, polls, users), polls
+		return NewCallbacks(&fakeSearchAnswers{}, polls, users, &fakePointAnswers{}), polls
 	}
 
 	callbacks, polls := newCallbacks()
@@ -218,10 +246,117 @@ func TestPollCallbacks(t *testing.T) {
 	}
 }
 
+func TestPointCallbacks(t *testing.T) {
+	owner, stranger := uuid.New(), uuid.New()
+	const ownerTG, strangerTG = int64(1001), int64(1002)
+
+	flatActive := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, CreatedBy: &owner}
+	intentActive := entity.Point{ID: uuid.New(), Type: entity.PointIntentHome, Status: entity.PointActive, CreatedBy: &owner}
+	flatClosed := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointClosed, CreatedBy: &owner}
+
+	cases := []struct {
+		name         string
+		tgID         int64
+		point        entity.Point
+		op           string
+		closeResult  bool
+		ack          string
+		wantTouched  bool
+		wantReason   entity.PointCloseReason
+		wantNoClosed bool
+	}{
+		{name: "чужой tg", tgID: strangerTG, point: flatActive, op: opPointAlive,
+			ack: ackNotYourPoint},
+		{name: "alive на активной квартире", tgID: ownerTG, point: flatActive, op: opPointAlive,
+			ack: ackPointAlive, wantTouched: true},
+		{name: "alive на «к себе»", tgID: ownerTG, point: intentActive, op: opPointAlive,
+			ack: ackRoomAlive, wantTouched: true},
+		{name: "alive на закрытой", tgID: ownerTG, point: flatClosed, op: opPointAlive,
+			ack: ackPointInactive, wantNoClosed: true},
+		{name: "gone на квартире", tgID: ownerTG, point: flatActive, op: opPointGone, closeResult: true,
+			ack: ackPointClosed, wantReason: entity.CloseReasonGone},
+		{name: "gone на «к себе»", tgID: ownerTG, point: intentActive, op: opPointGone, closeResult: true,
+			ack: ackPointClosed, wantReason: entity.CloseReasonFound},
+		{name: "повторное gone", tgID: ownerTG, point: flatActive, op: opPointGone, closeResult: false,
+			ack: ackPointInactive, wantReason: entity.CloseReasonGone},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			points := &fakePointAnswers{
+				points:      map[uuid.UUID]entity.Point{tc.point.ID: tc.point},
+				closeResult: tc.closeResult,
+			}
+			users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{ownerTG: owner, strangerTG: stranger}}
+			callbacks := NewCallbacks(&fakeSearchAnswers{}, &fakePollAnswers{}, users, points)
+
+			ack, err := callbacks.HandlePointCallback(t.Context(), tc.tgID, pointCallback(tc.op, tc.point.ID))
+			if err != nil {
+				t.Fatalf("HandlePointCallback() failed: %v", err)
+			}
+			if ack != tc.ack {
+				t.Errorf("ack = %q, want %q", ack, tc.ack)
+			}
+			if got := len(points.touched) == 1; got != tc.wantTouched {
+				t.Errorf("touched %v, want touched = %v", points.touched, tc.wantTouched)
+			}
+			if tc.wantNoClosed {
+				if len(points.closed) != 0 {
+					t.Errorf("closed %v, want no close attempt", points.closed)
+				}
+				return
+			}
+			if tc.wantReason != "" {
+				if got := points.closed[tc.point.ID]; got != tc.wantReason {
+					t.Errorf("closed with reason %q, want %q", got, tc.wantReason)
+				}
+			}
+		})
+	}
+
+	t.Run("не найдена", func(t *testing.T) {
+		points := &fakePointAnswers{}
+		users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{ownerTG: owner}}
+		callbacks := NewCallbacks(&fakeSearchAnswers{}, &fakePollAnswers{}, users, points)
+
+		ack, err := callbacks.HandlePointCallback(t.Context(), ownerTG, pointCallback(opPointAlive, uuid.New()))
+		if err != nil {
+			t.Fatalf("HandlePointCallback() failed: %v", err)
+		}
+		if ack != ackNotYourPoint {
+			t.Errorf("ack = %q, want %q", ack, ackNotYourPoint)
+		}
+	})
+
+	t.Run("тап из чата, которого нет в базе", func(t *testing.T) {
+		points := &fakePointAnswers{points: map[uuid.UUID]entity.Point{flatActive.ID: flatActive}}
+		users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{ownerTG: owner}}
+		callbacks := NewCallbacks(&fakeSearchAnswers{}, &fakePollAnswers{}, users, points)
+
+		ack, err := callbacks.HandlePointCallback(t.Context(), 999, pointCallback(opPointAlive, flatActive.ID))
+		if err != nil {
+			t.Fatalf("HandlePointCallback() failed: %v", err)
+		}
+		if ack != ackNotYourPoint {
+			t.Errorf("ack = %q, want %q", ack, ackNotYourPoint)
+		}
+	})
+
+	t.Run("мусор вместо ответа", func(t *testing.T) {
+		points := &fakePointAnswers{points: map[uuid.UUID]entity.Point{flatActive.ID: flatActive}}
+		users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{ownerTG: owner}}
+		callbacks := NewCallbacks(&fakeSearchAnswers{}, &fakePollAnswers{}, users, points)
+
+		if _, err := callbacks.HandlePointCallback(t.Context(), ownerTG, "pnt:maybe:"+flatActive.ID.String()); err == nil {
+			t.Error("an unknown answer was accepted")
+		}
+	})
+}
+
 func TestClearPushBlockedByTelegramID(t *testing.T) {
 	user := uuid.New()
 	users := &fakeAccounts{byTelegram: map[int64]uuid.UUID{1001: user}}
-	callbacks := NewCallbacks(&fakeSearchAnswers{}, &fakePollAnswers{}, users)
+	callbacks := NewCallbacks(&fakeSearchAnswers{}, &fakePollAnswers{}, users, &fakePointAnswers{})
 
 	if err := callbacks.ClearPushBlocked(t.Context(), 1001); err != nil {
 		t.Fatalf("ClearPushBlocked() failed: %v", err)

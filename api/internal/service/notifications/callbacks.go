@@ -28,6 +28,12 @@ const (
 	ackAnswered      = "уже ответил"
 	ackNotYourSearch = "не твой поиск"
 	ackNotYourMatch  = "не твой мэтч"
+
+	ackPointAlive    = "✓ Отмечено: актуальна"
+	ackRoomAlive     = "✓ Отмечено: свободна"
+	ackPointClosed   = "✓ Объявление закрыто"
+	ackPointInactive = "объявление уже неактивно"
+	ackNotYourPoint  = "не твоё объявление"
 )
 
 type SearchAnswers interface {
@@ -46,14 +52,21 @@ type Accounts interface {
 	ClearPushBlocked(ctx context.Context, id uuid.UUID) error
 }
 
+type PointAnswers interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
+	TouchAlive(ctx context.Context, id uuid.UUID) error
+	CloseWithReason(ctx context.Context, id uuid.UUID, reason entity.PointCloseReason) (bool, error)
+}
+
 type Callbacks struct {
 	searches SearchAnswers
 	polls    PollAnswers
 	users    Accounts
+	points   PointAnswers
 }
 
-func NewCallbacks(searches SearchAnswers, polls PollAnswers, users Accounts) *Callbacks {
-	return &Callbacks{searches: searches, polls: polls, users: users}
+func NewCallbacks(searches SearchAnswers, polls PollAnswers, users Accounts, points PointAnswers) *Callbacks {
+	return &Callbacks{searches: searches, polls: polls, users: users, points: points}
 }
 
 func (c *Callbacks) HandleSearchCallback(ctx context.Context, tgID int64, data string) (string, error) {
@@ -148,6 +161,63 @@ func (c *Callbacks) HandlePollCallback(ctx context.Context, tgID int64, data str
 	return "✓ " + pollLabel(answer), nil
 }
 
+func (c *Callbacks) HandlePointCallback(ctx context.Context, tgID int64, data string) (string, error) {
+	op, pointID, err := parsePointCallback(data)
+	if err != nil {
+		return "", err
+	}
+
+	user, err := c.users.ByTelegramID(ctx, tgID)
+	if errors.Is(err, entity.ErrNotFound) {
+		return ackNotYourPoint, nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	point, err := c.points.ByID(ctx, pointID)
+	if errors.Is(err, entity.ErrNotFound) {
+		return ackNotYourPoint, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if point.CreatedBy == nil || *point.CreatedBy != user.ID {
+		return ackNotYourPoint, nil
+	}
+
+	switch op {
+	case opPointAlive:
+		if point.Status != entity.PointActive {
+			return ackPointInactive, nil
+		}
+		if err := c.points.TouchAlive(ctx, pointID); err != nil {
+			return "", err
+		}
+		if point.Type == entity.PointIntentHome {
+			return ackRoomAlive, nil
+		}
+		return ackPointAlive, nil
+
+	case opPointGone:
+		reason := entity.CloseReasonGone
+		if point.Type == entity.PointIntentHome {
+			reason = entity.CloseReasonFound
+		}
+		closed, err := c.points.CloseWithReason(ctx, pointID, reason)
+		if err != nil {
+			return "", err
+		}
+		if !closed {
+			return ackPointInactive, nil
+		}
+		return ackPointClosed, nil
+
+	default:
+		return "", fmt.Errorf("point callback %q: unknown answer", data)
+	}
+}
+
 func (c *Callbacks) ClearPushBlocked(ctx context.Context, tgID int64) error {
 	user, err := c.users.ByTelegramID(ctx, tgID)
 	if errors.Is(err, entity.ErrNotFound) {
@@ -209,6 +279,18 @@ func parseSearchCallback(data string) (string, uuid.UUID, error) {
 	id, err := uuid.Parse(parts[2])
 	if err != nil {
 		return "", uuid.Nil, fmt.Errorf("search callback %q: %w", data, err)
+	}
+	return parts[1], id, nil
+}
+
+func parsePointCallback(data string) (string, uuid.UUID, error) {
+	parts, err := splitCallback(tgbot.PointCallbackPrefix, data)
+	if err != nil {
+		return "", uuid.Nil, err
+	}
+	id, err := uuid.Parse(parts[2])
+	if err != nil {
+		return "", uuid.Nil, fmt.Errorf("point callback %q: %w", data, err)
 	}
 	return parts[1], id, nil
 }

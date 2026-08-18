@@ -11,7 +11,7 @@
    только сервер. Входящие лайки и мэтчи — по тому же правилу: бейдж на табе
    считается по одному списку, который перечитывается после каждого лайка,
    откуда бы его ни поставили. */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isMiniAppDark, openTelegramLink, useSignal } from '@telegram-apps/sdk-react';
 
 import {
@@ -379,19 +379,57 @@ export function App() {
     setView('searchForm');
   }, []);
 
+  const feedRef = useRef(feed);
+  feedRef.current = feed;
+
+  /** Перечитывает выдачу по текущим параметрам просмотра; входа и формы не трогает. */
+  const refreshFeed = useCallback(async () => {
+    const f = feedRef.current;
+    if (!f.data) return;
+    const data = await fetchFeed(draftToParams(f.draft)).catch(() => null);
+    if (data) setFeed((s) => ({ ...s, data }));
+  }, []);
+
+  /**
+   * Перечитывает вкладку. Реалтайма нет (§7): вердикты модератора, входящие
+   * лайки и мэтчи приходят вне приложения, поэтому вкладка обновляет своё при
+   * каждом входе и при возврате приложения из фона — иначе счётчики стоят до
+   * рестарта. Полной перезагрузки страницы TMA не делают: она сбрасывает
+   * состояние и заново инициализирует SDK.
+   */
+  const refreshTab = useCallback(
+    (which: Tab) => {
+      if (which === 'searches') {
+        reloadPoints();
+        void reloadSearches().catch(() => undefined);
+      }
+      if (which === 'profile') {
+        reloadLikes();
+        void fetchMe()
+          .then(setProfile)
+          .catch(() => undefined);
+      }
+      if (which === 'feed') void refreshFeed();
+    },
+    [reloadPoints, reloadSearches, reloadLikes, setProfile, refreshFeed],
+  );
+
   const toTab = useCallback(
     (next: Tab) => {
       setTab(next);
       setView('tab');
-      // Вердикты модератора приходят вне приложения — вкладка со списками
-      // перечитывает своё при каждом входе, иначе счётчики стоят до рестарта.
-      if (next === 'searches') {
-        reloadPoints();
-        void reloadSearches().catch(() => undefined);
-      }
+      refreshTab(next);
     },
-    [reloadPoints, reloadSearches],
+    [refreshTab],
   );
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && view === 'tab') refreshTab(tab);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshTab, tab, view]);
 
   // Стабильная ссылка: форма подписывает её на родную кнопку «назад».
   const closeForm = useCallback(() => {
@@ -528,12 +566,6 @@ export function App() {
   const hasNewInSearches = active.some((s) => s.new_count > 0);
 
   /** Перечитывает выдачу текущих параметров: счётчики пулов считает сервер. */
-  const refreshFeed = async () => {
-    if (!feed.data) return;
-    const data = await fetchFeed(draftToParams(feed.draft)).catch(() => null);
-    if (data) setFeed((f) => ({ ...f, data }));
-  };
-
   /**
    * «Интересно — войти в пул» (§2.2): вход бесплатный и в один тап, поэтому
    * карточка меняется сразу — держать её мёртвой на время запроса не за что.

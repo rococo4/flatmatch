@@ -53,6 +53,21 @@ func (r *Repo) ByID(ctx context.Context, userID, id uuid.UUID) (MatchWithPeer, e
 	return row.toEntity(), nil
 }
 
+func (r *Repo) MatchIDBetween(ctx context.Context, a, b uuid.UUID) (*uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.pool.QueryRow(ctx, `
+		SELECT id FROM matches
+		WHERE a_id = least($1::uuid, $2::uuid)
+		  AND b_id = greatest($1::uuid, $2::uuid)`, a, b).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("match between %s and %s: %w", a, b, err)
+	}
+	return &id, nil
+}
+
 func (r *Repo) IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error) {
 	var matched bool
 	err := r.pool.QueryRow(ctx, `

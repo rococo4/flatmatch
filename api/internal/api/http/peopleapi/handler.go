@@ -38,6 +38,10 @@ type Points interface {
 	InPool(ctx context.Context, userID, pointID uuid.UUID) (bool, error)
 }
 
+type Matches interface {
+	MatchIDBetween(ctx context.Context, a, b uuid.UUID) (*uuid.UUID, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 	Intersecting(id string) []string
@@ -49,15 +53,16 @@ type Handler struct {
 	photos   Photos
 	searches Searches
 	points   Points
+	matches  Matches
 	dir      ZoneDir
 }
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-func New(people People, likes Likes, photos Photos, searches Searches, points Points, dir ZoneDir) *Handler {
+func New(people People, likes Likes, photos Photos, searches Searches, points Points, matches Matches, dir ZoneDir) *Handler {
 	return &Handler{
 		people: people, likes: likes, photos: photos,
-		searches: searches, points: points, dir: dir,
+		searches: searches, points: points, matches: matches, dir: dir,
 	}
 }
 
@@ -109,10 +114,17 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 		handleError(w, r, err)
 		return
 	}
+	var matchID *uuid.UUID
+	if myLike && likedMe {
+		if matchID, err = h.matches.MatchIDBetween(r.Context(), viewer.ID, target.ID); err != nil {
+			handleError(w, r, err)
+			return
+		}
+	}
 
 	httpx.JSON(w, r, http.StatusOK, toProfile(viewer, target,
 		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")), point,
-		myLike, likedMe, budget))
+		myLike, likedMe, matchID, budget))
 }
 
 func (h *Handler) metInPool(ctx context.Context, viewerID, targetID uuid.UUID) (bool, error) {

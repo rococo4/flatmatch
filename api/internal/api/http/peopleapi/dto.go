@@ -47,9 +47,10 @@ type profileResponse struct {
 
 	ContextPoint *pointDTO `json:"context_point,omitempty"`
 
-	LikedMe bool      `json:"liked_me"`
-	MyLike  bool      `json:"my_like"`
-	Budget  budgetDTO `json:"budget"`
+	LikedMe bool       `json:"liked_me"`
+	MyLike  bool       `json:"my_like"`
+	MatchID *uuid.UUID `json:"match_id,omitempty"`
+	Budget  budgetDTO  `json:"budget"`
 }
 
 type sharedDTO struct {
@@ -66,6 +67,7 @@ func toProfile(
 	viewer, target entity.User,
 	photoURL string, zone *zoneDTO, point *pointDTO,
 	myLike, likedMe bool,
+	matchID *uuid.UUID,
 	budget entity.LikeBudget,
 ) profileResponse {
 	p := target.Profile
@@ -92,6 +94,7 @@ func toProfile(
 
 		LikedMe: likedMe,
 		MyLike:  myLike,
+		MatchID: matchID,
 		Budget:  budgetDTO{Remaining: budget.Remaining, NextFreeAt: budget.NextFreeAt},
 	}
 

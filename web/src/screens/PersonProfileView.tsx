@@ -123,6 +123,11 @@ export function PersonProfileView({
     // Кнопка гаснет не мгновенно (MainButton отвечает на setParams), а второй
     // тап ушёл бы вторым запросом за тот же лайк.
     if (busy || !person) return;
+    // У мэтча кнопка не лайкает — ведёт в мэтч, где контакты.
+    if (person.match_id) {
+      onMatched?.(person.match_id);
+      return;
+    }
     setBusy(true);
     setRefusal(null);
     try {
@@ -241,6 +246,7 @@ function likeAction(
   native: boolean,
 ): LikeAction {
   const base = { native, caption: refusal ?? undefined };
+  if (p.match_id) return { ...base, label: '✓ У вас мэтч — открыть', match: true };
   if (p.my_like) return { ...base, label: 'Лайк отправлен', disabled: true };
   if (p.liked_me) {
     return {

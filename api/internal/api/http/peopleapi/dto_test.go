@@ -25,7 +25,7 @@ func TestProfileCarriesNoContacts(t *testing.T) {
 	}
 
 	raw, err := json.Marshal(toProfile(entity.User{}, target,
-		"/media/photos/a1b2.jpg", nil, nil, false, false, entity.LikeBudget{Remaining: 5}))
+		"/media/photos/a1b2.jpg", nil, nil, false, false, nil, entity.LikeBudget{Remaining: 5}))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestProfileLikeDirectionsAreNotSwapped(t *testing.T) {
 	const myLike, likedMe = true, false
 
 	raw, err := json.Marshal(toProfile(entity.User{}, entity.User{ID: uuid.New()},
-		"", nil, nil, myLike, likedMe, entity.LikeBudget{Remaining: 4}))
+		"", nil, nil, myLike, likedMe, nil, entity.LikeBudget{Remaining: 4}))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

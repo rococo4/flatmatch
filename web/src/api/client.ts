@@ -471,6 +471,8 @@ export interface PersonProfileDTO {
 
   liked_me: boolean;
   my_like: boolean;
+  /** Вы уже в мэтче: кнопка ведёт в него, лайкать нечего. */
+  match_id?: string;
   budget: LikeBudget;
 }
 

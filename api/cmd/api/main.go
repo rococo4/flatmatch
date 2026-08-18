@@ -69,7 +69,8 @@ type deps struct {
 	pairLikes    *likesrepo.Repo
 	pairSearches *searchesrepo.Repo
 
-	pairPoints *pointsrepo.Repo
+	pairPoints  *pointsrepo.Repo
+	pairMatches *matchesrepo.Repo
 
 	photos *photostore.Dir
 	dir    *zones.Directory
@@ -160,6 +161,7 @@ func run() error {
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,
 		pairPoints:   pointsRepo,
+		pairMatches:  matchesRepo,
 		photos:       photos,
 		dir:          dir,
 		bot:          bot,
@@ -256,7 +258,7 @@ func router(
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
 		r.Get("/people/{id}", peopleapi.New(
-			d.people, d.pairLikes, d.accounts, d.pairSearches, d.pairPoints, d.dir).Profile)
+			d.people, d.pairLikes, d.accounts, d.pairSearches, d.pairPoints, d.pairMatches, d.dir).Profile)
 	})
 
 	return r

@@ -25,6 +25,8 @@ export type LikeAction = {
   disabled?: boolean;
   /** Кнопку рисует Telegram — в вёрстке остаётся только подпись. */
   native?: boolean;
+  /** Зелёная: вы уже в мэтче, кнопка ведёт в него, а не лайкает. */
+  match?: boolean;
 };
 
 const L = {
@@ -266,7 +268,12 @@ export function PersonProfileScreen({
           {!like.native && (
             <button
               type="button"
-              style={L.mainButton(Boolean(like.disabled))}
+              style={{
+                ...L.mainButton(Boolean(like.disabled)),
+                ...(like.match
+                  ? { background: 'var(--verdict-ok-bg)', color: 'var(--verdict-ok-fg)' }
+                  : {}),
+              }}
               disabled={like.disabled}
               onClick={onLike}
             >

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
@@ -199,13 +200,9 @@ func (r *Repo) PendingModeration(ctx context.Context) ([]entity.Point, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list points pending moderation: %w", err)
 	}
-	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[pointRow])
+	out, err := collectPoints(rows)
 	if err != nil {
 		return nil, fmt.Errorf("list points pending moderation: %w", err)
-	}
-	out := make([]entity.Point, 0, len(raw))
-	for _, row := range raw {
-		out = append(out, row.toEntity())
 	}
 	return out, nil
 }
@@ -379,6 +376,57 @@ func (r *Repo) TouchAlive(ctx context.Context, pointID uuid.UUID) error {
 	return nil
 }
 
+func (r *Repo) PointsForPing(ctx context.Context, every time.Duration) ([]entity.Point, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+pointColumns+`
+		FROM points
+		WHERE status = 'active' AND created_by IS NOT NULL
+		  AND (source = 'user_link' OR type = 'intent_home')
+		  AND last_seen_alive < now() - make_interval(secs => $1)
+		  AND (ping_asked_at IS NULL OR ping_asked_at < now() - make_interval(secs => $1))
+		ORDER BY last_seen_alive, id`, every.Seconds())
+	if err != nil {
+		return nil, fmt.Errorf("points for ping: %w", err)
+	}
+	out, err := collectPoints(rows)
+	if err != nil {
+		return nil, fmt.Errorf("points for ping: %w", err)
+	}
+	return out, nil
+}
+
+func (r *Repo) MarkPingAsked(ctx context.Context, pointID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `UPDATE points SET ping_asked_at = now() WHERE id = $1`, pointID)
+	if err != nil {
+		return fmt.Errorf("mark point %s asked: %w", pointID, err)
+	}
+	return nil
+}
+
+func (r *Repo) Expire(ctx context.Context, quiet, afterPing time.Duration) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `
+		UPDATE points SET status = 'closed', close_reason = 'expired', edited_at = now()
+		WHERE status IN ('active', 'paused')
+		  AND (last_seen_alive < now() - make_interval(secs => $1)
+		       OR (ping_asked_at IS NOT NULL
+		           AND ping_asked_at < now() - make_interval(secs => $2)
+		           AND last_seen_alive < ping_asked_at
+		           AND EXISTS (SELECT 1 FROM notifications n
+		                       WHERE n.type = 'point_ping'
+		                         AND n.context_key = points.id::text
+		                         AND n.sent_at IS NOT NULL
+		                         AND n.sent_at >= points.ping_asked_at - interval '1 minute')))
+		RETURNING id`, quiet.Seconds(), afterPing.Seconds())
+	if err != nil {
+		return nil, fmt.Errorf("expire points: %w", err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, fmt.Errorf("expire points: %w", err)
+	}
+	return ids, nil
+}
+
 func (r *Repo) Leave(ctx context.Context, userID, pointID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx,
 		`DELETE FROM likes_points WHERE user_id = $1 AND point_id = $2`, userID, pointID)
@@ -514,6 +562,18 @@ func collectPoint(rows pgx.Rows) (entity.Point, error) {
 		return entity.Point{}, err
 	}
 	return row.toEntity(), nil
+}
+
+func collectPoints(rows pgx.Rows) ([]entity.Point, error) {
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[pointRow])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]entity.Point, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, row.toEntity())
+	}
+	return out, nil
 }
 
 func urlTaken(err error) error {

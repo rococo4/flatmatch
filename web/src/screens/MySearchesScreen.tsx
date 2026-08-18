@@ -492,7 +492,7 @@ function FlatRow({
         </button>
         {mine &&
           (point.status === 'rejected' ? (
-            <PointActions id={point.id} onClose={onClose} question="Скрыть карточку?" />
+            <PointActions id={point.id} action="Скрыть" onClose={onClose} question="Скрыть карточку?" />
           ) : (
             <PointActions
               id={point.id}
@@ -502,7 +502,13 @@ function FlatRow({
             />
           ))}
         {!mine && (
-          <PointActions id={point.id} onShare={onShare} onClose={onLeave} question="Выйти из пула?" />
+          <PointActions
+            id={point.id}
+            action="Выйти из пула"
+            onShare={onShare}
+            onClose={onLeave}
+            question="Точно выйти?"
+          />
         )}
       </div>
     </article>
@@ -559,11 +565,14 @@ function HomeRow({
 function PointActions({
   id,
   question,
+  action = 'Закрыть',
   onShare,
   onClose,
 }: {
   id: string;
   question: string;
+  /** Подпись красной кнопки: «Закрыть» у своих, «Выйти из пула» у чужих. */
+  action?: string;
   onShare?: (id: string) => void;
   onClose?: (id: string) => void;
 }) {
@@ -584,7 +593,7 @@ function PointActions({
               {question}
             </span>
             <button type="button" style={L.destructiveLink} onClick={() => onClose(id)}>
-              Закрыть
+              {action}
             </button>
             <button type="button" style={L.actionLink} onClick={() => setConfirming(false)}>
               Отмена
@@ -596,7 +605,7 @@ function PointActions({
             style={{ ...L.destructiveLink, marginLeft: 'auto' }}
             onClick={() => setConfirming(true)}
           >
-            Закрыть
+            {action}
           </button>
         ))}
     </div>

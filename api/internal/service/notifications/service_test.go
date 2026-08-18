@@ -115,11 +115,17 @@ func (f *fakeSearches) ActiveByUser(_ context.Context, userID uuid.UUID) ([]enti
 
 type fakePoints struct {
 	members []uuid.UUID
+	all     []uuid.UUID
 	err     error
+	allErr  error
 }
 
 func (f *fakePoints) PoolMemberIDs(_ context.Context, _, _ uuid.UUID) ([]uuid.UUID, error) {
 	return f.members, f.err
+}
+
+func (f *fakePoints) AllPoolMemberIDs(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+	return f.all, f.allErr
 }
 
 type fakePeople struct {
@@ -422,6 +428,68 @@ func TestPointVerdict(t *testing.T) {
 	}
 	if !strings.HasPrefix(repo.rows[0].ActorKey, mine.ID.String()+":") {
 		t.Errorf("actor %q, want the point as the subject", repo.rows[0].ActorKey)
+	}
+}
+
+func TestPointGoneTellsThePoolWithoutTheLastVoter(t *testing.T) {
+	creator, member, voter := uuid.New(), uuid.New(), uuid.New()
+	point := entity.Point{ID: uuid.New(), CreatedBy: pointer.To(creator), GoneCount: 2}
+
+	repo := &fakeRepo{}
+	points := &fakePoints{all: []uuid.UUID{creator, member, voter}}
+	svc := testService(t, repo, &fakeSearches{}, points, &fakePeople{})
+
+	svc.PointGone(t.Context(), point, voter)
+
+	if len(repo.rows) != 2 {
+		t.Fatalf("wrote %d rows, want 2: %+v", len(repo.rows), repo.rows)
+	}
+	own := map[uuid.UUID]any{}
+	for _, n := range repo.rows {
+		if n.Type != entity.NotifPointGone || n.ContextKey != point.ID.String() {
+			t.Errorf("row %+v, want a point_gone push about %s", n, point.ID)
+		}
+		if want := point.ID.String() + ":2"; n.ActorKey != want {
+			t.Errorf("actor %q, want %q — the point and the round of votes", n.ActorKey, want)
+		}
+		own[n.UserID] = n.Payload[payloadOwn]
+	}
+	if own[creator] != true {
+		t.Errorf("the creator got own=%v, want true", own[creator])
+	}
+	if own[member] != false {
+		t.Errorf("the pool member got own=%v, want false", own[member])
+	}
+	if _, wrote := own[voter]; wrote {
+		t.Errorf("wrote a row for %s — the one who voted last", voter)
+	}
+}
+
+func TestPointGoneOfAParsedFlatBelongsToNobody(t *testing.T) {
+	member, voter := uuid.New(), uuid.New()
+
+	repo := &fakeRepo{}
+	points := &fakePoints{all: []uuid.UUID{member, voter}}
+	svc := testService(t, repo, &fakeSearches{}, points, &fakePeople{})
+
+	svc.PointGone(t.Context(), entity.Point{ID: uuid.New()}, voter)
+
+	if len(repo.rows) != 1 {
+		t.Fatalf("wrote %d rows, want 1: %+v", len(repo.rows), repo.rows)
+	}
+	if repo.rows[0].Payload[payloadOwn] != false {
+		t.Errorf("payload %v, want own=false for a point without a creator", repo.rows[0].Payload)
+	}
+}
+
+func TestPointGoneSurvivesAnUnreadablePool(t *testing.T) {
+	repo := &fakeRepo{}
+	points := &fakePoints{allErr: errors.New("no database today")}
+	testService(t, repo, &fakeSearches{}, points, &fakePeople{}).
+		PointGone(t.Context(), entity.Point{ID: uuid.New()}, uuid.New())
+
+	if len(repo.rows) != 0 {
+		t.Errorf("wrote %d rows without a readable pool", len(repo.rows))
 	}
 }
 

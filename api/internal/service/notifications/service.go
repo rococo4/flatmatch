@@ -24,6 +24,7 @@ type Searches interface {
 
 type Points interface {
 	PoolMemberIDs(ctx context.Context, viewerID, pointID uuid.UUID) ([]uuid.UUID, error)
+	AllPoolMemberIDs(ctx context.Context, pointID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type People interface {
@@ -36,6 +37,7 @@ const (
 	payloadGender   = "gender"
 	payloadPeerName = "peer_name"
 	payloadSearchID = "search_id"
+	payloadOwn      = "own"
 )
 
 type Service struct {

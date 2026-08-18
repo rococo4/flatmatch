@@ -64,6 +64,21 @@ func PostMatchText(peerName string) string {
 	return "Как дела с " + ru.InstrumentalFirstName(peerName) + "? Расскажи, что вышло"
 }
 
+func PointGoneText(nameIn string) string {
+	return "Квартира " + nameIn + ", похоже, сдана"
+}
+
+func PointGoneOwnText(nameIn string) string {
+	return "Твою квартиру " + nameIn + " отметили как сданную — проверь"
+}
+
+func PointPingText(kind entity.PointType, nameIn string) string {
+	if kind == entity.PointIntentHome {
+		return "Комната " + nameIn + " ещё свободна?"
+	}
+	return "Квартира " + nameIn + " ещё актуальна?"
+}
+
 func people(n int) string {
 	return ru.Plural(n, "человек", "человека", "человек")
 }

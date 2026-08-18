@@ -100,3 +100,22 @@ func TestFixedTexts(t *testing.T) {
 		t.Errorf("PostMatchText() = %q, want %q", got, want)
 	}
 }
+
+func TestFreshnessTexts(t *testing.T) {
+	if got, want := PointGoneText("у метро Спортивная"),
+		"Квартира у метро Спортивная, похоже, сдана"; got != want {
+		t.Errorf("PointGoneText() = %q, want %q", got, want)
+	}
+	if got, want := PointGoneOwnText("в Хамовниках"),
+		"Твою квартиру в Хамовниках отметили как сданную — проверь"; got != want {
+		t.Errorf("PointGoneOwnText() = %q, want %q", got, want)
+	}
+	if got, want := PointPingText(entity.PointFlat, "у метро Спортивная"),
+		"Квартира у метро Спортивная ещё актуальна?"; got != want {
+		t.Errorf("PointPingText(flat) = %q, want %q", got, want)
+	}
+	if got, want := PointPingText(entity.PointIntentHome, "в Хамовниках"),
+		"Комната в Хамовниках ещё свободна?"; got != want {
+		t.Errorf("PointPingText(intent_home) = %q, want %q", got, want)
+	}
+}

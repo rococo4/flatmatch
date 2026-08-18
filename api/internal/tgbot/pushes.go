@@ -12,6 +12,7 @@ const (
 	ModerationCallbackPrefix = "mod"
 	SearchCallbackPrefix     = "srch"
 	PollCallbackPrefix       = "poll"
+	PointCallbackPrefix      = "pnt"
 )
 
 var ErrBlocked = errors.New("the bot cannot reach this chat")

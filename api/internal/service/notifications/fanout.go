@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 
@@ -77,6 +78,32 @@ func (s *Service) PoolNew(ctx context.Context, pointID, enteredUserID uuid.UUID)
 		})
 	}
 	s.many(ctx, entity.NotifPoolNew, rows)
+}
+
+func (s *Service) PointGone(ctx context.Context, point entity.Point, lastVoter uuid.UUID) {
+	ctx = detached(ctx)
+
+	members, err := s.points.AllPoolMemberIDs(ctx, point.ID)
+	if err != nil {
+		s.log.Warn("find the members of a pool", "point", point.ID, "error", err)
+		return
+	}
+
+	actor := fmt.Sprintf("%s:%d", point.ID, point.GoneCount)
+	rows := make([]entity.Notification, 0, len(members))
+	for _, member := range members {
+		if member == lastVoter {
+			continue
+		}
+		rows = append(rows, entity.Notification{
+			UserID:     member,
+			Type:       entity.NotifPointGone,
+			ActorKey:   actor,
+			ContextKey: point.ID.String(),
+			Payload:    map[string]any{payloadOwn: point.CreatedBy != nil && *point.CreatedBy == member},
+		})
+	}
+	s.many(ctx, entity.NotifPointGone, rows)
 }
 
 func (s *Service) announceSearches(ctx context.Context, userID uuid.UUID) {

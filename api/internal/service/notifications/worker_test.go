@@ -306,9 +306,13 @@ func (f *fakePolls) MatchesForPostPoll(_ context.Context, olderThan time.Duratio
 
 type fakePointZones struct {
 	points map[uuid.UUID]entity.Point
+	err    error
 }
 
 func (f *fakePointZones) ByID(_ context.Context, id uuid.UUID) (entity.Point, error) {
+	if f.err != nil {
+		return entity.Point{}, f.err
+	}
 	point, ok := f.points[id]
 	if !ok {
 		return entity.Point{}, entity.ErrNotFound
@@ -505,6 +509,121 @@ func TestPersonalPushesCarryTheirDeepLinks(t *testing.T) {
 				t.Errorf("buttons = %+v, want a deep link to %q", push.buttons, tc.link)
 			}
 		})
+	}
+}
+
+func TestPointGoneSpeaksDifferentlyToTheCreator(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	creator, member := f.addressee(1001), f.addressee(1002)
+	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, ZoneID: "st-sokol"}
+	f.points.points[point.ID] = point
+
+	for _, own := range []struct {
+		userID uuid.UUID
+		mine   bool
+	}{{creator, true}, {member, false}} {
+		f.queue.put(entity.Notification{
+			UserID: own.userID, Type: entity.NotifPointGone,
+			ActorKey: point.ID.String() + ":2", ContextKey: point.ID.String(),
+			Payload: map[string]any{payloadOwn: own.mine},
+		})
+	}
+
+	w.pass(t.Context())
+
+	want := []string{
+		"Твою квартиру у метро Сокол отметили как сданную — проверь",
+		"Квартира у метро Сокол, похоже, сдана",
+	}
+	if got := f.sender.texts(); !slices.Equal(got, want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
+	if got := f.sender.sent[0].buttons; len(got) != 1 ||
+		got[0].Text != "Проверить" || got[0].StartParam != linkMine {
+		t.Errorf("buttons of the creator = %+v, want «Проверить» into «Мои поиски»", got)
+	}
+	if got := f.sender.sent[1].buttons; len(got) != 1 ||
+		got[0].Text != "Открыть" || got[0].StartParam != "point_"+point.ID.String() {
+		t.Errorf("buttons of the pool member = %+v, want «Открыть» into the point", got)
+	}
+}
+
+func TestPointPingAsksWithTwoAnswers(t *testing.T) {
+	cases := []struct {
+		kind  entity.PointType
+		text  string
+		alive string
+		gone  string
+	}{
+		{entity.PointFlat, "Квартира у метро Сокол ещё актуальна?", "Да, живая", "Уже сдана"},
+		{entity.PointIntentHome, "Комната у метро Сокол ещё свободна?", "Да", "Нашёл соседа"},
+	}
+
+	for _, tc := range cases {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			w, f := newWorker(t, workerFakes{})
+			owner := f.addressee(1001)
+			point := entity.Point{ID: uuid.New(), Type: tc.kind, ZoneID: "st-sokol"}
+			f.points.points[point.ID] = point
+			f.queue.put(entity.Notification{
+				UserID: owner, Type: entity.NotifPointPing,
+				ActorKey: point.ID.String() + ":1", ContextKey: point.ID.String(),
+			})
+
+			w.pass(t.Context())
+
+			if len(f.sender.sent) != 1 {
+				t.Fatalf("sent %v, want one message", f.sender.texts())
+			}
+			push := f.sender.sent[0]
+			if push.text != tc.text {
+				t.Errorf("text = %q, want %q", push.text, tc.text)
+			}
+			want := []tgbot.PushButton{
+				{Text: tc.alive, CallbackData: "pnt:alive:" + point.ID.String()},
+				{Text: tc.gone, CallbackData: "pnt:gone:" + point.ID.String()},
+			}
+			if !slices.Equal(push.buttons, want) {
+				t.Errorf("buttons = %+v, want %+v", push.buttons, want)
+			}
+		})
+	}
+}
+
+func TestPointPushWithoutItsPointIsBuried(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	viewer := f.addressee(1001)
+	row := f.queue.put(entity.Notification{
+		UserID: viewer, Type: entity.NotifPointGone,
+		ActorKey: "gone:1", ContextKey: uuid.NewString(),
+	})
+
+	w.pass(t.Context())
+
+	if f.queue.byID(row.ID).FailedAt == nil {
+		t.Error("a push about a point that no longer exists is still queued")
+	}
+	if len(f.sender.sent) != 0 {
+		t.Errorf("sent %v about a point that is gone", f.sender.texts())
+	}
+}
+
+func TestPointPushWaitsForAnUnreadablePoint(t *testing.T) {
+	w, f := newWorker(t, workerFakes{})
+	viewer := f.addressee(1001)
+	f.points.err = errors.New("no database today")
+	row := f.queue.put(entity.Notification{
+		UserID: viewer, Type: entity.NotifPointPing,
+		ActorKey: "ping:1", ContextKey: uuid.NewString(),
+	})
+
+	w.pass(t.Context())
+
+	if f.queue.byID(row.ID).FailedAt != nil {
+		t.Error("a push was buried because the database blinked")
+	}
+	if len(f.sender.sent) != 0 {
+		t.Errorf("sent %v without reading the point", f.sender.texts())
 	}
 }
 

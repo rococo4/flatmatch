@@ -34,6 +34,7 @@ const (
 	buttonFeed     = "В ленту"
 	buttonPhoto    = "Загрузить"
 	buttonAbout    = "Поправить"
+	buttonCheck    = "Проверить"
 )
 
 const (
@@ -196,8 +197,12 @@ func (w *Worker) deliverOne(ctx context.Context, row entity.Notification, unreac
 		return
 	}
 
-	text, buttons, err := w.personalMessage(row)
+	text, buttons, err := w.personalMessage(ctx, row)
 	if err != nil {
+		if !errors.Is(err, errUnknownContext) {
+			w.log.Warn("build a personal push", "type", row.Type, "notification", row.ID, "error", err)
+			return
+		}
 		w.giveUp(ctx, row, err)
 		return
 	}
@@ -394,7 +399,7 @@ func (w *Worker) askPostMatch(ctx context.Context) {
 	}
 }
 
-func (w *Worker) personalMessage(n entity.Notification) (string, []tgbot.PushButton, error) {
+func (w *Worker) personalMessage(ctx context.Context, n entity.Notification) (string, []tgbot.PushButton, error) {
 	switch n.Type {
 	case entity.NotifLiked:
 		name := payloadString(n.Payload, payloadName)
@@ -425,6 +430,23 @@ func (w *Worker) personalMessage(n entity.Notification) (string, []tgbot.PushBut
 		}
 		return StillSearchingText(zone.NameIn), stillSearchingButtons(searchID), nil
 
+	case entity.NotifPointGone:
+		_, zone, err := w.pointContext(ctx, n.ContextKey)
+		if err != nil {
+			return "", nil, err
+		}
+		if payloadBool(n.Payload, payloadOwn) {
+			return PointGoneOwnText(zone.NameIn), deepLink(buttonCheck, linkMine), nil
+		}
+		return PointGoneText(zone.NameIn), deepLink(buttonOpen, linkPointPrefix+n.ContextKey), nil
+
+	case entity.NotifPointPing:
+		point, zone, err := w.pointContext(ctx, n.ContextKey)
+		if err != nil {
+			return "", nil, err
+		}
+		return PointPingText(point.Type, zone.NameIn), pointPingButtons(point.Type, point.ID), nil
+
 	case entity.NotifPostMatch:
 		matchID, err := uuid.Parse(n.ActorKey)
 		if err != nil {
@@ -448,27 +470,34 @@ func (w *Worker) aggregateMessage(ctx context.Context, typ entity.NotificationTy
 		return ZoneNewText(zone.NameIn, n), deepLink(buttonPool, linkPoolPrefix+contextKey), nil
 
 	case entity.NotifPoolNew:
-		pointID, err := uuid.Parse(contextKey)
+		_, zone, err := w.pointContext(ctx, contextKey)
 		if err != nil {
-			return "", nil, fmt.Errorf("point %q: %w", contextKey, errUnknownContext)
-		}
-		point, err := w.points.ByID(ctx, pointID)
-		if err != nil {
-			if errors.Is(err, entity.ErrNotFound) {
-				return "", nil, fmt.Errorf("point %s: %w", pointID, errUnknownContext)
-			}
 			return "", nil, err
 		}
-		zone, ok := w.dir.Get(point.ZoneID)
-		if !ok {
-			return "", nil, fmt.Errorf("zone %q: %w", point.ZoneID, errUnknownContext)
-		}
-
 		return PoolNewText(zone.Name, n), deepLink(buttonPool, linkPointPrefix+contextKey), nil
 
 	default:
 		return "", nil, fmt.Errorf("type %q: %w", typ, errUnknownContext)
 	}
+}
+
+func (w *Worker) pointContext(ctx context.Context, contextKey string) (entity.Point, zones.Zone, error) {
+	pointID, err := uuid.Parse(contextKey)
+	if err != nil {
+		return entity.Point{}, zones.Zone{}, fmt.Errorf("point %q: %w", contextKey, errUnknownContext)
+	}
+	point, err := w.points.ByID(ctx, pointID)
+	if err != nil {
+		if errors.Is(err, entity.ErrNotFound) {
+			return entity.Point{}, zones.Zone{}, fmt.Errorf("point %s: %w", pointID, errUnknownContext)
+		}
+		return entity.Point{}, zones.Zone{}, err
+	}
+	zone, ok := w.dir.Get(point.ZoneID)
+	if !ok {
+		return entity.Point{}, zones.Zone{}, fmt.Errorf("zone %q: %w", point.ZoneID, errUnknownContext)
+	}
+	return point, zone, nil
 }
 
 func (w *Worker) chatOf(ctx context.Context, userID uuid.UUID) (int64, bool) {
@@ -571,5 +600,10 @@ func ids(rows []entity.Notification) []uuid.UUID {
 
 func payloadString(payload map[string]any, key string) string {
 	v, _ := payload[key].(string)
+	return v
+}
+
+func payloadBool(payload map[string]any, key string) bool {
+	v, _ := payload[key].(bool)
 	return v
 }

@@ -15,6 +15,9 @@ import (
 const (
 	opStillSearching = "yes"
 	opFound          = "found"
+
+	opPointAlive = "alive"
+	opPointGone  = "gone"
 )
 
 const (
@@ -175,12 +178,27 @@ func postMatchButtons(matchID uuid.UUID) []tgbot.PushButton {
 	return out
 }
 
+func pointPingButtons(kind entity.PointType, pointID uuid.UUID) []tgbot.PushButton {
+	alive, gone := "Да, живая", "Уже сдана"
+	if kind == entity.PointIntentHome {
+		alive, gone = "Да", "Нашёл соседа"
+	}
+	return []tgbot.PushButton{
+		{Text: alive, CallbackData: pointCallback(opPointAlive, pointID)},
+		{Text: gone, CallbackData: pointCallback(opPointGone, pointID)},
+	}
+}
+
 func searchCallback(op string, searchID uuid.UUID) string {
 	return tgbot.SearchCallbackPrefix + ":" + op + ":" + searchID.String()
 }
 
 func pollCallback(matchID uuid.UUID, answer entity.PollAnswer) string {
 	return tgbot.PollCallbackPrefix + ":" + matchID.String() + ":" + string(answer)
+}
+
+func pointCallback(op string, pointID uuid.UUID) string {
+	return tgbot.PointCallbackPrefix + ":" + op + ":" + pointID.String()
 }
 
 func parseSearchCallback(data string) (string, uuid.UUID, error) {

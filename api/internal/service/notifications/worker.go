@@ -479,7 +479,7 @@ func (w *Worker) personalMessage(ctx context.Context, n entity.Notification) (st
 			return "", nil, err
 		}
 		if payloadBool(n.Payload, payloadOwn) {
-			return PointGoneOwnText(zone.NameIn), deepLink(buttonCheck, linkMine), nil
+			return PointGoneOwnText(zone.NameIn), deepLink(buttonCheck, linkPointPrefix+n.ContextKey), nil
 		}
 		return PointGoneText(zone.NameIn), deepLink(buttonOpen, linkPointPrefix+n.ContextKey), nil
 

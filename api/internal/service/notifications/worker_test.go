@@ -564,8 +564,8 @@ func TestPointGoneSpeaksDifferentlyToTheCreator(t *testing.T) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
 	if got := f.sender.sent[0].buttons; len(got) != 1 ||
-		got[0].Text != "Проверить" || got[0].StartParam != linkMine {
-		t.Errorf("buttons of the creator = %+v, want «Проверить» into «Мои поиски»", got)
+		got[0].Text != "Проверить" || got[0].StartParam != "point_"+point.ID.String() {
+		t.Errorf("buttons of the creator = %+v, want «Проверить» into the point", got)
 	}
 	if got := f.sender.sent[1].buttons; len(got) != 1 ||
 		got[0].Text != "Открыть" || got[0].StartParam != "point_"+point.ID.String() {

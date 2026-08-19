@@ -258,3 +258,34 @@ func TestCardCarriesFreshness(t *testing.T) {
 		t.Errorf("a card without a vote carries my_vote: %s", silent)
 	}
 }
+
+func TestConfirmedAtSpeaksOnlyOfARealCheck(t *testing.T) {
+	card := fullCard()
+	card.Point.LastSeenAlive = card.Point.CreatedAt
+
+	fresh := toCard(card, stubPhotos{}, zoneDTO{}, uuid.New())
+	if fresh.ConfirmedAt != nil {
+		t.Errorf("ConfirmedAt = %v of a point nobody checked, want nil", fresh.ConfirmedAt)
+	}
+	raw, err := json.Marshal(fresh)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(raw), "confirmed_at") {
+		t.Errorf("an unchecked card carries confirmed_at: %s", raw)
+	}
+
+	checked := card.Point.CreatedAt.Add(time.Hour)
+	card.Point.LastSeenAlive = checked
+	got := toCard(card, stubPhotos{}, zoneDTO{}, uuid.New())
+	if got.ConfirmedAt == nil || !got.ConfirmedAt.Equal(checked) {
+		t.Errorf("ConfirmedAt = %v, want %s", got.ConfirmedAt, checked)
+	}
+	confirmed, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(confirmed), "confirmed_at") {
+		t.Errorf("a checked card does not carry confirmed_at: %s", confirmed)
+	}
+}

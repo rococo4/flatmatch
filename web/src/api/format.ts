@@ -449,17 +449,18 @@ export function addedLabel(daysAgo: number): string {
 /**
  * Строка свежести квартиры вместо «добавлена вчера» (§8).
  *
- * Подтверждение считается свежее добавления, только если оно моложе самой
- * точки: у только что поданной квартиры last_seen_alive = created_at, и
- * «подтверждена сегодня» на ней было бы обещанием проверки, которой не было.
- * Один голос «сдана» точку не скрывает, но молчать о нём тоже нельзя.
+ * Была ли проверка вообще — решает сервер: `confirmed_at` приезжает только
+ * тогда, когда точку подтвердили после создания (у только что поданной
+ * квартиры last_seen_alive = created_at, и «подтверждена сегодня» на ней было
+ * бы обещанием проверки, которой не было). Один голос «сдана» точку не
+ * скрывает, но молчать о нём тоже нельзя.
  */
 export function freshnessLabel(
-  p: Pick<PointDTO, 'last_seen_alive' | 'created_days_ago' | 'gone_votes' | 'status'>,
+  p: Pick<PointDTO, 'confirmed_at' | 'created_days_ago' | 'gone_votes' | 'status'>,
 ): string {
-  const confirmed = daysSince(p.last_seen_alive);
   let line: string;
-  if (confirmed < p.created_days_ago) {
+  if (p.confirmed_at) {
+    const confirmed = daysSince(p.confirmed_at);
     if (confirmed <= 0) line = 'подтверждена сегодня';
     else if (confirmed === 1) line = 'подтверждена вчера';
     else line = `подтверждена ${confirmed} ${plural(confirmed, 'день', 'дня', 'дней')} назад`;
@@ -602,10 +603,7 @@ export function monthOptions(count = 6): { value: string; label: string }[] {
   return out;
 }
 
-/**
- * Сколько календарных дней прошло с момента — как считает `created_days_ago`
- * на сервере: от полуночи, а не «за последние 24 часа». Точность до дня (§8).
- */
+/** Сколько календарных дней прошло с момента: от полуночи. Точность до дня (§8). */
 function daysSince(iso: string): number {
   const then = new Date(iso);
   then.setHours(0, 0, 0, 0);

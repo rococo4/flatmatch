@@ -190,7 +190,7 @@ func (s *Service) Leave(ctx context.Context, userID, pointID uuid.UUID) error {
 }
 
 func (s *Service) Vote(ctx context.Context, viewerID, pointID uuid.UUID, alive bool) (pointsrepo.FeedPoint, error) {
-	card, err := s.repo.CardByID(ctx, viewerID, pointID)
+	card, err := s.Point(ctx, viewerID, pointID)
 	if err != nil {
 		return pointsrepo.FeedPoint{}, err
 	}

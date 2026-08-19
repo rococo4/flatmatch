@@ -242,9 +242,10 @@ export function FlatPoolView({
         // а сам он в пуле не числится (visible_people не возвращает смотрящего).
         poolCount={members ? members.length : point.pool_count}
         // Точку на проверке видит только тот, кто её подал (§5), — она своя,
-        // даже если список «Моих поисков» ещё не доехал. Пауза — другое дело:
-        // «похоже, сдана» видят и вошедшие, и выйти из такого пула им можно.
-        mine={mine || (point.status !== 'active' && point.status !== 'paused')}
+        // даже если список «Моих поисков» ещё не доехал. Своя пауза узнаётся по
+        // restorable: «Выйти из пула» на собственной скрытой точке — не про неё.
+        // Чужая пауза — другое дело: вошедшему выйти из такого пула можно.
+        mine={mine || !!point.restorable || (point.status !== 'active' && point.status !== 'paused')}
         busy={busy}
         error={refusal}
         vote={

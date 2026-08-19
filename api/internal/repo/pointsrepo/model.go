@@ -40,7 +40,7 @@ const memberColumns = `lp.created_at AS entered_at,
 	s.pool_seen_at AS s_pool_seen_at, s.created_at AS s_created_at,
 	s.updated_at AS s_updated_at`
 
-const livePoint = `status IN ('pending', 'active')`
+const livePoint = `status IN ('pending', 'active', 'paused')`
 
 const uniqueViolation = "23505"
 

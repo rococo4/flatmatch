@@ -65,11 +65,12 @@ type Card struct {
 	MoveIn    string   `json:"move_in,omitempty"`
 	Deposit   *int     `json:"deposit,omitempty"`
 
-	CreatedDaysAgo int       `json:"created_days_ago"`
-	LastSeenAlive  time.Time `json:"last_seen_alive"`
-	GoneVotes      int       `json:"gone_votes"`
-	MyVote         *bool     `json:"my_vote,omitempty"`
-	Restorable     bool      `json:"restorable,omitempty"`
+	CreatedDaysAgo int        `json:"created_days_ago"`
+	LastSeenAlive  time.Time  `json:"last_seen_alive"`
+	ConfirmedAt    *time.Time `json:"confirmed_at,omitempty"`
+	GoneVotes      int        `json:"gone_votes"`
+	MyVote         *bool      `json:"my_vote,omitempty"`
+	Restorable     bool       `json:"restorable,omitempty"`
 
 	PoolCount int  `json:"pool_count"`
 	Responses int  `json:"responses"`
@@ -192,6 +193,13 @@ func cardStatus(p entity.Point) string {
 	}
 }
 
+func confirmedAt(p entity.Point) *time.Time {
+	if !p.LastSeenAlive.After(p.CreatedAt.Add(time.Second)) {
+		return nil
+	}
+	return pointer.To(p.LastSeenAlive)
+}
+
 func restorable(p entity.Point, viewerID uuid.UUID) bool {
 	return p.Status == entity.PointPaused && p.CreatedBy != nil && *p.CreatedBy == viewerID
 }
@@ -219,6 +227,7 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO, viewerID uuid.
 		PhotoURLs:      photoURLs(p.PhotoKeys, photos),
 		CreatedDaysAgo: daysAgo(p.CreatedAt),
 		LastSeenAlive:  p.LastSeenAlive,
+		ConfirmedAt:    confirmedAt(p),
 		GoneVotes:      fp.GoneVotes,
 		MyVote:         fp.MyVote,
 		Restorable:     restorable(p, viewerID),

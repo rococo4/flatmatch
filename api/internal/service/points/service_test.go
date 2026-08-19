@@ -805,6 +805,27 @@ func TestVoteRejectsAPointThatIsNotActive(t *testing.T) {
 	}
 }
 
+func TestVoteHidesAForeignPointOnModeration(t *testing.T) {
+	url := "https://avito.ru/x"
+	author := uuid.New()
+	point := entity.Point{
+		ID:        uuid.New(),
+		Type:      entity.PointFlat,
+		Status:    entity.PointPending,
+		CreatedBy: &author,
+		URLNorm:   &url,
+	}
+	repo := &fakeRepo{card: pointsrepo.FeedPoint{Point: point}}
+	s := newService(t, repo, &fakeSearches{}, nil)
+
+	if _, err := s.Vote(t.Context(), uuid.New(), point.ID, false); !errors.Is(err, entity.ErrNotFound) {
+		t.Errorf("Vote() on a foreign pending point = %v, want ErrNotFound", err)
+	}
+	if repo.voteCalls != 0 {
+		t.Errorf("repo.Vote called %d times, want 0", repo.voteCalls)
+	}
+}
+
 func TestVoteStaysSilentBelowTheThreshold(t *testing.T) {
 	url := "https://avito.ru/x"
 	point := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive, URLNorm: &url}

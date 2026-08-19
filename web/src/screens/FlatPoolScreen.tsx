@@ -349,11 +349,15 @@ export function FlatPoolScreen({
         {members === null ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <PoolCount n={poolCount} kind="flat" hint="увидишь после входа" />
-            <PoolEntryButton
-              label="Интересно — войти в пул"
-              caption="Вход бесплатный и безлимитный"
-              onClick={busy ? undefined : onEnter}
-            />
+            {/* В скрытую голосами квартиру не войти: сервер пускает только в
+                активную. Кнопка на паузе обещала бы вход и получила бы 404. */}
+            {!flat.gone && (
+              <PoolEntryButton
+                label="Интересно — войти в пул"
+                caption="Вход бесплатный и безлимитный"
+                onClick={busy ? undefined : onEnter}
+              />
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

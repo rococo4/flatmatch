@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
@@ -182,5 +183,56 @@ func TestCardByIDHidesUnreachableRooms(t *testing.T) {
 	}
 	if card.Author == nil || card.Author.ID != viewer {
 		t.Errorf("own card = %+v, want the author attached", card)
+	}
+}
+
+func TestSetStatusConfirmsFreshnessOnApproval(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	user := seedUser(t, pool, 1)
+
+	backdate := func(id uuid.UUID) {
+		t.Helper()
+		if _, err := pool.Exec(t.Context(),
+			`UPDATE points SET last_seen_alive = now() - interval '10 days' WHERE id = $1`, id); err != nil {
+			t.Fatalf("backdate last_seen_alive: %v", err)
+		}
+	}
+
+	approved, err := repo.Create(t.Context(),
+		flatPoint(&user, entity.SourceUserLink, "https://avito.ru/1", entity.PointPending))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	backdate(approved.ID)
+
+	if changed, err := repo.SetStatus(t.Context(), approved.ID, entity.PointActive, nil); err != nil || !changed {
+		t.Fatalf("SetStatus(active) = %v, %v, want true, nil", changed, err)
+	}
+	got, err := repo.ByID(t.Context(), approved.ID)
+	if err != nil {
+		t.Fatalf("ByID() failed: %v", err)
+	}
+	if got.LastSeenAlive.Before(time.Now().Add(-time.Minute)) {
+		t.Errorf("last_seen_alive = %s, want the moment of approval", got.LastSeenAlive)
+	}
+
+	rejected, err := repo.Create(t.Context(),
+		flatPoint(&user, entity.SourceUserLink, "https://avito.ru/2", entity.PointPending))
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	backdate(rejected.ID)
+
+	if changed, err := repo.SetStatus(t.Context(), rejected.ID, entity.PointClosed, pointer.To("rejected")); err != nil || !changed {
+		t.Fatalf("SetStatus(closed) = %v, %v, want true, nil", changed, err)
+	}
+	stale, err := repo.ByID(t.Context(), rejected.ID)
+	if err != nil {
+		t.Fatalf("ByID() failed: %v", err)
+	}
+	if !stale.LastSeenAlive.Before(time.Now().Add(-24 * time.Hour)) {
+		t.Errorf("last_seen_alive of a rejected point = %s, want the backdated value", stale.LastSeenAlive)
 	}
 }

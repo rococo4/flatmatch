@@ -228,6 +228,30 @@ func TestCreateEnforcesUserLinkLimitUnderConcurrency(t *testing.T) {
 	}
 }
 
+func TestPausedFlatKeepsItsSlot(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	user := seedUser(t, pool, 1)
+
+	for i := range entity.MaxUserLinkPoints {
+		url := fmt.Sprintf("https://avito.ru/%d", i)
+		created, err := repo.Create(t.Context(), flatPoint(&user, entity.SourceUserLink, url, entity.PointActive))
+		if err != nil {
+			t.Fatalf("Create() #%d failed: %v", i+1, err)
+		}
+		if i == 0 {
+			pausePoint(t, pool, created.ID)
+		}
+	}
+
+	_, err := repo.Create(t.Context(),
+		flatPoint(&user, entity.SourceUserLink, "https://avito.ru/one-more", entity.PointActive))
+	if !errors.Is(err, entity.ErrPointLimit) {
+		t.Errorf("Create() over a limit holding a paused point = %v, want ErrPointLimit", err)
+	}
+}
+
 func TestIntentHomeLimitsByStage(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

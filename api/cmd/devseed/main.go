@@ -326,14 +326,17 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 func seedFlats(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) (int, error) {
 	const query = `
 		INSERT INTO points (id, type, status, source, zone_id, price_total, rooms,
-			isolated, photo_keys, created_at, edited_at)
+			isolated, photo_keys, created_at, edited_at, last_seen_alive)
 		VALUES ($1, 'flat', 'active', 'manual', $2, $3, $4, true, ARRAY[$5],
-			now() - make_interval(days => $6::int), now() - make_interval(days => $6::int))
+			now() - make_interval(days => $6::int), now() - make_interval(days => $6::int),
+			now() - make_interval(days => $6::int))
 		ON CONFLICT (id) DO UPDATE SET
 			status = 'active', close_reason = NULL, zone_id = EXCLUDED.zone_id,
 			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
 			isolated = EXCLUDED.isolated, photo_keys = EXCLUDED.photo_keys,
-			created_at = EXCLUDED.created_at, edited_at = EXCLUDED.edited_at`
+			created_at = EXCLUDED.created_at, edited_at = EXCLUDED.edited_at,
+			last_seen_alive = EXCLUDED.last_seen_alive, gone_count = 0,
+			ping_asked_at = NULL`
 
 	members := 0
 	for _, f := range flats {

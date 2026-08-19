@@ -186,7 +186,8 @@ func (r *Repo) CountActiveIn(ctx context.Context, zoneIDs []string) (int, error)
 
 func (r *Repo) SetStatus(ctx context.Context, id uuid.UUID, status entity.PointStatus, closeReason *string) (bool, error) {
 	tag, err := r.pool.Exec(ctx, `
-		UPDATE points SET status = $2, close_reason = $3, edited_at = now()
+		UPDATE points SET status = $2, close_reason = $3, edited_at = now(),
+			last_seen_alive = CASE WHEN $2 = 'active' THEN now() ELSE last_seen_alive END
 		WHERE id = $1 AND status = 'pending'`, id, string(status), closeReason)
 	if err != nil {
 		return false, fmt.Errorf("set status of point %s to %s: %w", id, status, err)

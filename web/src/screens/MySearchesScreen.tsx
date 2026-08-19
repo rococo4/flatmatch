@@ -233,7 +233,8 @@ export function MySearchesScreen({
   onReactivate?: (id: string) => void;
   /** → пул квартиры (список вошедших) */
   onOpenFlatPool?: (id: string) => void;
-  /** «Позвать в чат» — диплинк на свою квартиру (§6, вирусная петля). */
+  /** «Позвать в чат» — диплинк на свою квартиру (§6, вирусная петля).
+   *  Только у одобренных: ссылка на pending/paused у получателя не откроется. */
   onSharePoint?: (id: string) => void;
   /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
   onClosePoint?: (id: string) => void;
@@ -515,7 +516,7 @@ function FlatRow({
           ) : (
             <PointActions
               id={point.id}
-              onShare={point.status === 'paused' ? undefined : onShare}
+              onShare={point.status === 'active' ? onShare : undefined}
               onRestore={point.status === 'paused' ? onRestore : undefined}
               onClose={onClose}
               question="Закрыть квартиру?"
@@ -525,7 +526,7 @@ function FlatRow({
           <PointActions
             id={point.id}
             action="Выйти из пула"
-            onShare={onShare}
+            onShare={point.status === 'active' ? onShare : undefined}
             onClose={onLeave}
             question="Точно выйти?"
           />
@@ -571,7 +572,12 @@ function HomeRow({
             разбора у него нет by design (§2.2). Закрытой («нашёл соседа»,
             «истёк срок») остаётся только уйти из списка. */}
         {isLivePoint(point) ? (
-          <PointActions id={point.id} onShare={onShare} onClose={onClose} question="Закрыть точку?" />
+          <PointActions
+            id={point.id}
+            onShare={point.status === 'active' ? onShare : undefined}
+            onClose={onClose}
+            question="Закрыть точку?"
+          />
         ) : (
           <PointActions id={point.id} action="Скрыть" onClose={onClose} question="Скрыть карточку?" />
         )}

@@ -69,12 +69,10 @@ const L = {
 export function PointCreatedScreen({
   title,
   pricePerPerson,
-  onShare,
   onToSearches,
 }: {
   title: string;
   pricePerPerson: string; // «45 000 ₽ с человека»
-  onShare?: () => void;
   onToSearches?: () => void;
 }) {
   return (
@@ -130,17 +128,20 @@ export function PointCreatedScreen({
       </div>
 
       <div style={L.fixed}>
-        {/* Шеринг появляется вместе с обработчиком: ссылка на точку — это
-            диплинк, и рисовать кнопку, которая никуда не ведёт, незачем. */}
-        {onShare && (
-          <button
-            type="button"
-            style={{ ...S.secondaryButton, background: 'var(--chip-bg)', padding: 14, fontSize: 16 }}
-            onClick={onShare}
-          >
-            Позвать в пул — поделиться в чат
-          </button>
-        )}
+        {/* Шеринга до аппрува нет: ссылка на pending-точку у получателя не
+            откроется (§5 — в общую ленту после проверки), кнопка создавала
+            бы мёртвые приглашения. Кнопка «Позвать в чат» ждёт в «Моих
+            поисках» — появится, как только точку одобрят. */}
+        <span
+          style={{
+            fontSize: 13,
+            color: 'var(--tg-theme-subtitle-text-color)',
+            textAlign: 'center',
+            textWrap: 'pretty',
+          }}
+        >
+          Пройдёт проверку — позови людей в пул из «Моих поисков»
+        </span>
         <button type="button" style={L.ghostButton} onClick={onToSearches}>
           К моим поискам
         </button>

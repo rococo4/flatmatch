@@ -1209,7 +1209,6 @@ export function App() {
                 ? `${money(share)} с человека`
                 : money(createdPoint.price_total ?? 0)
             }
-            onShare={() => sharePoint(createdPoint.id)}
             onToSearches={() => toTab('searches')}
           />
         );

@@ -265,7 +265,7 @@ export function FlatPoolView({
           if (votable) setAsked(true);
         }}
         onOpenPerson={onOpenPerson}
-        onShare={onShare ? () => onShare(pointId) : undefined}
+        onShare={onShare && point.status === 'active' ? () => onShare(pointId) : undefined}
         onEnter={() => void enter()}
         onLeave={() => setLeaving(true)}
         onVote={(alive) => void vote(alive)}

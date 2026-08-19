@@ -1,2 +1,4 @@
-# Пока пусто — зависимости появятся вместе с реализацией (§12 шаг 7).
-# Ожидаются: telethon (MTProto), psycopg (Postgres), клиент LLM-провайдера.
+httpx==0.28.1
+beautifulsoup4==4.13.4
+psycopg[binary]==3.2.9
+anthropic==0.62.0

@@ -32,6 +32,7 @@ import {
   pointShareUrl,
   postLike,
   reactivateSearch,
+  restorePoint,
   startParam,
   updateSearch,
   type CloseReason,
@@ -756,6 +757,18 @@ export function App() {
     }
   };
 
+  /** «Проверил — она живая»: своя скрытая голосами квартира возвращается в ленту (§8). */
+  const restoreMyPoint = async (pointId: string) => {
+    setSearchesError(null);
+    try {
+      await restorePoint(pointId);
+      reloadPoints();
+      void refreshFeed();
+    } catch (e: unknown) {
+      setSearchesError(asApiError(e).message);
+    }
+  };
+
   const openMatch = (id: string) => {
     setMatchId(id);
     setView('match');
@@ -973,6 +986,7 @@ export function App() {
             onOpenFlatPool={openFlatPool}
             onSharePoint={sharePoint}
             onClosePoint={(id) => void closeMyPoint(id)}
+            onRestorePoint={(id) => void restoreMyPoint(id)}
             onLeavePool={(id) => void leaveFromList(id)}
             onCreateFlatPoint={() => setView('flatForm')}
             onCreateHomePoint={() => setView('homeForm')}

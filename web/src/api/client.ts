@@ -250,8 +250,25 @@ export type PointType = 'flat' | 'intent_home';
 /** Стадия «к себе»: уже живёт или заезжает. У квартиры с рынка стадии нет. */
 export type PointStage = 'live' | 'moving_in';
 
-/** unknown — значение уровня кода, как у Profile.status. */
-export type PointStatus = 'unknown' | 'pending' | 'active' | 'paused' | 'closed' | 'rejected';
+/**
+ * Статус точки, как его отдаёт карточка.
+ *
+ * `paused` — «похоже, сдана» (скрыта голосами, §8), а закрытая приезжает не
+ * словом `closed`, а своей причиной: `gone` — сдана, `expired` — истёк срок,
+ * `found` — «к себе» нашёл соседа, `rejected` — не прошла модерацию. Голый
+ * `closed` остаётся закрытием руками. unknown — значение уровня кода, как у
+ * Profile.status.
+ */
+export type PointStatus =
+  | 'unknown'
+  | 'pending'
+  | 'active'
+  | 'paused'
+  | 'closed'
+  | 'rejected'
+  | 'gone'
+  | 'expired'
+  | 'found';
 
 /** «раздельный» важнее числа: вторая дверь для двух незнакомцев — это про быт. */
 export type Bathrooms = 'combined' | 'separate' | 'two';
@@ -326,6 +343,14 @@ export interface PointDTO {
 
   /** «добавлена N дней назад» — точность до дня, «20 минут назад» не обещаем (§8). */
   created_days_ago: number;
+  /** Последнее подтверждение жизни: создание, голос «живая», восстановление, ответ на пинг (§8). */
+  last_seen_alive: string;
+  /** Сколько человек отметили «уже сдана» — строка свежести и плашка паузы. */
+  gone_votes: number;
+  /** Мой голос, если он есть: true — «живая», false — «сдана». Нет поля — не голосовал. */
+  my_vote?: boolean;
+  /** Моя квартира на паузе: её возвращает «Проверил — она живая» (§8). */
+  restorable?: boolean;
   pool_count: number;
   responses: number;
   in_pool: boolean;
@@ -882,6 +907,32 @@ export function enterPointPool(id: string): Promise<void> {
 /** «Выйти из пула». Дорогие лайки при этом не сгорают (§2.3) — говорить о них нечего. */
 export function leavePointPool(id: string): Promise<void> {
   return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/enter`, { method: 'DELETE' });
+}
+
+/**
+ * Голос свежести: «Объявление ещё живое?» после перехода по ссылке (§8).
+ *
+ * Отвечает карточкой, а не 204: голос может скрыть точку прямо сейчас
+ * (порог набран), и экран обязан перерисоваться из ответа, а не из своих
+ * догадок. Отказы: 409 `point_not_active`, 422 `not_votable` (не квартира
+ * с рынка или без ссылки).
+ */
+export function votePoint(id: string, alive: boolean): Promise<PointDTO> {
+  return request<PointDTO>(`/api/v1/points/${encodeURIComponent(id)}/vote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alive }),
+  });
+}
+
+/**
+ * «Проверил — она живая»: снимает паузу со своей квартиры и стирает голоса.
+ *
+ * Только у создателя и только у paused: чужая — 404, не на паузе — 409
+ * `point_not_paused`. Второе скрытие голосами будет финальным (§8).
+ */
+export function restorePoint(id: string): Promise<PointDTO> {
+  return request<PointDTO>(`/api/v1/points/${encodeURIComponent(id)}/restore`, { method: 'POST' });
 }
 
 /**

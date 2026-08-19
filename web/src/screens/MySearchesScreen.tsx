@@ -9,6 +9,7 @@ import type { CSSProperties } from 'react';
 import type { PointDTO } from '../api/client';
 import {
   addedLabel,
+  isLivePoint,
   money,
   plural,
   pointStatusLabel,
@@ -96,7 +97,13 @@ const L = {
     background: 'var(--card-bg)',
     border: '1px solid var(--sep)',
   } as CSSProperties,
-  actions: { display: 'flex', alignItems: 'center', gap: 16, paddingTop: 2 } as CSSProperties,
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 16,
+    paddingTop: 2,
+  } as CSSProperties,
   actionLink: {
     fontSize: 13,
     fontWeight: 510,
@@ -198,6 +205,7 @@ export function MySearchesScreen({
   onOpenFlatPool,
   onSharePoint,
   onClosePoint,
+  onRestorePoint,
   onLeavePool,
   onCreateFlatPoint,
   onCreateHomePoint,
@@ -229,6 +237,8 @@ export function MySearchesScreen({
   onSharePoint?: (id: string) => void;
   /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
   onClosePoint?: (id: string) => void;
+  /** «Проверил — она живая» у своей скрытой голосами квартиры (§8). */
+  onRestorePoint?: (id: string) => void;
   /** Выход из чужого пула прямо из списка — без похода на экран пула. */
   onLeavePool?: (id: string) => void;
   /** → форма «Найди со-съёмщика на свою квартиру» */
@@ -236,8 +246,10 @@ export function MySearchesScreen({
   /** → форма «К себе», сразу на гейте стадии */
   onCreateHomePoint?: () => void;
 }) {
-  // Отклонённые висят в списке с пометкой, но слот лимита не занимают.
-  const liveFlats = flats.filter((p) => p.status !== 'rejected' && p.status !== 'closed').length;
+  // Отклонённые, сданные и протухшие висят в списке с пометкой, но слот лимита
+  // не занимают: закрытая точка приезжает своей причиной, не словом `closed`.
+  const liveFlats = flats.filter(isLivePoint).length;
+  const liveHomes = homes.filter(isLivePoint).length;
   // Отказ по слотам показывается только после тапа: висящая плашка «занято»
   // над списком из трёх карточек и так очевидна, а до тапа она просто шум.
   const [slotsNotice, setSlotsNotice] = useState(false);
@@ -396,6 +408,7 @@ export function MySearchesScreen({
                   onOpenPool={onOpenFlatPool}
                   onShare={onSharePoint}
                   onClose={onClosePoint}
+                  onRestore={onRestorePoint}
                 />
               ))}
               {enteredFlats.map((p) => (
@@ -415,7 +428,7 @@ export function MySearchesScreen({
         {/* 3. Зову к себе — точки «к себе», свой лимит слотов */}
         <div style={L.section}>
           <span style={S.sectionTitle}>
-            ЗОВУ К СЕБЕ · {homes.length} ИЗ {homeSlotsTotal}
+            ЗОВУ К СЕБЕ · {liveHomes} ИЗ {homeSlotsTotal}
           </span>
 
           {homes.length === 0 ? (
@@ -428,7 +441,7 @@ export function MySearchesScreen({
               {homes.map((h) => (
                 <HomeRow key={h.id} point={h} onShare={onSharePoint} onClose={onClosePoint} />
               ))}
-              {homes.length < homeSlotsTotal && <CreateEntry tone="home" onClick={onCreateHomePoint} />}
+              {liveHomes < homeSlotsTotal && <CreateEntry tone="home" onClick={onCreateHomePoint} />}
             </>
           )}
         </div>
@@ -450,6 +463,7 @@ function FlatRow({
   onOpenPool,
   onShare,
   onClose,
+  onRestore,
   onLeave,
 }: {
   point: PointDTO;
@@ -457,6 +471,8 @@ function FlatRow({
   onOpenPool?: (id: string) => void;
   onShare?: (id: string) => void;
   onClose?: (id: string) => void;
+  /** «Проверил — она живая» у своей скрытой голосами квартиры (§8). */
+  onRestore?: (id: string) => void;
   /** Быстрый выход из чужого пула прямо из списка (§6). */
   onLeave?: (id: string) => void;
 }) {
@@ -490,13 +506,17 @@ function FlatRow({
             ? 'Смотреть пул'
             : `Смотреть пул · ${point.pool_count} ${plural(point.pool_count, 'человек', 'человека', 'человек')}`}
         </button>
+        {/* Закрытой карточке предлагать нечего, кроме как убрать её с глаз:
+            и отклонённой модератором, и сданной, и протухшей по TTL. Скрытую
+            голосами, наоборот, ещё можно вернуть — она не закрыта (§8). */}
         {mine &&
-          (point.status === 'rejected' ? (
+          (!isLivePoint(point) ? (
             <PointActions id={point.id} action="Скрыть" onClose={onClose} question="Скрыть карточку?" />
           ) : (
             <PointActions
               id={point.id}
-              onShare={onShare}
+              onShare={point.status === 'paused' ? undefined : onShare}
+              onRestore={point.status === 'paused' ? onRestore : undefined}
               onClose={onClose}
               question="Закрыть квартиру?"
             />
@@ -548,8 +568,13 @@ function HomeRow({
         </div>
         <StatusRow status={point.status} />
         {/* Отклики автор смотрит в общем «Тебя лайкнули» — своего экрана
-            разбора у него нет by design (§2.2). */}
-        <PointActions id={point.id} onShare={onShare} onClose={onClose} question="Закрыть точку?" />
+            разбора у него нет by design (§2.2). Закрытой («нашёл соседа»,
+            «истёк срок») остаётся только уйти из списка. */}
+        {isLivePoint(point) ? (
+          <PointActions id={point.id} onShare={onShare} onClose={onClose} question="Закрыть точку?" />
+        ) : (
+          <PointActions id={point.id} action="Скрыть" onClose={onClose} question="Скрыть карточку?" />
+        )}
       </div>
     </article>
   );
@@ -567,6 +592,7 @@ function PointActions({
   question,
   action = 'Закрыть',
   onShare,
+  onRestore,
   onClose,
 }: {
   id: string;
@@ -574,16 +600,23 @@ function PointActions({
   /** Подпись красной кнопки: «Закрыть» у своих, «Выйти из пула» у чужих. */
   action?: string;
   onShare?: (id: string) => void;
+  /** «Проверил — она живая» — только у своей скрытой голосами квартиры (§8). */
+  onRestore?: (id: string) => void;
   onClose?: (id: string) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  if (!onShare && !onClose) return null;
+  if (!onShare && !onRestore && !onClose) return null;
 
   return (
     <div style={L.actions}>
       {onShare && (
         <button type="button" style={L.actionLink} onClick={() => onShare(id)}>
           Позвать в чат
+        </button>
+      )}
+      {onRestore && (
+        <button type="button" style={L.actionLink} onClick={() => onRestore(id)}>
+          Проверил — она живая
         </button>
       )}
       {onClose &&

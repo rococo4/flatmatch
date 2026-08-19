@@ -17,13 +17,16 @@ import {
   fetchPoint,
   fetchPointPool,
   leavePointPool,
+  restorePoint,
+  votePoint,
   type PointDTO,
   type PointPoolMemberDTO,
 } from '../api/client';
 import {
-  addedLabel,
   chipLabel,
   flatFacts,
+  freshnessLabel,
+  goneBanner,
   habitsLine,
   money,
   openOriginalLabel,
@@ -102,6 +105,13 @@ export function FlatPoolView({
   const [refusal, setRefusal] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  /** По ссылке сходили — спрашиваем про свежесть. Возврат из браузера не ловим (§8). */
+  const [asked, setAsked] = useState(false);
+  const [voteBusy, setVoteBusy] = useState(false);
+  /** Ответили только что: «Спасибо, отметили» вместо «Ты отметил: …». */
+  const [justVoted, setJustVoted] = useState(false);
+  /** Тапнули «изменить»: показываем кнопки, будто голоса ещё нет. */
+  const [changing, setChanging] = useState(false);
 
   const load = useCallback(async (): Promise<Loaded> => {
     const point = await fetchPoint(pointId);
@@ -119,6 +129,9 @@ export function FlatPoolView({
     setData(null);
     setError(null);
     setRefusal(null);
+    setAsked(false);
+    setJustVoted(false);
+    setChanging(false);
     load()
       .then((loaded) => {
         if (!cancelled) setData(loaded);
@@ -162,6 +175,45 @@ export function FlatPoolView({
     }
   };
 
+  /**
+   * Голос о свежести. Карточка берётся из ответа, а не перечитывается: голос
+   * мог прямо сейчас скрыть точку (порог набран), и ответ уже несёт paused.
+   */
+  const vote = async (alive: boolean) => {
+    if (voteBusy) return;
+    setVoteBusy(true);
+    setRefusal(null);
+    try {
+      const point = await votePoint(pointId, alive);
+      setData((d) => (d ? { ...d, point } : d));
+      setChanging(false);
+      setJustVoted(true);
+      onChanged?.();
+    } catch (e: unknown) {
+      setRefusal(message(e));
+    } finally {
+      setVoteBusy(false);
+    }
+  };
+
+  /** «Проверил — она живая»: пауза снята, голоса стёрты — карточка из ответа. */
+  const restore = async () => {
+    if (busy) return;
+    setBusy(true);
+    setRefusal(null);
+    try {
+      const point = await restorePoint(pointId);
+      setData((d) => (d ? { ...d, point } : d));
+      setJustVoted(false);
+      setChanging(false);
+      onChanged?.();
+    } catch (e: unknown) {
+      setRefusal(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (error || !data) {
     return (
       <div style={V.screen}>
@@ -177,6 +229,10 @@ export function FlatPoolView({
   }
 
   const { point, members } = data;
+  // Спрашивать про свежесть есть смысл только у живой квартиры с рынка со
+  // ссылкой: у скрытой голоса уже сыграли, у «к себе» их не бывает вовсе (§8).
+  const votable = point.type === 'flat' && !!point.url && point.status === 'active';
+  const myVote = point.my_vote ?? null;
   return (
     <>
       <FlatPoolScreen
@@ -185,20 +241,35 @@ export function FlatPoolView({
         // Вошедшему счётчик считать нечего: в списке ровно те, кого он видит,
         // а сам он в пуле не числится (visible_people не возвращает смотрящего).
         poolCount={members ? members.length : point.pool_count}
-        // Неактивную точку видит только тот, кто её подал (§5), — она своя,
-        // даже если список «Моих поисков» ещё не доехал. И выйти из её пула
-        // особенно нельзя: вход обратно требует активной точки.
-        mine={mine || point.status !== 'active'}
+        // Точку на проверке видит только тот, кто её подал (§5), — она своя,
+        // даже если список «Моих поисков» ещё не доехал. Пауза — другое дело:
+        // «похоже, сдана» видят и вошедшие, и выйти из такого пула им можно.
+        mine={mine || (point.status !== 'active' && point.status !== 'paused')}
         busy={busy}
         error={refusal}
+        vote={
+          votable
+            ? {
+                asked: asked || changing,
+                // «изменить» возвращает кнопки: экрану это тот же «голоса нет».
+                myVote: changing ? null : myVote,
+                busy: voteBusy,
+                justVoted,
+              }
+            : undefined
+        }
         onBack={onBack}
         onOpenSource={() => {
           if (point.url) openExternal(point.url);
+          if (votable) setAsked(true);
         }}
         onOpenPerson={onOpenPerson}
         onShare={onShare ? () => onShare(pointId) : undefined}
         onEnter={() => void enter()}
         onLeave={() => setLeaving(true)}
+        onVote={(alive) => void vote(alive)}
+        onRestore={() => void restore()}
+        onChangeVote={() => setChanging(true)}
       />
       {leaving && (
         <LeavePoolSheet
@@ -227,8 +298,14 @@ function toCard(p: PointDTO): FlatPoolCard {
     priceTotal: share !== null ? total : undefined,
     facts: flatFacts(p),
     restrictions: restrictionLabels(p.restrictions, 'flat'),
-    addedAt: addedLabel(p.created_days_ago),
-    status: pointStatusLabel(p.status) || undefined,
+    freshness: freshnessLabel(p),
+    // У точки на паузе строки статуса нет: то же самое, только громче,
+    // говорит жёлтая плашка — две «похоже, сдана» подряд были бы шумом.
+    status: p.status === 'paused' ? undefined : pointStatusLabel(p.status) || undefined,
+    gone:
+      p.status === 'paused'
+        ? { banner: goneBanner(p.gone_votes), restorable: !!p.restorable }
+        : undefined,
     sourceLabel: p.url ? openOriginalLabel(p.url) : undefined,
   };
 }

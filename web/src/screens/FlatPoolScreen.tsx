@@ -47,11 +47,29 @@ export type FlatPoolCard = {
   priceTotal?: string;
   facts: Fact[];
   restrictions: string[];
-  addedAt: string; // «добавлена вчера»
+  /** «подтверждена вчера» / «добавлена 5 дней назад, не проверялась» (§8). */
+  freshness: string;
   /** «на проверке» у своей ещё не одобренной точки; у чужих пусто. */
   status?: string;
+  /** Точка на паузе: жёлтая плашка вместо строки статуса (§8). */
+  gone?: { banner: string; restorable: boolean };
   /** «Открыть на Авито». Пусто — ссылки на оригинал у точки нет. */
   sourceLabel?: string;
+};
+
+/**
+ * Состояние блока-вопроса «Объявление ещё живое?» (§8).
+ *
+ * `asked` — по ссылке уже сходили в этой сессии: до этого спрашивать не о чем.
+ * `myVote` — голос, с которым пришли (или только что оставили); null — не
+ * голосовал, показываем кнопки. `justVoted` отличает «Спасибо, отметили» сразу
+ * после ответа от «Ты отметил: …» у пришедшего с готовым голосом.
+ */
+export type FlatVoteState = {
+  asked: boolean;
+  myVote: boolean | null;
+  busy: boolean;
+  justVoted?: boolean;
 };
 
 const L = {
@@ -124,6 +142,61 @@ const L = {
     cursor: 'pointer',
     padding: 0,
   } as CSSProperties,
+  /** Жёлтая плашка паузы — тот же жёлтый, что у лимитов и вердикта «краем». */
+  gonePlate: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    padding: '10px 12px',
+    borderRadius: 10,
+    background: 'var(--warning-bg)',
+    color: 'var(--warning-fg)',
+    fontSize: 14,
+    fontWeight: 590,
+  } as CSSProperties,
+  /** Внутри жёлтой плашки: серый --chip-bg на жёлтом выглядел бы грязью. */
+  restoreButton: {
+    width: '100%',
+    padding: 11,
+    border: 'none',
+    borderRadius: 10,
+    background: 'var(--card-bg)',
+    font: 'inherit',
+    fontSize: 14,
+    fontWeight: 590,
+    color: 'var(--tg-theme-accent-text-color)',
+    cursor: 'pointer',
+  } as CSSProperties,
+  voteBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: '10px 12px',
+    borderRadius: 10,
+    background: 'var(--app-bg)',
+  } as CSSProperties,
+  voteButton: {
+    flex: '1 1 0',
+    padding: 10,
+    border: 'none',
+    borderRadius: 9,
+    background: 'var(--card-bg)',
+    font: 'inherit',
+    fontSize: 14,
+    fontWeight: 590,
+    color: 'var(--tg-theme-accent-text-color)',
+    cursor: 'pointer',
+  } as CSSProperties,
+  changeLink: {
+    border: 'none',
+    background: 'none',
+    font: 'inherit',
+    fontSize: 13,
+    fontWeight: 510,
+    color: 'var(--tg-theme-accent-text-color)',
+    cursor: 'pointer',
+    padding: 0,
+  } as CSSProperties,
 };
 
 export function FlatPoolScreen({
@@ -133,6 +206,7 @@ export function FlatPoolScreen({
   mine,
   busy,
   error,
+  vote,
   shownCount = 3,
   onBack,
   onOpenSource,
@@ -140,6 +214,9 @@ export function FlatPoolScreen({
   onEnter,
   onLeave,
   onShare,
+  onVote,
+  onRestore,
+  onChangeVote,
 }: {
   flat: FlatPoolCard;
   /** null = смотрящий не в пуле: список ему закрыт, карточка — нет (§6). */
@@ -149,6 +226,8 @@ export function FlatPoolScreen({
   mine?: boolean;
   busy?: boolean;
   error?: string | null;
+  /** Голосование о свежести: только у квартиры с рынка со ссылкой и активной (§8). */
+  vote?: FlatVoteState;
   shownCount?: number;
   onBack?: () => void;
   onOpenSource?: () => void;
@@ -157,6 +236,12 @@ export function FlatPoolScreen({
   onLeave?: () => void;
   /** «Позвать в пул — поделиться в чат»: у любого участника, квартира ничья (§2.2). */
   onShare?: () => void;
+  /** «Да» / «Уже сдана» из блока-вопроса. */
+  onVote?: (alive: boolean) => void;
+  /** «Проверил — она живая» под жёлтой плашкой — только у создателя (§8). */
+  onRestore?: () => void;
+  /** «изменить» у оставленного голоса — вернуть кнопки. */
+  onChangeVote?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? (members ?? []) : (members ?? []).slice(0, shownCount);
@@ -186,7 +271,12 @@ export function FlatPoolScreen({
         <article style={S.card}>
           <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>
             <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>Квартира с рынка</span>
-            <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>{flat.addedAt}</span>
+            {/* Строка свежести длиннее «добавлена вчера» — с припиской про
+                голос она может встать в две строки, и тогда край должен быть
+                ровным. */}
+            <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82, textAlign: 'right' }}>
+              {flat.freshness}
+            </span>
           </div>
           <div style={{ ...S.cardBody, gap: 12 }}>
             {flat.photoUrls.length > 0 ? (
@@ -228,6 +318,18 @@ export function FlatPoolScreen({
             <FactsBlock title="Квартира" facts={flat.facts}>
               <GreyChips items={flat.restrictions} />
             </FactsBlock>
+            {/* Плашка паузы заменяет собой строку статуса: у скрытой голосами
+                квартиры «похоже, сдана» — главная новость карточки. */}
+            {flat.gone && (
+              <div style={L.gonePlate}>
+                <span>{flat.gone.banner}</span>
+                {flat.gone.restorable && (
+                  <button type="button" style={L.restoreButton} disabled={busy} onClick={onRestore}>
+                    Проверил — она живая
+                  </button>
+                )}
+              </div>
+            )}
             {flat.status && (
               <div>
                 <LimitChip>{flat.status}</LimitChip>
@@ -237,6 +339,9 @@ export function FlatPoolScreen({
               <button type="button" style={L.sourceLink} onClick={onOpenSource}>
                 {flat.sourceLabel} ↗
               </button>
+            )}
+            {vote && (vote.asked || vote.myVote !== null) && (
+              <VoteBlock vote={vote} onVote={onVote} onChangeVote={onChangeVote} />
             )}
           </div>
         </article>
@@ -330,6 +435,62 @@ export function FlatPoolScreen({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Блок-вопрос о свежести под кнопкой источника (§8).
+ *
+ * Возврат из браузера не ловим: блок появляется сразу после тапа по ссылке и
+ * висит, пока не ответят или не уйдут с карточки. Пришедшему с готовым голосом
+ * он показывается сразу — «Ты отметил: …», без ожидания тапа.
+ */
+function VoteBlock({
+  vote,
+  onVote,
+  onChangeVote,
+}: {
+  vote: FlatVoteState;
+  onVote?: (alive: boolean) => void;
+  onChangeVote?: () => void;
+}) {
+  if (vote.myVote === null) {
+    return (
+      <div style={L.voteBlock}>
+        <span style={{ fontSize: 14, fontWeight: 590 }}>Объявление ещё живое?</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            style={L.voteButton}
+            disabled={vote.busy}
+            onClick={() => onVote?.(true)}
+          >
+            Да
+          </button>
+          <button
+            type="button"
+            style={{ ...L.voteButton, color: 'var(--tg-theme-destructive-text-color)' }}
+            disabled={vote.busy}
+            onClick={() => onVote?.(false)}
+          >
+            Уже сдана
+          </button>
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
+          Помоги остальным в пуле — сданные мы скрываем
+        </span>
+      </div>
+    );
+  }
+
+  const line = vote.justVoted ? 'Спасибо, отметили' : `Ты отметил: ${vote.myVote ? 'живая' : 'сдана'}`;
+  return (
+    <div style={{ ...L.voteBlock, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{line} ·</span>
+      <button type="button" style={L.changeLink} disabled={vote.busy} onClick={onChangeVote}>
+        изменить
+      </button>
     </div>
   );
 }

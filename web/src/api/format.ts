@@ -160,18 +160,24 @@ const STAGE_BADGE: Record<PointStage, string> = {
 /**
  * Строка статуса своей точки.
  *
- * У активной строки нет: «в ленте» — это норма, а не новость. Закрытую «Мои
- * поиски» не показывают вовсе, и метка ей нужна только на случай, если сервер
- * когда-нибудь её отдаст.
+ * У активной строки нет: «в ленте» — это норма, а не новость. Закрытая
+ * приезжает своей причиной, а не словом `closed`, поэтому меток у неё четыре:
+ * голоса, TTL, «нашёл соседа» и отказ модератора — разные истории (§8).
  */
 const POINT_STATUS_LABEL: Record<PointStatus, string> = {
   unknown: '',
   pending: 'на проверке',
   active: '',
-  paused: 'скрыта',
+  paused: 'похоже, сдана',
   closed: 'закрыта',
   rejected: 'отклонена',
+  gone: 'сдана',
+  expired: 'истёк срок',
+  found: 'нашёл соседа',
 };
+
+/** Слот лимита занимает только живая точка: закрытая любой причиной — нет (§8). */
+const DEAD_POINT_STATUSES: PointStatus[] = ['closed', 'rejected', 'gone', 'expired', 'found'];
 
 /** Развёрнуто — для строки фактов карточки. */
 const BATHROOMS_LABEL: Record<Bathrooms, string> = {
@@ -417,9 +423,20 @@ export function stageBadge(stage: PointStage): string {
   return STAGE_BADGE[stage] ?? '';
 }
 
-/** «на проверке» / «скрыта». У активной точки строки нет — это норма. */
+/** «на проверке» / «похоже, сдана». У активной точки строки нет — это норма. */
 export function pointStatusLabel(status: PointStatus): string {
   return POINT_STATUS_LABEL[status] ?? '';
+}
+
+/**
+ * Живая ли точка — занимает ли она слот лимита.
+ *
+ * Закрытая точка приезжает не словом `closed`, а причиной (`gone`, `expired`,
+ * `found`), поэтому сравнением с одним статусом обойтись нельзя: иначе сданная
+ * квартира держала бы слот из пяти, а «нашёл соседа» — один из двух.
+ */
+export function isLivePoint(p: Pick<PointDTO, 'status'>): boolean {
+  return !DEAD_POINT_STATUSES.includes(p.status);
 }
 
 /** «добавлена вчера» / «добавлена 5 дней назад». Точность до дня (§8). */
@@ -427,6 +444,36 @@ export function addedLabel(daysAgo: number): string {
   if (daysAgo <= 0) return 'добавлена сегодня';
   if (daysAgo === 1) return 'добавлена вчера';
   return `добавлена ${daysAgo} ${plural(daysAgo, 'день', 'дня', 'дней')} назад`;
+}
+
+/**
+ * Строка свежести квартиры вместо «добавлена вчера» (§8).
+ *
+ * Подтверждение считается свежее добавления, только если оно моложе самой
+ * точки: у только что поданной квартиры last_seen_alive = created_at, и
+ * «подтверждена сегодня» на ней было бы обещанием проверки, которой не было.
+ * Один голос «сдана» точку не скрывает, но молчать о нём тоже нельзя.
+ */
+export function freshnessLabel(
+  p: Pick<PointDTO, 'last_seen_alive' | 'created_days_ago' | 'gone_votes' | 'status'>,
+): string {
+  const confirmed = daysSince(p.last_seen_alive);
+  let line: string;
+  if (confirmed < p.created_days_ago) {
+    if (confirmed <= 0) line = 'подтверждена сегодня';
+    else if (confirmed === 1) line = 'подтверждена вчера';
+    else line = `подтверждена ${confirmed} ${plural(confirmed, 'день', 'дня', 'дней')} назад`;
+  } else {
+    line = `${addedLabel(p.created_days_ago)}, не проверялась`;
+  }
+  if (p.status === 'active' && p.gone_votes >= 1) return `${line} · кто-то отметил как сданную`;
+  return line;
+}
+
+/** Плашка паузы: «похоже, сдана — 2 человека отметили» (§8). */
+export function goneBanner(goneVotes: number): string {
+  const who = plural(goneVotes, 'человек', 'человека', 'человек');
+  return `похоже, сдана — ${goneVotes} ${who} ${goneVotes === 1 ? 'отметил' : 'отметили'}`;
 }
 
 /**
@@ -553,6 +600,18 @@ export function monthOptions(count = 6): { value: string; label: string }[] {
     out.push({ value: `${d.getFullYear()}-${month}`, label: withYear(MONTH_FMT.format(d), d) });
   }
   return out;
+}
+
+/**
+ * Сколько календарных дней прошло с момента — как считает `created_days_ago`
+ * на сервере: от полуночи, а не «за последние 24 часа». Точность до дня (§8).
+ */
+function daysSince(iso: string): number {
+  const then = new Date(iso);
+  then.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((today.getTime() - then.getTime()) / DAY_MS));
 }
 
 /** «35–45к» или «до 45к»: снизу вилка открыта чаще, чем сверху. */

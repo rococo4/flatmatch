@@ -287,6 +287,37 @@ func TestPushAnswersAreRoutedByPrefix(t *testing.T) {
 	}
 }
 
+func TestAnsweredPushKeepsItsLinkButton(t *testing.T) {
+	api := newBotAPI(t)
+	pushes := &fakePushes{}
+
+	update := privateTap(188993596, "pnt:alive:1a1c1de1-0000-4000-8000-000000000001")
+	update.CallbackQuery.Message.ReplyMarkup = &InlineKeyboard{Rows: [][]InlineKeyboardButton{
+		{
+			{Text: "Да", Data: "pnt:alive:x"},
+			{Text: "Нашёл соседа", Data: "pnt:gone:x"},
+		},
+		{{Text: "Открыть", Web: &WebApp{URL: "https://app.example/?startapp=mine"}}},
+	}}
+	newTestBotWithPushes(api, &fakeModeration{}, moderationChat, pushes).
+		handle(t.Context(), update)
+
+	edit := api.got("editMessageReplyMarkup")
+	if edit == nil {
+		t.Fatal("the answered push was not re-marked")
+	}
+	markup, _ := edit.body["reply_markup"].(map[string]any)
+	rows, _ := markup["inline_keyboard"].([]any)
+	if len(rows) != 2 {
+		t.Fatalf("keyboard = %v, want the ack row and the kept link row", markup)
+	}
+	link, _ := rows[1].([]any)
+	button, _ := link[0].(map[string]any)
+	if button["text"] != "Открыть" || button["web_app"] == nil {
+		t.Errorf("second row = %v, want the kept «Открыть» link", rows[1])
+	}
+}
+
 func TestTapOnAnAnsweredPushSaysSo(t *testing.T) {
 	api := newBotAPI(t)
 	pushes := &fakePushes{}

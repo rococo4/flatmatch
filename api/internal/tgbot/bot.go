@@ -256,10 +256,30 @@ func (b *Bot) answer(ctx context.Context, queryID, ack string, log *slog.Logger)
 
 func (b *Bot) markAnswered(ctx context.Context, query *CallbackQuery, ack, seenData string, log *slog.Logger) {
 	mark := &InlineKeyboard{Rows: [][]InlineKeyboardButton{{{Text: ack, Data: seenData}}}}
+	mark.Rows = append(mark.Rows, linkRows(query.Message.ReplyMarkup)...)
 	err := b.client.EditReplyMarkup(ctx, query.Message.Chat.ID, query.Message.MessageID, mark)
 	if err != nil && !isCancelled(err) && !notModified(err) {
 		log.Error("could not mark the answered message", "error", err)
 	}
+}
+
+func linkRows(markup *InlineKeyboard) [][]InlineKeyboardButton {
+	if markup == nil {
+		return nil
+	}
+	var out [][]InlineKeyboardButton
+	for _, row := range markup.Rows {
+		var links []InlineKeyboardButton
+		for _, b := range row {
+			if b.Web != nil {
+				links = append(links, b)
+			}
+		}
+		if len(links) > 0 {
+			out = append(out, links)
+		}
+	}
+	return out
 }
 
 func (b *Bot) moderationEnabled() bool {

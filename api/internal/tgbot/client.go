@@ -87,9 +87,10 @@ type Update struct {
 }
 
 type Message struct {
-	MessageID int    `json:"message_id"`
-	Chat      Chat   `json:"chat"`
-	Text      string `json:"text"`
+	MessageID   int             `json:"message_id"`
+	Chat        Chat            `json:"chat"`
+	Text        string          `json:"text"`
+	ReplyMarkup *InlineKeyboard `json:"reply_markup"`
 }
 
 type CallbackQuery struct {

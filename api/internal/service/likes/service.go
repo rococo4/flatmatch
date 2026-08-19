@@ -22,16 +22,21 @@ type Pushes interface {
 	Matched(ctx context.Context, match entity.Match)
 }
 
+type Points interface {
+	TouchAlive(ctx context.Context, pointID uuid.UUID) error
+}
+
 type Service struct {
 	repo   Repository
 	dir    *zones.Directory
 	pushes Pushes
+	points Points
 }
 
 var ErrInvalidParams = errors.New("like params are invalid")
 
-func New(repo Repository, dir *zones.Directory, pushes Pushes) *Service {
-	return &Service{repo: repo, dir: dir, pushes: pushes}
+func New(repo Repository, dir *zones.Directory, pushes Pushes, points Points) *Service {
+	return &Service{repo: repo, dir: dir, pushes: pushes, points: points}
 }
 
 func (s *Service) Like(ctx context.Context, from entity.User, toID uuid.UUID, zoneID string, pointID *uuid.UUID) (entity.LikeResult, error) {
@@ -58,16 +63,18 @@ func (s *Service) Like(ctx context.Context, from entity.User, toID uuid.UUID, zo
 }
 
 func (s *Service) announce(ctx context.Context, from entity.User, toID uuid.UUID, res entity.LikeResult) {
-	if s.pushes == nil {
+	if s.pushes != nil && !res.Already && res.Like.Spent {
+		s.pushes.Liked(ctx, toID, from.ID, from.Name, from.Profile.Gender)
+	}
+	if res.Match == nil {
 		return
 	}
 
-	if !res.Already && res.Like.Spent {
-		s.pushes.Liked(ctx, toID, from.ID, from.Name, from.Profile.Gender)
-	}
-
-	if res.Match != nil {
+	if s.pushes != nil {
 		s.pushes.Matched(ctx, *res.Match)
+	}
+	if res.Match.ContextPoint != nil && s.points != nil {
+		_ = s.points.TouchAlive(context.WithoutCancel(ctx), *res.Match.ContextPoint)
 	}
 }
 

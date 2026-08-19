@@ -11,6 +11,7 @@ import (
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/repo/likesrepo"
+	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/service/zones"
 )
 
@@ -25,7 +26,14 @@ type fakeRepo struct {
 	budgetCalls   int
 }
 
+type fakePoints struct {
+	touched []uuid.UUID
+	err     error
+}
+
 var _ Repository = (*likesrepo.Repo)(nil)
+
+var _ Points = (*pointsrepo.Repo)(nil)
 
 func (f *fakeRepo) Create(_ context.Context, _, _ uuid.UUID, lc likesrepo.LikeContext) (entity.LikeResult, error) {
 	f.createCalls++
@@ -64,7 +72,7 @@ func testDir(t *testing.T) *zones.Directory {
 
 func TestLikeRejectsUnknownZone(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t), nil)
+	svc := New(repo, testDir(t), nil, nil)
 
 	_, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-atlantis", nil)
 
@@ -80,7 +88,7 @@ func TestLikeRejectsUnknownZone(t *testing.T) {
 
 func TestLikeWithoutZoneIsLegal(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t), nil)
+	svc := New(repo, testDir(t), nil, nil)
 
 	got, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", nil)
 	if err != nil {
@@ -97,7 +105,7 @@ func TestLikeWithoutZoneIsLegal(t *testing.T) {
 
 func TestLikeKnownZoneReachesRepo(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t), nil)
+	svc := New(repo, testDir(t), nil, nil)
 
 	if _, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-khamovniki", nil); err != nil {
 		t.Fatalf("Like() failed: %v", err)
@@ -113,7 +121,7 @@ func TestLikeKnownZoneReachesRepo(t *testing.T) {
 
 func TestLikePointReachesRepoUntouched(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t), nil)
+	svc := New(repo, testDir(t), nil, nil)
 	point := uuid.New()
 
 	got, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", &point)
@@ -130,7 +138,7 @@ func TestLikePointReachesRepoUntouched(t *testing.T) {
 
 func TestLikeRefusesTwoContexts(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t), nil)
+	svc := New(repo, testDir(t), nil, nil)
 	point := uuid.New()
 
 	_, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-khamovniki", &point)
@@ -150,7 +158,7 @@ func TestLikePassesRepoErrorsThrough(t *testing.T) {
 		entity.ErrLikeLimit, entity.ErrNeedSearch, entity.ErrNotApproved, entity.ErrNotFound,
 	} {
 		t.Run(want.Error(), func(t *testing.T) {
-			svc := New(&fakeRepo{err: want}, testDir(t), nil)
+			svc := New(&fakeRepo{err: want}, testDir(t), nil, nil)
 
 			_, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "line-1", nil)
 			if !errors.Is(err, want) {
@@ -162,7 +170,7 @@ func TestLikePassesRepoErrorsThrough(t *testing.T) {
 
 func TestIncomingAndBudgetReachRepo(t *testing.T) {
 	repo := &fakeRepo{}
-	svc := New(repo, testDir(t), nil)
+	svc := New(repo, testDir(t), nil, nil)
 
 	if _, err := svc.Incoming(t.Context(), uuid.New()); err != nil {
 		t.Fatalf("Incoming() failed: %v", err)
@@ -172,5 +180,75 @@ func TestIncomingAndBudgetReachRepo(t *testing.T) {
 	}
 	if repo.incomingCalls != 1 || repo.budgetCalls != 1 {
 		t.Errorf("incoming=%d budget=%d, want 1 and 1", repo.incomingCalls, repo.budgetCalls)
+	}
+}
+
+func (f *fakePoints) TouchAlive(_ context.Context, pointID uuid.UUID) error {
+	f.touched = append(f.touched, pointID)
+	return f.err
+}
+
+func TestMatchOnAPointKeepsItAlive(t *testing.T) {
+	point := uuid.New()
+	repo := &fakeRepo{result: &entity.LikeResult{
+		Like:  entity.Like{PointID: &point, Spent: true},
+		Match: &entity.Match{ID: uuid.New(), ContextPoint: &point},
+	}}
+	pushes := &fakePushes{}
+	pts := &fakePoints{}
+	svc := New(repo, testDir(t), pushes, pts)
+
+	if _, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", &point); err != nil {
+		t.Fatalf("Like() failed: %v", err)
+	}
+	if !slices.Equal(pts.touched, []uuid.UUID{point}) {
+		t.Errorf("touched %v, want the context point %s", pts.touched, point)
+	}
+	if len(pushes.matched) != 1 {
+		t.Errorf("matched pushes = %d, want 1", len(pushes.matched))
+	}
+}
+
+func TestMatchInAZoneTouchesNoPoint(t *testing.T) {
+	repo := &fakeRepo{result: &entity.LikeResult{
+		Like:  entity.Like{ZoneID: "d-khamovniki", Spent: true},
+		Match: &entity.Match{ID: uuid.New(), ContextZone: "d-khamovniki"},
+	}}
+	pts := &fakePoints{}
+	svc := New(repo, testDir(t), &fakePushes{}, pts)
+
+	if _, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "d-khamovniki", nil); err != nil {
+		t.Fatalf("Like() failed: %v", err)
+	}
+	if len(pts.touched) != 0 {
+		t.Errorf("a zone match touched %v, want nothing", pts.touched)
+	}
+}
+
+func TestMatchWithoutAPointsServiceSurvives(t *testing.T) {
+	point := uuid.New()
+	repo := &fakeRepo{result: &entity.LikeResult{
+		Like:  entity.Like{PointID: &point, Spent: true},
+		Match: &entity.Match{ID: uuid.New(), ContextPoint: &point},
+	}}
+	svc := New(repo, testDir(t), nil, nil)
+
+	if _, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", &point); err != nil {
+		t.Fatalf("Like() failed: %v", err)
+	}
+}
+
+func TestTouchFailureDoesNotBreakTheLike(t *testing.T) {
+	point := uuid.New()
+	repo := &fakeRepo{result: &entity.LikeResult{
+		Like:  entity.Like{PointID: &point, Spent: true},
+		Match: &entity.Match{ID: uuid.New(), ContextPoint: &point},
+	}}
+	pts := &fakePoints{err: errors.New("db is down")}
+	svc := New(repo, testDir(t), &fakePushes{}, pts)
+
+	got, err := svc.Like(t.Context(), entity.User{ID: uuid.New()}, uuid.New(), "", &point)
+	if err != nil || got.Match == nil {
+		t.Fatalf("Like() = %+v, %v, want the match through", got, err)
 	}
 }

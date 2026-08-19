@@ -17,6 +17,9 @@ const (
 	flatLimitMessage        = "Пять квартир уже добавлено — закрой одну в Моих поисках"
 	intentHomeLimitMessage  = "Ты уже зовёшь к себе — активных точек может быть две"
 	needEnterMessage        = "Пул откроется после входа"
+	pointNotActiveMessage   = "Голосовать можно только по активной квартире"
+	pointNotPausedMessage   = "Квартира и так активна"
+	notVotableMessage       = "Отметка живости — только у квартир с рынка"
 )
 
 func handleFormError(w http.ResponseWriter, r *http.Request, kind entity.PointType, err error) {
@@ -36,6 +39,12 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, entity.ErrNeedEnter):
 		httpx.Error(w, r, http.StatusForbidden, httpx.CodeNeedEnter, needEnterMessage, err)
+	case errors.Is(err, entity.ErrPointNotActive):
+		httpx.Error(w, r, http.StatusConflict, httpx.CodePointNotActive, pointNotActiveMessage, err)
+	case errors.Is(err, entity.ErrPointNotPaused):
+		httpx.Error(w, r, http.StatusConflict, httpx.CodePointNotPaused, pointNotPausedMessage, err)
+	case errors.Is(err, entity.ErrNotVotable):
+		httpx.Error(w, r, http.StatusUnprocessableEntity, httpx.CodeNotVotable, notVotableMessage, err)
 	case errors.Is(err, entity.ErrNotFound):
 
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such point", err)

@@ -22,6 +22,10 @@ type zoneDTO struct {
 	NameGen string `json:"name_gen"`
 }
 
+type voteRequest struct {
+	Alive *bool `json:"alive"`
+}
+
 type createRequest struct {
 	Type string `json:"type"`
 
@@ -61,7 +65,11 @@ type Card struct {
 	MoveIn    string   `json:"move_in,omitempty"`
 	Deposit   *int     `json:"deposit,omitempty"`
 
-	CreatedDaysAgo int `json:"created_days_ago"`
+	CreatedDaysAgo int       `json:"created_days_ago"`
+	LastSeenAlive  time.Time `json:"last_seen_alive"`
+	GoneVotes      int       `json:"gone_votes"`
+	MyVote         *bool     `json:"my_vote,omitempty"`
+	Restorable     bool      `json:"restorable,omitempty"`
 
 	PoolCount int  `json:"pool_count"`
 	Responses int  `json:"responses"`
@@ -172,10 +180,20 @@ func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 }
 
 func cardStatus(p entity.Point) string {
-	if p.Status == entity.PointClosed && p.CloseReason != nil && *p.CloseReason == "rejected" {
-		return "rejected"
+	if p.Status != entity.PointClosed || p.CloseReason == nil {
+		return string(p.Status)
 	}
-	return string(p.Status)
+	switch entity.PointCloseReason(*p.CloseReason) {
+	case entity.CloseReasonGone, entity.CloseReasonExpired,
+		entity.CloseReasonFound, entity.CloseReasonRejected:
+		return *p.CloseReason
+	default:
+		return string(p.Status)
+	}
+}
+
+func restorable(p entity.Point, viewerID uuid.UUID) bool {
+	return p.Status == entity.PointPaused && p.CreatedBy != nil && *p.CreatedBy == viewerID
 }
 
 func photoURLs(keys []string, photos Photos) []string {
@@ -186,7 +204,7 @@ func photoURLs(keys []string, photos Photos) []string {
 	return out
 }
 
-func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
+func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO, viewerID uuid.UUID) Card {
 	p := fp.Point
 	out := Card{
 		ID:             p.ID,
@@ -200,6 +218,10 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO) Card {
 		Restrictions:   make([]string, 0, len(p.Restrictions)),
 		PhotoURLs:      photoURLs(p.PhotoKeys, photos),
 		CreatedDaysAgo: daysAgo(p.CreatedAt),
+		LastSeenAlive:  p.LastSeenAlive,
+		GoneVotes:      fp.GoneVotes,
+		MyVote:         fp.MyVote,
+		Restorable:     restorable(p, viewerID),
 		PoolCount:      fp.PoolCount,
 		Responses:      fp.Responses,
 		InPool:         fp.InPool,

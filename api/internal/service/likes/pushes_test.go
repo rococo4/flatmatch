@@ -42,7 +42,7 @@ func liker() entity.User {
 
 func TestSpentLikeTellsTheAddressee(t *testing.T) {
 	pushes := &fakePushes{}
-	svc := New(&fakeRepo{}, testDir(t), pushes)
+	svc := New(&fakeRepo{}, testDir(t), pushes, nil)
 
 	from, to := liker(), uuid.New()
 	if _, err := svc.Like(t.Context(), from, to, "d-khamovniki", nil); err != nil {
@@ -67,7 +67,7 @@ func TestReplyPushesTheMatchOnly(t *testing.T) {
 	svc := New(&fakeRepo{result: &entity.LikeResult{
 		Like:  entity.Like{Spent: false},
 		Match: &match,
-	}}, testDir(t), pushes)
+	}}, testDir(t), pushes, nil)
 
 	if _, err := svc.Like(t.Context(), liker(), uuid.New(), "", nil); err != nil {
 		t.Fatalf("Like() failed: %v", err)
@@ -86,7 +86,7 @@ func TestRepeatedTapStaysSilent(t *testing.T) {
 	svc := New(&fakeRepo{result: &entity.LikeResult{
 		Like:    entity.Like{Spent: true},
 		Already: true,
-	}}, testDir(t), pushes)
+	}}, testDir(t), pushes, nil)
 
 	if _, err := svc.Like(t.Context(), liker(), uuid.New(), "d-khamovniki", nil); err != nil {
 		t.Fatalf("Like() failed: %v", err)
@@ -99,7 +99,7 @@ func TestRepeatedTapStaysSilent(t *testing.T) {
 
 func TestFailedLikeStaysSilent(t *testing.T) {
 	pushes := &fakePushes{}
-	svc := New(&fakeRepo{err: entity.ErrLikeLimit}, testDir(t), pushes)
+	svc := New(&fakeRepo{err: entity.ErrLikeLimit}, testDir(t), pushes, nil)
 
 	if _, err := svc.Like(t.Context(), liker(), uuid.New(), "d-khamovniki", nil); !errors.Is(err, entity.ErrLikeLimit) {
 		t.Fatalf("Like() = %v, want ErrLikeLimit", err)
@@ -115,7 +115,7 @@ func TestLikeWithoutPushesDoesNotPanic(t *testing.T) {
 	svc := New(&fakeRepo{result: &entity.LikeResult{
 		Like:  entity.Like{Spent: true},
 		Match: &match,
-	}}, testDir(t), nil)
+	}}, testDir(t), nil, nil)
 
 	if _, err := svc.Like(t.Context(), liker(), uuid.New(), "d-khamovniki", nil); err != nil {
 		t.Fatalf("Like() failed: %v", err)

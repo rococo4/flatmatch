@@ -105,7 +105,7 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 			SlotsUsed:  used,
 			SlotsTotal: entity.MaxActiveSearches,
 		},
-		Points: pointsapi.Cards(points, h.photos, h.dir),
+		Points: pointsapi.Cards(points, h.photos, h.dir, user.ID),
 	})
 }
 

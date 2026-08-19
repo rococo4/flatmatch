@@ -31,6 +31,10 @@ const (
 	CodePointLimit   Code = "point_limit"
 	CodeDuplicateURL Code = "duplicate_url"
 	CodeNeedEnter    Code = "need_enter"
+
+	CodePointNotActive Code = "point_not_active"
+	CodePointNotPaused Code = "point_not_paused"
+	CodeNotVotable     Code = "not_votable"
 )
 
 type ErrorBody struct {

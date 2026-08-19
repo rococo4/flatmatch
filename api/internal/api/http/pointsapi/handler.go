@@ -32,6 +32,8 @@ type Points interface {
 	Enter(ctx context.Context, userID, pointID uuid.UUID) error
 	Leave(ctx context.Context, userID, pointID uuid.UUID) error
 	Close(ctx context.Context, userID, pointID uuid.UUID) error
+	Vote(ctx context.Context, viewerID, pointID uuid.UUID, alive bool) (pointsrepo.FeedPoint, error)
+	Restore(ctx context.Context, userID, pointID uuid.UUID) (pointsrepo.FeedPoint, error)
 	Pool(ctx context.Context, viewer entity.User, pointID uuid.UUID) (points.PoolView, error)
 }
 
@@ -51,6 +53,8 @@ type Handler struct {
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
+var errNoAliveField = errors.New("vote body carries no alive field")
+
 func New(points Points, photos Photos, dir ZoneDir) *Handler {
 	return &Handler{points: points, photos: photos, dir: dir}
 }
@@ -66,15 +70,17 @@ func (h *Handler) Routes() chi.Router {
 	r.Post("/{id}/enter", h.enter)
 	r.Delete("/{id}/enter", h.leave)
 	r.Post("/{id}/close", h.close)
+	r.Post("/{id}/vote", h.vote)
+	r.Post("/{id}/restore", h.restore)
 	r.Get("/{id}/pool", h.pool)
 	return r
 }
 
-func Cards(list []pointsrepo.FeedPoint, photos Photos, dir ZoneDir) []Card {
+func Cards(list []pointsrepo.FeedPoint, photos Photos, dir ZoneDir, viewerID uuid.UUID) []Card {
 	out := make([]Card, 0, len(list))
 	for _, fp := range list {
 		zone, _ := dir.Get(fp.Point.ZoneID)
-		out = append(out, toCard(fp, photos, toZoneDTO(zone)))
+		out = append(out, toCard(fp, photos, toZoneDTO(zone), viewerID))
 	}
 	return out
 }
@@ -113,7 +119,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	card := pointsrepo.FeedPoint{Point: created, InPool: created.Type == entity.PointFlat}
-	httpx.JSON(w, r, http.StatusCreated, h.toCard(card))
+	httpx.JSON(w, r, http.StatusCreated, h.toCard(card, user.ID))
 }
 
 func (h *Handler) uploadPhoto(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +170,7 @@ func (h *Handler) card(w http.ResponseWriter, r *http.Request) {
 		handleError(w, r, err)
 		return
 	}
-	httpx.JSON(w, r, http.StatusOK, h.toCard(card))
+	httpx.JSON(w, r, http.StatusOK, h.toCard(card, user.ID))
 }
 
 func (h *Handler) mine(w http.ResponseWriter, r *http.Request) {
@@ -180,8 +186,8 @@ func (h *Handler) mine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, mineResponse{
-		Created: Cards(created, h.photos, h.dir),
-		Entered: Cards(entered, h.photos, h.dir),
+		Created: Cards(created, h.photos, h.dir, user.ID),
+		Entered: Cards(entered, h.photos, h.dir, user.ID),
 	})
 }
 
@@ -195,6 +201,54 @@ func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 	h.membership(w, r, h.points.Close)
+}
+
+func (h *Handler) vote(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+	id, ok := pointID(w, r)
+	if !ok {
+		return
+	}
+
+	var body voteRequest
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.Alive == nil {
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "vote carries no alive field",
+			[]string{"alive"}, errNoAliveField)
+		return
+	}
+
+	card, err := h.points.Vote(r.Context(), user.ID, id, *body.Alive)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, h.toCard(card, user.ID))
+}
+
+func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+	id, ok := pointID(w, r)
+	if !ok {
+		return
+	}
+
+	card, err := h.points.Restore(r.Context(), user.ID, id)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, h.toCard(card, user.ID))
 }
 
 func (h *Handler) pool(w http.ResponseWriter, r *http.Request) {
@@ -239,9 +293,9 @@ func (h *Handler) membership(w http.ResponseWriter, r *http.Request, act func(co
 	httpx.JSON(w, r, http.StatusNoContent, nil)
 }
 
-func (h *Handler) toCard(fp pointsrepo.FeedPoint) Card {
+func (h *Handler) toCard(fp pointsrepo.FeedPoint, viewerID uuid.UUID) Card {
 	zone, _ := h.dir.Get(fp.Point.ZoneID)
-	return toCard(fp, h.photos, toZoneDTO(zone))
+	return toCard(fp, h.photos, toZoneDTO(zone), viewerID)
 }
 
 func (h *Handler) searchZone(m points.MemberView) *zoneDTO {

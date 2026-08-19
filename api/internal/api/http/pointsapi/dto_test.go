@@ -51,7 +51,7 @@ func fullCard() pointsrepo.FeedPoint {
 func TestCardCarriesNoCreator(t *testing.T) {
 	card := fullCard()
 
-	raw, err := json.Marshal(toCard(card, stubPhotos{}, zoneDTO{ID: "st-sokol"}))
+	raw, err := json.Marshal(toCard(card, stubPhotos{}, zoneDTO{ID: "st-sokol"}, uuid.New()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestCardKeepsDictionaryCodes(t *testing.T) {
 	card.Point.PriceShare = pointer.To(40000)
 	card.Point.MoveIn = pointer.To(time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC))
 
-	got := toCard(card, stubPhotos{}, zoneDTO{ID: "st-sokol"})
+	got := toCard(card, stubPhotos{}, zoneDTO{ID: "st-sokol"}, uuid.New())
 	if got.Stage != "moving_in" || got.Bathrooms != "separate" || got.Utilities != "meters" {
 		t.Errorf("dictionary codes lost: %+v", got)
 	}
@@ -104,7 +104,7 @@ func TestAuthorCarriesNoContacts(t *testing.T) {
 		PhotoStatus: entity.ModerationOK,
 	}
 
-	raw, err := json.Marshal(toCard(card, stubPhotos{}, zoneDTO{ID: "st-sokol"}))
+	raw, err := json.Marshal(toCard(card, stubPhotos{}, zoneDTO{ID: "st-sokol"}, uuid.New()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestAuthorCarriesNoContacts(t *testing.T) {
 	}
 
 	card.Author.PhotoStatus = entity.ModerationPending
-	if got := toCard(card, stubPhotos{}, zoneDTO{}); got.Author.PhotoURL != "" {
+	if got := toCard(card, stubPhotos{}, zoneDTO{}, uuid.New()); got.Author.PhotoURL != "" {
 		t.Errorf("unapproved author photo leaked: %q", got.Author.PhotoURL)
 	}
 }
@@ -182,5 +182,79 @@ func TestIntentHomeRequestReadsTheMoveInDay(t *testing.T) {
 	_, err = broken.toIntentHome()
 	if !errors.As(err, &fields) || len(fields.Fields) != 1 || fields.Fields[0] != "move_in" {
 		t.Errorf("error = %v, want invalid move_in", err)
+	}
+}
+
+func TestCardStatusSpeaksTheCloseReason(t *testing.T) {
+	cases := map[string]string{
+		"gone":     "gone",
+		"expired":  "expired",
+		"found":    "found",
+		"rejected": "rejected",
+		"closed":   "closed",
+	}
+
+	for reason, want := range cases {
+		point := entity.Point{Status: entity.PointClosed, CloseReason: pointer.To(reason)}
+		if got := cardStatus(point); got != want {
+			t.Errorf("cardStatus(closed as %s) = %q, want %q", reason, got, want)
+		}
+	}
+
+	for _, status := range []entity.PointStatus{entity.PointActive, entity.PointPaused, entity.PointPending} {
+		if got := cardStatus(entity.Point{Status: status}); got != string(status) {
+			t.Errorf("cardStatus(%s) = %q, want the status itself", status, got)
+		}
+	}
+	if got := cardStatus(entity.Point{Status: entity.PointClosed}); got != "closed" {
+		t.Errorf("cardStatus(closed without a reason) = %q, want closed", got)
+	}
+}
+
+func TestRestorableIsTheCreatorsOwnPausedPoint(t *testing.T) {
+	card := fullCard()
+	creator := *card.Point.CreatedBy
+
+	if toCard(card, stubPhotos{}, zoneDTO{}, creator).Restorable {
+		t.Error("an active point offers a restore")
+	}
+
+	card.Point.Status = entity.PointPaused
+	if !toCard(card, stubPhotos{}, zoneDTO{}, creator).Restorable {
+		t.Error("the creator of a paused point cannot restore it")
+	}
+	if toCard(card, stubPhotos{}, zoneDTO{}, uuid.New()).Restorable {
+		t.Error("a stranger is offered a restore of a paused point")
+	}
+
+	card.Point.CreatedBy = nil
+	if toCard(card, stubPhotos{}, zoneDTO{}, creator).Restorable {
+		t.Error("a point without a creator offers a restore")
+	}
+}
+
+func TestCardCarriesFreshness(t *testing.T) {
+	card := fullCard()
+	card.Point.LastSeenAlive = time.Date(2026, 8, 17, 12, 30, 0, 0, time.UTC)
+	card.GoneVotes = 2
+	card.MyVote = pointer.To(false)
+
+	raw, err := json.Marshal(toCard(card, stubPhotos{}, zoneDTO{}, uuid.New()))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, want := range []string{`"last_seen_alive":"2026-08-17T12:30:00Z"`, `"gone_votes":2`, `"my_vote":false`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("card JSON %s does not carry %s", raw, want)
+		}
+	}
+
+	card.MyVote = nil
+	silent, err := json.Marshal(toCard(card, stubPhotos{}, zoneDTO{}, uuid.New()))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(silent), "my_vote") {
+		t.Errorf("a card without a vote carries my_vote: %s", silent)
 	}
 }

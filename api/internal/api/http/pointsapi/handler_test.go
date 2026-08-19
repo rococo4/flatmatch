@@ -44,6 +44,10 @@ type fakePoints struct {
 	closed  []uuid.UUID
 	cards   int
 
+	voted     []uuid.UUID
+	voteAlive *bool
+	restored  []uuid.UUID
+
 	photoKey  string
 	photoBody []byte
 }
@@ -448,4 +452,145 @@ func upload(t *testing.T, service *fakePoints, contentType, body string) *httpte
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	return rec
+}
+
+func (f *fakePoints) Vote(_ context.Context, _, pointID uuid.UUID, alive bool) (pointsrepo.FeedPoint, error) {
+	if f.err != nil {
+		return pointsrepo.FeedPoint{}, f.err
+	}
+	f.voted = append(f.voted, pointID)
+	f.voteAlive = pointer.To(alive)
+	return f.card, nil
+}
+
+func (f *fakePoints) Restore(_ context.Context, _, pointID uuid.UUID) (pointsrepo.FeedPoint, error) {
+	if f.err != nil {
+		return pointsrepo.FeedPoint{}, f.err
+	}
+	f.restored = append(f.restored, pointID)
+	return f.card, nil
+}
+
+func votedFlat(id uuid.UUID, votes int, mine *bool) pointsrepo.FeedPoint {
+	return pointsrepo.FeedPoint{
+		Point: entity.Point{
+			ID: id, Type: entity.PointFlat, Status: entity.PointActive,
+			Source: entity.SourceUserLink, ZoneID: station,
+			URLNorm:       pointer.To("https://avito.ru/1"),
+			LastSeenAlive: time.Now(), CreatedAt: time.Now().Add(-48 * time.Hour),
+		},
+		GoneVotes: votes,
+		MyVote:    mine,
+	}
+}
+
+func TestVoteAnswersWithTheFreshCard(t *testing.T) {
+	id := uuid.New()
+	service := &fakePoints{card: votedFlat(id, 2, pointer.To(false))}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+id.String()+"/vote", `{"alive":false}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`"gone_votes":2`, `"my_vote":false`, `"last_seen_alive"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("voted card %s does not carry %s", body, want)
+		}
+	}
+	if len(service.voted) != 1 || service.voted[0] != id {
+		t.Errorf("service voted on %v, want %s", service.voted, id)
+	}
+	if service.voteAlive == nil || *service.voteAlive {
+		t.Errorf("service got alive = %v, want false", service.voteAlive)
+	}
+}
+
+func TestVoteNeedsTheAliveField(t *testing.T) {
+	service := &fakePoints{card: votedFlat(uuid.New(), 0, nil)}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+uuid.NewString()+"/vote", `{}`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusBadRequest, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"invalid_field"`) || !strings.Contains(body, `"alive"`) {
+		t.Errorf("body = %s, want invalid_field on alive", rec.Body)
+	}
+	if len(service.voted) != 0 {
+		t.Errorf("a bodyless vote reached the service: %v", service.voted)
+	}
+}
+
+func TestVoteRefusesPointsThatTakeNoVotes(t *testing.T) {
+	cases := map[string]struct {
+		err    error
+		status int
+		code   string
+		text   string
+	}{
+		"уже скрыта": {
+			err: entity.ErrPointNotActive, status: http.StatusConflict,
+			code: "point_not_active", text: "Голосовать можно только по активной квартире",
+		},
+		"не квартира с рынка": {
+			err: entity.ErrNotVotable, status: http.StatusUnprocessableEntity,
+			code: "not_votable", text: "Отметка живости — только у квартир с рынка",
+		},
+		"не видна": {
+			err: entity.ErrNotFound, status: http.StatusNotFound, code: "not_found",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			service := &fakePoints{err: tc.err}
+
+			rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+uuid.NewString()+"/vote", `{"alive":false}`)
+
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tc.status, rec.Body)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `"`+tc.code+`"`) {
+				t.Errorf("body = %s, want code %s", body, tc.code)
+			}
+			if tc.text != "" && !strings.Contains(body, tc.text) {
+				t.Errorf("body = %s, want %q", body, tc.text)
+			}
+		})
+	}
+}
+
+func TestRestoreAnswersWithTheCard(t *testing.T) {
+	id := uuid.New()
+	service := &fakePoints{card: votedFlat(id, 0, nil)}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+id.String()+"/restore", "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"active"`) {
+		t.Errorf("body = %s, want the restored card", rec.Body)
+	}
+	if len(service.restored) != 1 || service.restored[0] != id {
+		t.Errorf("service restored %v, want %s", service.restored, id)
+	}
+}
+
+func TestRestoreRefusesAnActivePoint(t *testing.T) {
+	service := &fakePoints{err: entity.ErrPointNotPaused}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+uuid.NewString()+"/restore", "")
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusConflict, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"point_not_paused"`) ||
+		!strings.Contains(rec.Body.String(), "Квартира и так активна") {
+		t.Errorf("body = %s, want point_not_paused with its message", rec.Body)
+	}
 }

@@ -415,6 +415,7 @@ export function pointTitleGen(p: Pick<PointDTO, 'type' | 'rooms' | 'zone'>): str
 export function openOriginalLabel(url: string): string {
   if (url.includes('avito.')) return 'Открыть на Авито';
   if (url.includes('cian.')) return 'Открыть на Циан';
+  if (url.includes('t.me/')) return 'Открыть пост в Telegram';
   return 'Открыть оригинал';
 }
 

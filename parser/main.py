@@ -1,13 +1,14 @@
 """Парсер ТГ-каналов аренды (§8): цикл поллинга лент.
 
 Тик раз в POLL_MINUTES с джиттером ±20%: инжест лент всех PARSER_CHANNELS в
-channel_posts, затем разбор новых постов LLM в точки. Гашение удалённых
-подключается следующим шагом — шов check_alive() уже вызывается.
+channel_posts, затем разбор новых постов LLM в точки, затем — раз в
+ALIVE_HOURS — гашение точек с удалённым постом (kill.sweep).
 """
 
 import random
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 import anthropic
 import httpx
@@ -15,11 +16,14 @@ import httpx
 import db
 import fetch
 import ingest
+import kill
 import pipeline
 from config import Config
 
 CHANNEL_PAUSE = 3.0
 JITTER = 0.2
+
+_last_sweep: datetime | None = None
 
 
 def main() -> int:
@@ -65,8 +69,13 @@ def llm_client(cfg: Config):
 
 
 def check_alive(conn, client: httpx.Client, cfg: Config) -> None:
-    # Шов: обход живости t.me-точек раз в ALIVE_HOURS — следующий шаг.
-    return
+    global _last_sweep
+    now = datetime.now(timezone.utc)
+    if _last_sweep is not None and now - _last_sweep < timedelta(hours=cfg.alive_hours):
+        return
+    closed = kill.sweep(conn, client, now)
+    _last_sweep = now
+    log(f"гашение: закрыто точек {closed}")
 
 
 def next_delay(poll_minutes: int) -> float:

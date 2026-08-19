@@ -54,8 +54,13 @@ services:
       PUSH_WORKER_ENABLED: ${PUSH_WORKER_ENABLED:-true}
       PUSH_TICK: ${PUSH_TICK:-30s}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Shared with parser (§5 parser design): both write into the same
+      # points/<uuid>.<ext> keys, so the photos volume below is mounted here too.
+      PHOTO_DIR: /data/photos
     expose:
       - "8080"
+    volumes:
+      - photos:/data/photos
 
   caddy:
     build:
@@ -77,8 +82,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
-  # Telegram channel parser (§8) — a stub until §12 step 7. It is behind a
-  # profile so `docker compose up` does not start it:
+  # Telegram channel parser (§12 step 7b). It is behind a profile so
+  # `docker compose up` does not start it:
   #   docker compose --profile parser up -d
   parser:
     build: ./parser
@@ -89,8 +94,18 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-flatmatch}:${POSTGRES_PASSWORD:-flatmatch}@postgres:5432/${POSTGRES_DB:-flatmatch}?sslmode=disable
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PARSER_CHANNELS: ${PARSER_CHANNELS:-}
+      POLL_MINUTES: ${POLL_MINUTES:-}
+      ALIVE_HOURS: ${ALIVE_HOURS:-}
+      # Same path and same volume as api — photos are keyed the same way
+      # regardless of which service downloaded them.
+      PHOTO_DIR: /data/photos
+    volumes:
+      - photos:/data/photos
 
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  photos:

@@ -255,14 +255,32 @@ def test_transient_llm_failure_leaves_the_post_new(conn, cfg):
     assert _post_row(conn, 16)["status"] == "new"
 
 
-def _post(connection, message_id: int, text: str) -> None:
+def test_photos_are_downloaded_before_the_point_is_created(conn, cfg, monkeypatch):
+    urls = ["https://cdn/a.jpg", "https://cdn/b.jpg"]
+    _post(conn, 17, "Сдаётся квартира у Сокола", photo_urls=urls)
+    calls = []
+
+    def fake_download(client, got_urls, photo_dir, limit=5):
+        calls.append((got_urls, photo_dir, limit))
+        return ["points/fake-a.jpg", "points/fake-b.jpg"]
+
+    monkeypatch.setattr(pipeline.photos, "download", fake_download)
+
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+
+    point = _point(conn, _post_row(conn, 17)["point_id"])
+    assert point["photo_keys"] == ["points/fake-a.jpg", "points/fake-b.jpg"]
+    assert calls == [(urls, cfg.photo_dir, 5)]
+
+
+def _post(connection, message_id: int, text: str, photo_urls: list | None = None) -> None:
     with connection.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO channel_posts (channel, message_id, text, text_hash)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO channel_posts (channel, message_id, text, text_hash, photo_urls)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (CHANNEL, message_id, text, f"hash-{message_id}"),
+            (CHANNEL, message_id, text, f"hash-{message_id}", photo_urls or []),
         )
 
 

@@ -11,6 +11,8 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 import extract
+import fetch
+import photos
 import zones
 from norm import normalize_listing_url
 
@@ -42,7 +44,7 @@ SKIP_DUP = "dup"
 SKIP_LLM_ERROR = "llm_error"
 
 _SELECT_NEW = """
-SELECT channel, message_id, text
+SELECT channel, message_id, text, photo_urls
 FROM channel_posts
 WHERE status = 'new'
 ORDER BY first_seen_at
@@ -79,20 +81,24 @@ RETURNING id
 def process_new(conn, llm, cfg) -> None:
     with conn.cursor() as cur:
         cur.execute(_SELECT_NEW)
-        posts = [dict(zip(("channel", "message_id", "text"), row)) for row in cur.fetchall()]
+        posts = [
+            dict(zip(("channel", "message_id", "text", "photo_urls"), row))
+            for row in cur.fetchall()
+        ]
 
-    for post in posts:
-        try:
-            status = process_post(conn, llm, cfg, post)
-        except Exception as err:
-            # Сеть, лимиты, недоступный ключ: пост остаётся new и уедет в следующий
-            # тик, соседние посты падение одного не задевает.
-            log(f"пост {_where(post)} отложен: {err}", stream=sys.stderr)
-            continue
-        log(f"пост {_where(post)}: {status}")
+    with fetch.client() as photo_client:
+        for post in posts:
+            try:
+                status = process_post(conn, llm, cfg, post, photo_client)
+            except Exception as err:
+                # Сеть, лимиты, недоступный ключ: пост остаётся new и уедет в
+                # следующий тик, соседние посты падение одного не задевает.
+                log(f"пост {_where(post)} отложен: {err}", stream=sys.stderr)
+                continue
+            log(f"пост {_where(post)}: {status}")
 
 
-def process_post(conn, llm, cfg, post) -> str:
+def process_post(conn, llm, cfg, post, photo_client) -> str:
     if not post["text"].strip():
         # Видео и медиа без подписи — почти половина ленты, LLM на них не тратим.
         return _finish(conn, post, STATUS_SKIPPED, SKIP_NO_TEXT, None)
@@ -121,8 +127,10 @@ def process_post(conn, llm, cfg, post) -> str:
     if live is not None:
         return _finish(conn, post, STATUS_SKIPPED, SKIP_DUP, raw, point_id=live)
 
+    photo_keys = photos.download(photo_client, post["photo_urls"], cfg.photo_dir)
+
     try:
-        return _create(conn, post, got, raw, zone_id, url_norm)
+        return _create(conn, post, got, raw, zone_id, url_norm, photo_keys)
     except psycopg.errors.UniqueViolation:
         # Гонку с параллельной подачей той же ссылки закрывает уникальный индекс.
         live = _live_point(conn, url_norm)
@@ -137,7 +145,7 @@ def _where(post) -> str:
     return f"{post['channel']}/{post['message_id']}"
 
 
-def _create(conn, post, got, raw, zone_id: str, url_norm: str) -> str:
+def _create(conn, post, got, raw, zone_id: str, url_norm: str, photo_keys: list[str]) -> str:
     twin = _twin(conn, zone_id, got.price_month_total, got.rooms)
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
@@ -152,7 +160,7 @@ def _create(conn, post, got, raw, zone_id: str, url_norm: str) -> str:
                 got.deposit,
                 got.restrictions,
                 got.move_in,
-                [],
+                photo_keys,
                 url_norm,
             ),
         )

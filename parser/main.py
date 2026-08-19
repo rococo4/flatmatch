@@ -1,19 +1,21 @@
 """Парсер ТГ-каналов аренды (§8): цикл поллинга лент.
 
 Тик раз в POLL_MINUTES с джиттером ±20%: инжест лент всех PARSER_CHANNELS в
-channel_posts. Разбор новых постов LLM и гашение удалённых подключаются
-следующими шагами — швы process_new() и check_alive() уже вызываются.
+channel_posts, затем разбор новых постов LLM в точки. Гашение удалённых
+подключается следующим шагом — шов check_alive() уже вызывается.
 """
 
 import random
 import sys
 import time
 
+import anthropic
 import httpx
 
 import db
 import fetch
 import ingest
+import pipeline
 from config import Config
 
 CHANNEL_PAUSE = 3.0
@@ -30,13 +32,17 @@ def main() -> int:
     log(f"старт, база {db.redacted(cfg.database_url)}")
     log(f"каналы: {', '.join(cfg.channels)}; тик {cfg.poll_minutes} мин")
 
+    llm = llm_client(cfg)
+    if llm is None:
+        log("ANTHROPIC_API_KEY не задан — посты будут копиться неразобранными")
+
     with db.connect(cfg.database_url) as conn, fetch.client() as client:
         while True:
-            tick(conn, client, cfg)
+            tick(conn, client, llm, cfg)
             time.sleep(next_delay(cfg.poll_minutes))
 
 
-def tick(conn, client: httpx.Client, cfg: Config) -> None:
+def tick(conn, client: httpx.Client, llm, cfg: Config) -> None:
     for i, channel in enumerate(cfg.channels):
         if i:
             # Не долбим t.me пачкой запросов подряд.
@@ -47,13 +53,15 @@ def tick(conn, client: httpx.Client, cfg: Config) -> None:
             log(f"канал {channel} пропущен до следующего тика: {err}", stream=sys.stderr)
             continue
         log(f"канал {channel}: новых постов {stored}")
-    process_new(conn, cfg)
+    if llm is not None:
+        pipeline.process_new(conn, llm, cfg)
     check_alive(conn, client, cfg)
 
 
-def process_new(conn, cfg: Config) -> None:
-    # Шов: LLM-разбор новых постов и создание точек — следующий шаг.
-    return
+def llm_client(cfg: Config):
+    if not cfg.anthropic_api_key:
+        return None
+    return anthropic.Anthropic(api_key=cfg.anthropic_api_key)
 
 
 def check_alive(conn, client: httpx.Client, cfg: Config) -> None:

@@ -51,7 +51,7 @@ CREATE INDEX channel_posts_point_idx ON channel_posts (point_id) WHERE point_id 
 
 skip_reason — словарь уровня парсера (не CHECK): `wanted`, `roommate`, `room`,
 `other`, `no_zone`, `no_price`, `price_range`, `bad_fields`, `dup`, `forward`,
-`llm_error`. §11 спеки продукта пополняется одной строкой про channel_posts
+`no_text`, `llm_error`. §11 спеки продукта пополняется одной строкой про channel_posts
 (парсерская таблица, api не читает) и правкой семантики url_norm («носитель
 ссылки на оригинал: avito/cian или t.me-пост»).
 
@@ -83,7 +83,9 @@ flats_4_friends, nebabushkin_msk.
 ## 3. Пайплайн поста
 
 1. Пост уже в channel_posts (PK channel+message_id) → пропуск (идемпотентность).
-2. `is_forward` → status='skipped', skip_reason='forward'.
+2. `is_forward` → status='skipped', skip_reason='forward'; пустой текст
+   (видео и медиа без подписи — на живой ленте ~40% постов) → status='skipped',
+   skip_reason='no_text', ДО всякого вызова LLM.
 3. LLM (`claude-sonnet-5`, structured outputs, temperature дефолт):
    системный промпт = роль + правила + список станций (стабильный префикс,
    `cache_control`); ответ:

@@ -125,6 +125,10 @@ cat <<EOF
   Mini App:  $tunnel_url
   Бот:       $bot  →  напиши ему /start
 
+  Адрес новый — ссылки шеринга (t.me/…?startapp=) заработают после
+  @BotFather → /mybots → Bot Settings → Configure Mini App → этот URL.
+  Кнопка /start и кнопки пушей работают и без этого.
+
   Логи:      .dev/{api,web,tunnel}.log
   Остановить: scripts/dev-down.sh
 

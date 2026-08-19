@@ -135,6 +135,40 @@ func TestBlockedChatsAreRecognisedByDescription(t *testing.T) {
 	}
 }
 
+func TestMixedButtonsSplitIntoAnswerAndLinkRows(t *testing.T) {
+	api := newBotAPI(t)
+	api.replies["sendMessage"] = `{"ok":true,"result":{"message_id":7}}`
+
+	_, err := newTestPushSender(api).SendPush(t.Context(), 42, "Комната ещё свободна?", []PushButton{
+		{Text: "Да", CallbackData: "pnt:alive:x"},
+		{Text: "Нашёл соседа", CallbackData: "pnt:gone:x"},
+		{Text: "Открыть", StartParam: "mine"},
+	})
+	if err != nil {
+		t.Fatalf("SendPush() failed: %v", err)
+	}
+
+	markup, ok := api.got("sendMessage").body["reply_markup"].(map[string]any)
+	if !ok {
+		t.Fatal("the message has no keyboard")
+	}
+	rows, ok := markup["inline_keyboard"].([]any)
+	if !ok || len(rows) != 2 {
+		t.Fatalf("keyboard = %v, want the answers row and the link row", markup)
+	}
+	if answers, ok := rows[0].([]any); !ok || len(answers) != 2 {
+		t.Errorf("first row = %v, want the two callback answers", rows[0])
+	}
+	link, _ := rows[1].([]any)
+	if len(link) != 1 {
+		t.Fatalf("second row = %v, want the single link", rows[1])
+	}
+	button, _ := link[0].(map[string]any)
+	if button["web_app"] == nil || button["callback_data"] != nil {
+		t.Errorf("link button = %v, want web_app without callback_data", button)
+	}
+}
+
 func onlyButton(t *testing.T, body map[string]any) map[string]any {
 	t.Helper()
 

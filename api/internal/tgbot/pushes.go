@@ -58,15 +58,21 @@ func (s *PushSender) keyboard(buttons []PushButton) *InlineKeyboard {
 	if len(buttons) == 0 {
 		return nil
 	}
-	row := make([]InlineKeyboardButton, 0, len(buttons))
+	var answers, links []InlineKeyboardButton
 	for _, b := range buttons {
-		button := InlineKeyboardButton{Text: b.Text, Data: b.CallbackData}
 		if b.StartParam != "" {
-			button.Web = &WebApp{URL: s.deepLink(b.StartParam)}
+			links = append(links, InlineKeyboardButton{Text: b.Text, Web: &WebApp{URL: s.deepLink(b.StartParam)}})
+			continue
 		}
-		row = append(row, button)
+		answers = append(answers, InlineKeyboardButton{Text: b.Text, Data: b.CallbackData})
 	}
-	return &InlineKeyboard{Rows: [][]InlineKeyboardButton{row}}
+	rows := make([][]InlineKeyboardButton, 0, 2)
+	for _, row := range [][]InlineKeyboardButton{answers, links} {
+		if len(row) > 0 {
+			rows = append(rows, row)
+		}
+	}
+	return &InlineKeyboard{Rows: rows}
 }
 
 func (s *PushSender) deepLink(startParam string) string {

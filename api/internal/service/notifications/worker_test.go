@@ -579,9 +579,12 @@ func TestPointPingAsksWithTwoAnswers(t *testing.T) {
 		text  string
 		alive string
 		gone  string
+		card  func(point entity.Point) string
 	}{
-		{entity.PointFlat, "Квартира у метро Сокол ещё актуальна?", "Да, живая", "Уже сдана"},
-		{entity.PointIntentHome, "Комната у метро Сокол ещё свободна?", "Да", "Нашёл соседа"},
+		{entity.PointFlat, "Квартира у метро Сокол ещё актуальна?", "Да, живая", "Уже сдана",
+			func(point entity.Point) string { return "point_" + point.ID.String() }},
+		{entity.PointIntentHome, "Комната у метро Сокол ещё свободна?", "Да", "Нашёл соседа",
+			func(entity.Point) string { return "mine" }},
 	}
 
 	for _, tc := range cases {
@@ -607,6 +610,7 @@ func TestPointPingAsksWithTwoAnswers(t *testing.T) {
 			want := []tgbot.PushButton{
 				{Text: tc.alive, CallbackData: "pnt:alive:" + point.ID.String()},
 				{Text: tc.gone, CallbackData: "pnt:gone:" + point.ID.String()},
+				{Text: "Открыть", StartParam: tc.card(point)},
 			}
 			if !slices.Equal(push.buttons, want) {
 				t.Errorf("buttons = %+v, want %+v", push.buttons, want)

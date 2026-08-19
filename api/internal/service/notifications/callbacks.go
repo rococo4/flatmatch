@@ -253,9 +253,14 @@ func pointPingButtons(kind entity.PointType, pointID uuid.UUID) []tgbot.PushButt
 	if kind == entity.PointIntentHome {
 		alive, gone = "Да", "Нашёл соседа"
 	}
+	card := linkPointPrefix + pointID.String()
+	if kind == entity.PointIntentHome {
+		card = linkMine
+	}
 	return []tgbot.PushButton{
 		{Text: alive, CallbackData: pointCallback(opPointAlive, pointID)},
 		{Text: gone, CallbackData: pointCallback(opPointGone, pointID)},
+		{Text: buttonOpen, StartParam: card},
 	}
 }
 

@@ -129,7 +129,7 @@ def process_post(conn, llm, cfg, post, photo_client) -> str:
     if ready.reason is not None:
         return _finish(conn, post, STATUS_SKIPPED, ready.reason, raw, point_id=ready.point_id)
 
-    photo_keys = photos.download(photo_client, post["photo_urls"], cfg.photo_dir)
+    photo_keys = _photos(photo_client, post, cfg)
 
     try:
         return _create(conn, post, got, raw, ready, photo_keys)
@@ -198,6 +198,17 @@ def log(message: str, stream=None) -> None:
 
 def _where(post) -> str:
     return f"{post['channel']}/{post['message_id']}"
+
+
+def _photos(photo_client, post, cfg) -> list[str]:
+    try:
+        return photos.download(photo_client, post["photo_urls"], cfg.photo_dir)
+    except OSError as err:
+        # Диск, права на том, битый путь: фото теряем, но пост доводим до конца.
+        # За LLM по нему уже заплачено, а брошенный в new он купит новый вызов
+        # на каждом следующем тике — и так вечно.
+        log(f"пост {_where(post)}: фото не сохранились: {err}", stream=sys.stderr)
+        return []
 
 
 def _create(conn, post, got, raw, ready: Verdict, photo_keys: list[str]) -> str:

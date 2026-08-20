@@ -144,6 +144,28 @@ def test_manual_point_with_tme_url_is_selected(conn, points, monkeypatch):
     assert point["close_reason"] == "gone"
 
 
+def test_point_closed_between_select_and_update_keeps_its_reason(conn, points, monkeypatch):
+    point_id = _point(conn, points, url_norm=f"https://t.me/{CHANNEL}/107")
+    _channel_post(conn, 107, point_id)
+
+    def closed_meanwhile(client, channel, message_id):
+        # Голоса или TTL закрыли точку, пока мы ходили за постом.
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE points SET status = 'closed', close_reason = 'expired' WHERE id = %s",
+                (point_id,),
+            )
+        return False
+
+    monkeypatch.setattr(kill, "fetch", _FakeFetch(closed_meanwhile))
+
+    closed = kill.sweep(conn, object(), NOW)
+
+    assert closed == 0
+    assert _point_row(conn, point_id)["close_reason"] == "expired"
+    assert _post_row(conn, 107)["deleted_at"] == NOW
+
+
 def test_pauses_between_requests_but_not_before_the_first(conn, points, monkeypatch, sleep_calls):
     first = _point(conn, points, url_norm=f"https://t.me/{CHANNEL}/105")
     second = _point(conn, points, url_norm=f"https://t.me/{CHANNEL}/106")

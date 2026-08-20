@@ -26,7 +26,7 @@ WHERE status IN ('active', 'paused')
 
 _CLOSE = """
 UPDATE points SET status = 'closed', close_reason = 'gone', edited_at = %s
-WHERE id = %s
+WHERE id = %s AND status IN ('active', 'paused')
 """
 
 _MARK_DELETED = "UPDATE channel_posts SET deleted_at = %s WHERE point_id = %s"
@@ -49,17 +49,20 @@ def sweep(conn, client, now) -> int:
         channel, message_id = match.group(1), int(match.group(2))
         alive = fetch.post_alive(client, channel, message_id)
         if alive is False:
-            _close(conn, point_id, now)
-            closed += 1
+            closed += _close(conn, point_id, now)
         else:
             _touch(conn, point_id, now)
     return closed
 
 
-def _close(conn, point_id, now) -> None:
+def _close(conn, point_id, now) -> int:
+    # Точку могли закрыть голосами или TTL между SELECT и этим UPDATE: чужую
+    # причину закрытия не перебиваем, а пост всё равно помечаем удалённым.
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(_CLOSE, (now, point_id))
+        closed = cur.rowcount
         cur.execute(_MARK_DELETED, (now, point_id))
+    return closed
 
 
 def _touch(conn, point_id, now) -> None:

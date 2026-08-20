@@ -50,8 +50,8 @@ CREATE INDEX channel_posts_point_idx ON channel_posts (point_id) WHERE point_id 
 ```
 
 skip_reason — словарь уровня парсера (не CHECK): `wanted`, `roommate`, `room`,
-`other`, `no_zone`, `no_price`, `price_range`, `bad_fields`, `dup`, `forward`,
-`no_text`, `llm_error`. §11 спеки продукта пополняется одной строкой про channel_posts
+`other`, `no_zone`, `no_price`, `bad_fields`, `dup`, `forward`, `no_text`,
+`llm_error`. §11 спеки продукта пополняется одной строкой про channel_posts
 (парсерская таблица, api не читает) и правкой семантики url_norm («носитель
 ссылки на оригинал: avito/cian или t.me-пост»).
 

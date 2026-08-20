@@ -273,6 +273,21 @@ def test_photos_are_downloaded_before_the_point_is_created(conn, cfg, monkeypatc
     assert calls == [(urls, cfg.photo_dir, 5)]
 
 
+def test_broken_photo_storage_does_not_send_the_post_back_to_new(conn, cfg, monkeypatch):
+    _post(conn, 18, "Сдаётся квартира у Сокола", photo_urls=["https://cdn/a.jpg"])
+
+    def boom(client, urls, photo_dir, limit=5):
+        raise PermissionError(13, "Permission denied", photo_dir)
+
+    monkeypatch.setattr(pipeline.photos, "download", boom)
+
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+
+    row = _post_row(conn, 18)
+    assert row["status"] == "point_created"
+    assert _point(conn, row["point_id"])["photo_keys"] == []
+
+
 def _post(connection, message_id: int, text: str, photo_urls: list | None = None) -> None:
     with connection.cursor() as cur:
         cur.execute(

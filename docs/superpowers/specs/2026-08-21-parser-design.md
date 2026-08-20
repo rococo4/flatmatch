@@ -111,8 +111,11 @@ flats_4_friends, nebabushkin_msk.
    Сырой ответ целиком → channel_posts.llm. Сетевые/5xx — ретраи SDK; невалидная
    схема — один повтор; после — status='error' (пост не блокирует остальные).
 4. kind ≠ rent_flat → skipped (`wanted`/`roommate`/`room`/`other`).
-5. Автовалидация (зеркало user_link минус фото): станция распозналась в id;
-   20000 ≤ price_month_total ≤ 300000; rooms null|1..20; deposit null|0..1000000;
+5. Автовалидация (зеркало user_link минус фото, плюс одно продуктовое
+   правило): rooms=1 (включая студии) → skipped `one_room` — однушку
+   со-съёмщиками не снимают, пул вокруг неё бессмыслен (null остаётся:
+   неизвестно ≠ однушка); станция распозналась в id; 20000 ≤
+   price_month_total ≤ 300000; rooms null|2..20; deposit null|0..1000000;
    restrictions ⊂ словаря; иначе skipped (`no_zone`/`no_price`/`bad_fields`).
 6. url_norm: listing_url → нормализация как validate.go; иначе t.me-ссылка.
    SELECT живой точки с тем же url_norm → skipped 'dup' (+point_id найденной);

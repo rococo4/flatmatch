@@ -41,6 +41,7 @@ SKIP_NO_TEXT = "no_text"
 SKIP_NO_ZONE = "no_zone"
 SKIP_NO_PRICE = "no_price"
 SKIP_BAD_FIELDS = "bad_fields"
+SKIP_ONE_ROOM = "one_room"
 SKIP_DUP = "dup"
 SKIP_LLM_ERROR = "llm_error"
 
@@ -147,6 +148,9 @@ def verdict(conn, cfg, got, fallback_url: str | None) -> Verdict:
     """
     if got.kind in SKIP_BY_KIND:
         return Verdict(reason=SKIP_BY_KIND[got.kind])
+    if got.rooms == 1:
+        # Однушку со-съёмщиками не снимают: пул вокруг неё бессмыслен.
+        return Verdict(reason=SKIP_ONE_ROOM)
 
     zone_id = _zone(cfg, got.station)
     if zone_id is None:

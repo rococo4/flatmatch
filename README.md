@@ -7,10 +7,10 @@ Telegram Mini App для поиска со-съёмщика квартиры в 
 Спека продукта — [`CLAUDE.md`](./CLAUDE.md), единственный источник правды.
 Если код расходится со спекой — прав документ.
 
-Продукт собран по §12 включительно до шага 7b: онбординг и модерация, поиски
-и зонные пулы, дорогой лайк и мэтч, точки с квартирами, пуши, свежесть,
-парсер ТГ-каналов с досыпкой. Дальше — §13: шаг 8, блок и пустые состояния,
-деплой на VPS, посев.
+Продукт собран по §12 целиком: онбординг и модерация, поиски и зонные пулы,
+дорогой лайк и мэтч, точки с квартирами, пуши, свежесть, парсер ТГ-каналов с
+досыпкой, блок с жалобой, src-трекинг и пустые состояния. Живёт на
+[flatmatch.ru](https://flatmatch.ru) (см. «Деплой»). Дальше — §13: посев.
 
 ## Структура
 
@@ -58,10 +58,15 @@ repo/*      →              →  entity
 
 ## Что уже работает
 
-- `/start` у бота отдаёт кнопку, открывающую Mini App;
-- фронт шлёт initData, api проверяет HMAC, находит-или-создаёт пользователя
-  по `tg_id` и отвечает профилем;
-- экран «Привет, {имя}» в теме Telegram, светлой и тёмной;
+- `/start` у бота отдаёт кнопку, открывающую Mini App; фронт шлёт initData,
+  api проверяет HMAC, находит-или-создаёт пользователя по `tg_id`;
+- онбординг 12 шагов → модерация анкеты в чате основателя → `active`;
+- поиски, зонные пулы с секциями и вердикт-чипами, лента search-first;
+- профиль человека → дорогой лайк (5 слотов / 24 ч) → мэтч с саммари;
+- точки: квартиры с рынка и «сосед к себе», квартирные пулы, свежесть-голоса;
+- пуши через бота: воркер, агрегация, кнопки-ответы, диплинки;
+- парсер ТГ-каналов с LLM-структуризацией и досыпкой (`parser/`);
+- блок и жалоба в модер-чат, `startapp=src_*` в `users.source`;
 - `GET /healthz` — состояние процесса и базы.
 
 ## Перед первым запуском
@@ -282,49 +287,100 @@ goose postgres 'postgres://flatmatch:flatmatch@localhost:5432/flatmatch?sslmode=
 goose postgres '...' down
 ```
 
-## Деплой на VPS
+## Деплой
 
-Одна машина, docker compose, Caddy впереди (§10). Kubernetes, Redis и очередей
-нет и не планируется.
+Прод уже поднят: **[flatmatch.ru](https://flatmatch.ru)**, одна машина
+(Timeweb Cloud, Амстердам, Ubuntu 24.04), docker compose, Caddy впереди с
+сертификатом от Let's Encrypt (§10). Kubernetes, Redis и очередей нет и не
+планируется.
 
-1. Заведи домен и направь его A-записью на IP машины. Telegram требует HTTPS,
-   а Caddy выпишет сертификат сам — но только если домен уже резолвится.
-2. Поставь Docker:
-   ```sh
-   curl -fsSL https://get.docker.com | sh
-   ```
-3. Склонируй репозиторий и заполни `.env`:
-   ```sh
-   git clone <repo> flatmatch && cd flatmatch
-   cp .env.example .env
-   ```
-   Обязательно поменяй:
-   - `BOT_TOKEN` — токен бота;
-   - `DOMAIN` — твой домен, под него Caddy получит сертификат;
-   - `APP_URL` — `https://<домен>`;
-   - `POSTGRES_PASSWORD` — не оставляй значение по умолчанию.
-4. Запусти:
-   ```sh
-   docker compose up -d --build
-   ```
-   Соберётся три сервиса: `postgres`, `api`, `caddy` (Caddy отдаёт собранный
-   фронт и проксирует `/api`). Парсер под профилем и не поднимается.
-5. Проверь:
-   ```sh
-   curl https://<домен>/healthz
-   docker compose logs -f api
-   ```
-6. В BotFather замени адрес Mini App с туннеля на `https://<домен>`.
+Доступ — по алиасу из `~/.ssh/config` (ssh слушает нестандартный порт 2222,
+22-й оставлен открытым на случай, если конфиг поедет):
 
-Обновление — `git pull && docker compose up -d --build`. Миграции применятся
-сами при старте api.
+```
+Host flatmatch
+    HostName 72.56.92.50
+    Port 2222
+    User root
+    IdentityFile ~/.ssh/flatmatch
+```
+
+Репозиторий на сервере — `/opt/flatmatch`, там же поднят стек: `postgres`,
+`api`, `parser`, `caddy` (Caddy отдаёт собранный фронт и проксирует `/api`).
+В BotFather у бота прописан `https://flatmatch.ru`.
+
+### Выкатка
+
+```sh
+scripts/deploy.sh          # хост flatmatch по умолчанию
+scripts/deploy.sh <host>   # другой алиас, если машин станет две
+```
+
+Скрипт делает `rsync -az --delete` репозитория в `/opt/flatmatch` (мимо
+`.git`, `node_modules`, `.venv`, `web/dist`, `.env` и прочего локального),
+затем по ssh — `docker compose up -d --build`, `docker image prune -f` и
+печатает `docker compose ps`. Миграции применит сам api при старте, отдельного
+шага нет. Фронт собирается в образе Caddy, локальный `web/dist` не едет.
+
+**`.env` живёт только на сервере** — `/opt/flatmatch/.env`, `chmod 600`, в git
+его нет и rsync его не трогает (иначе локальный файл с туннельным `APP_URL`
+затирал бы прод). Меняются переменные руками на месте:
+
+```sh
+ssh flatmatch
+nano /opt/flatmatch/.env
+cd /opt/flatmatch && docker compose up -d
+```
+
+На проде от локального `.env` отличаются `BOT_TOKEN` (боевой бот), `DOMAIN` и
+`APP_URL` (`flatmatch.ru`), `POSTGRES_PASSWORD` (не дефолтный),
+`MODERATION_CHAT_ID` и `ANTHROPIC_API_KEY` для парсера.
+
+### Логи и здоровье
+
+```sh
+curl https://flatmatch.ru/healthz
+ssh flatmatch 'cd /opt/flatmatch && docker compose logs -f api'
+ssh flatmatch 'cd /opt/flatmatch && docker compose logs -f parser'
+ssh flatmatch 'cd /opt/flatmatch && docker compose ps'
+```
+
+### Бэкапы
+
+`scripts/backup.sh` уезжает на сервер тем же rsync и запускается там: читает
+`/opt/flatmatch/.env`, снимает `pg_dump` через `docker compose exec -T
+postgres` и кладёт gzip в `/opt/flatmatch/backups/flatmatch-<дата>.sql.gz`,
+удаляя всё старше семи дней. В кроне (`crontab -e` на сервере):
+
+```
+0 4 * * * /opt/flatmatch/scripts/backup.sh >> /var/log/flatmatch-backup.log 2>&1
+```
+
+Восстановление — из того же дампа:
+
+```sh
+gunzip -c backups/flatmatch-2026-08-21.sql.gz \
+  | docker compose exec -T postgres psql -U flatmatch -d flatmatch
+```
 
 ### Что где хранится
 
 - данные Postgres — том `postgres_data`;
+- фото анкет и точек — том `photos`, общий у `api` и `parser`;
 - сертификаты Caddy — том `caddy_data`; не удаляй его без нужды, иначе на
   каждый передеплой будет запрашиваться новый сертификат и упрёшься в лимиты
   Let's Encrypt.
+
+### Если машину поднимают заново
+
+1. Домен A-записью на IP: Caddy выпишет сертификат сам, но только если домен
+   уже резолвится.
+2. `curl -fsSL https://get.docker.com | sh`.
+3. `ufw allow 22,2222,80,443`, ssh на 2222, ключ `~/.ssh/flatmatch`.
+4. `mkdir -p /opt/flatmatch`, `scripts/deploy.sh` с локальной машины, затем
+   `.env` руками на сервере (шаблон — `.env.example`) и ещё раз
+   `docker compose up -d --build`.
+5. Адрес Mini App в BotFather — `https://<домен>`.
 
 ## Переменные окружения
 
@@ -353,9 +409,11 @@ goose postgres '...' down
 точки просто копятся в `pending`. Когда чат появится, накопленную очередь
 поднимает команда `/queue`, отправленная в этот же чат.
 
-Фронтовые переменные — в [`web/.env.example`](./web/.env.example).
+Фронтовые переменные — в [`web/.env.example`](./web/.env.example),
+переменные парсера (`ANTHROPIC_API_KEY`, `PARSER_CHANNELS`, `POLL_MINUTES`,
+`ALIVE_HOURS`) — в [`parser/README.md`](./parser/README.md).
 
-## Известные ограничения скелета
+## Известные ограничения
 
 - Один процесс api может опрашивать бота через `getUpdates`. Если запустишь
   второй с тем же токеном, Telegram ответит 409 и второй остановится. Для

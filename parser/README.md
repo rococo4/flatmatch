@@ -80,7 +80,7 @@ docker compose logs -f parser
 |---|---|---|
 | `DATABASE_URL` | — | обязательна, без неё старта нет |
 | `ANTHROPIC_API_KEY` | — | ключ с console.anthropic.com; пусто — посты копятся неразобранными |
-| `PARSER_CHANNELS` | пять каналов старта | csv, без `@` |
+| `PARSER_CHANNELS` | семь каналов старта | csv, без `@` |
 | `POLL_MINUTES` | 20 | период тика |
 | `ALIVE_HOURS` | 4 | как часто перепроверять живость постов |
 | `PHOTO_DIR` | `../api/.data/photos` | общее с api хранилище фото |
@@ -92,7 +92,9 @@ docker compose logs -f parser
 бинд файла из репо).
 
 Каналы старта: `arendamsc`, `ugnest_msk`, `norealtor`, `flats_4_friends`,
-`nebabushkin_msk`.
+`nebabushkin_msk` — и вторая волна: `keystomoscow`, `lvngrm_msk`. Все
+семь — Москва-долгосрок со ссылкой или ценой прямо в посте; список
+перекрывается переменной, канал без превью на `t.me/s` парсеру не виден.
 
 ## Досыпка руками (`add.py`)
 

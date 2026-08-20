@@ -3,7 +3,10 @@
 import os
 from dataclasses import dataclass
 
-DEFAULT_CHANNELS = "arendamsc,ugnest_msk,norealtor,flats_4_friends,nebabushkin_msk"
+DEFAULT_CHANNELS = (
+    "arendamsc,ugnest_msk,norealtor,flats_4_friends,nebabushkin_msk,"
+    "keystomoscow,lvngrm_msk"
+)
 DEFAULT_PHOTO_DIR = "../api/.data/photos"
 DEFAULT_ZONES_PATH = "../api/internal/service/zones/moscow.json"
 DEFAULT_POLL_MINUTES = 20

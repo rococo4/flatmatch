@@ -165,6 +165,19 @@ docker compose exec postgres psql -U flatmatch -d flatmatch \
 модели лежит в `channel_posts.llm`. Досыпать квартиру руками — `add.py`,
 см. `parser/README.md`.
 
+## Прод
+
+Всё выше — про локальный стенд. Боевой стоит на VPS по адресу
+`https://flatmatch.ru`: docker compose, Caddy, деплой `scripts/deploy.sh`,
+логи `ssh flatmatch 'cd /opt/flatmatch && docker compose logs -f api'`.
+Подробности — раздел «Деплой» в [`README.md`](../../../README.md). Секретов
+здесь нет и не будет: боевой `.env` живёт только на сервере.
+
+Локальный стенд с боевым не смешивать. Токен у прод-бота свой; поднимешь
+локально api с тем же токеном — Telegram ответит `409 Conflict` одному из
+двух процессов, и живые пуши перестанут доходить. Для отладки рядом с продом
+заводится второй бот у @BotFather либо ставится `BOT_POLLING_ENABLED=false`.
+
 ## Чего скрипт не делает
 
 - Не выключает Docker Desktop — только контейнеры.

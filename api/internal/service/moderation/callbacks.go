@@ -15,8 +15,9 @@ import (
 const callbackPrefix = "mod"
 
 const (
-	subjectUser  = "u"
-	subjectPoint = "p"
+	subjectUser   = "u"
+	subjectPoint  = "p"
+	subjectReport = "r"
 )
 
 const (
@@ -24,6 +25,8 @@ const (
 	opPhoto = "photo"
 	opAbout = "about"
 	opNo    = "no"
+	opBan   = "ban"
+	opSkip  = "skip"
 )
 
 const (
@@ -51,6 +54,8 @@ func (s *Service) HandleCallback(ctx context.Context, data string) (string, erro
 		return s.userVerdict(ctx, parts[2], id)
 	case subjectPoint:
 		return s.pointVerdict(ctx, parts[2], id)
+	case subjectReport:
+		return "", fmt.Errorf("moderation callback %q: report verdicts are not wired yet", data)
 	default:
 		return "", fmt.Errorf("moderation callback %q: unknown subject", data)
 	}

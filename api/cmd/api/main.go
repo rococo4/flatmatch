@@ -32,12 +32,14 @@ import (
 	"flatmatch/api/internal/repo/matchesrepo"
 	"flatmatch/api/internal/repo/notificationsrepo"
 	"flatmatch/api/internal/repo/pointsrepo"
+	"flatmatch/api/internal/repo/reportsrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
 	"flatmatch/api/internal/service/likes"
 	"flatmatch/api/internal/service/matches"
 	"flatmatch/api/internal/service/moderation"
 	"flatmatch/api/internal/service/notifications"
+	"flatmatch/api/internal/service/people"
 	"flatmatch/api/internal/service/points"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/searches"
@@ -52,9 +54,9 @@ const shutdownGrace = 15 * time.Second
 
 const mediaPrefix = "/media"
 
-type people struct {
-	visibility *usersrepo.Repo
-	matches    *matchesrepo.Repo
+type visibility struct {
+	users   *usersrepo.Repo
+	matches *matchesrepo.Repo
 }
 
 type deps struct {
@@ -64,6 +66,7 @@ type deps struct {
 	likes    *likes.Service
 	matches  *matches.Service
 	points   *points.Service
+	persons  *people.Service
 
 	people       *usersrepo.Repo
 	pairLikes    *likesrepo.Repo
@@ -78,12 +81,12 @@ type deps struct {
 	bot *tgbot.Bot
 }
 
-func (p people) VisibleBetween(ctx context.Context, a, b uuid.UUID) (bool, error) {
-	return p.visibility.VisibleBetween(ctx, a, b)
+func (v visibility) VisibleBetween(ctx context.Context, a, b uuid.UUID) (bool, error) {
+	return v.users.VisibleBetween(ctx, a, b)
 }
 
-func (p people) IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error) {
-	return p.matches.IsMatched(ctx, a, b)
+func (v visibility) IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error) {
+	return v.matches.IsMatched(ctx, a, b)
 }
 
 func main() {
@@ -130,10 +133,11 @@ func run() error {
 	likesRepo := likesrepo.New(pool)
 	pointsRepo := pointsrepo.New(pool)
 	matchesRepo := matchesrepo.New(pool)
+	reportsRepo := reportsrepo.New(pool)
 
 	notificationsRepo := notificationsrepo.New(pool)
 	pushes := notifications.New(notificationsRepo, searchesRepo, pointsRepo,
-		people{visibility: usersRepo, matches: matchesRepo}, dir, log)
+		visibility{users: usersRepo, matches: matchesRepo}, dir, log)
 
 	botClient := tgbot.NewClient(cfg.BotToken)
 	moderator := moderation.New(tgbot.NewModerationSender(botClient),
@@ -157,6 +161,7 @@ func run() error {
 		matches:  matches.New(matchesRepo, searchesRepo, usersRepo, pointsRepo, dir),
 
 		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator, pushes),
+		persons:      people.New(usersRepo, reportsRepo, matchesRepo, moderator),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,
@@ -257,8 +262,8 @@ func router(
 		poolsHandler := poolsapi.New(d.pools, d.searches, d.points, d.photos, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
-		r.Get("/people/{id}", peopleapi.New(
-			d.people, d.pairLikes, d.accounts, d.pairSearches, d.pairPoints, d.pairMatches, d.dir).Profile)
+		r.Mount("/people", peopleapi.New(d.persons, d.people, d.pairLikes, d.accounts,
+			d.pairSearches, d.pairPoints, d.pairMatches, d.dir).Routes())
 	})
 
 	return r

@@ -54,6 +54,7 @@ type User struct {
 
 	Status         Status
 	OnboardingStep int
+	Source         string
 
 	LastSeen  time.Time
 	CreatedAt time.Time

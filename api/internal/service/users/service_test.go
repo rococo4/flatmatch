@@ -20,6 +20,9 @@ type fakeRepo struct {
 	user entity.User
 	err  error
 
+	source     string
+	sourceCall bool
+
 	patched    entity.ProfilePatch
 	photoKey   string
 	setStatus  entity.Status
@@ -49,6 +52,12 @@ func (f *fakeRepo) SetStatus(_ context.Context, _ uuid.UUID, s entity.Status) (e
 	f.statusCall = true
 	f.setStatus = s
 	return f.user, f.err
+}
+
+func (f *fakeRepo) SetSourceIfEmpty(_ context.Context, _ uuid.UUID, source string) error {
+	f.sourceCall = true
+	f.source = source
+	return f.err
 }
 
 var jpegFile = []byte("\xff\xd8\xff\xe0")
@@ -386,5 +395,37 @@ func TestAStandWithoutABotStillWorks(t *testing.T) {
 
 	if _, err := newService(repo).SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
 		t.Fatalf("SetPhoto() failed without a moderation chat: %v", err)
+	}
+}
+
+func TestSetSourceAcceptsOnlyTrackingCodes(t *testing.T) {
+	good := []string{"a", "hsetndr", "hse_tndr_2", strings.Repeat("z", 32)}
+	for _, code := range good {
+		repo := &fakeRepo{}
+		if err := newService(repo).SetSource(t.Context(), uuid.New(), code); err != nil {
+			t.Errorf("SetSource(%q) failed: %v", code, err)
+			continue
+		}
+		if repo.source != code {
+			t.Errorf("stored source = %q, want %q", repo.source, code)
+		}
+	}
+
+	bad := []string{"", "HSETNDR", "hse tndr", "hse-tndr", "хсе", strings.Repeat("z", 33)}
+	for _, code := range bad {
+		repo := &fakeRepo{}
+		err := newService(repo).SetSource(t.Context(), uuid.New(), code)
+
+		var fields *entity.FieldsError
+		if !errors.As(err, &fields) || !errors.Is(err, ErrInvalidSource) {
+			t.Errorf("SetSource(%q) error = %v, want ErrInvalidSource with fields", code, err)
+			continue
+		}
+		if !slices.Equal(fields.Fields, []string{"source"}) {
+			t.Errorf("fields = %v, want [source]", fields.Fields)
+		}
+		if repo.sourceCall {
+			t.Errorf("SetSource(%q) reached the database", code)
+		}
 	}
 }

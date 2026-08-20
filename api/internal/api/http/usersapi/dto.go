@@ -40,6 +40,10 @@ type ownProfile struct {
 	BotUsername string `json:"bot_username,omitempty"`
 }
 
+type sourceRequest struct {
+	Source string `json:"source"`
+}
+
 type patchRequest struct {
 	Age        *int    `json:"age"`
 	Gender     *string `json:"gender"`

@@ -29,6 +29,8 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, users.ErrInvalidPatch):
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "value outside the allowed set", fields.Fields, err)
+	case errors.Is(err, users.ErrInvalidSource):
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "source must match ^[a-z0-9_]{1,32}$", fields.Fields, err)
 	case errors.Is(err, users.ErrIncomplete):
 		httpx.BadRequest(w, r, httpx.CodeProfileIncomplete, "profile is not filled in", fields.Fields, err)
 	default:

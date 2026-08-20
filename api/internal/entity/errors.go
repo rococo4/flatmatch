@@ -27,6 +27,8 @@ var ErrPointNotPaused = errors.New("point is not paused")
 
 var ErrNotVotable = errors.New("only market flats with a link take votes")
 
+var ErrSelfTarget = errors.New("the target is the caller")
+
 type FieldsError struct {
 	Err    error
 	Fields []string

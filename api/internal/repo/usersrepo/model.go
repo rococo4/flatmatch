@@ -17,7 +17,7 @@ const columns = `
 	age, gender, gender_pref, occupation, schedule, smoking,
 	pets_own, pets_ok, noise, guests, cleaning, alcohol, expenses, about,
 	photo_key, photo_status, about_status,
-	status, onboarding_step, last_seen, created_at`
+	status, onboarding_step, source, last_seen, created_at`
 
 type userRow struct {
 	ID         uuid.UUID `db:"id"`
@@ -44,8 +44,9 @@ type userRow struct {
 	PhotoStatus string  `db:"photo_status"`
 	AboutStatus string  `db:"about_status"`
 
-	Status         string `db:"status"`
-	OnboardingStep int    `db:"onboarding_step"`
+	Status         string  `db:"status"`
+	OnboardingStep int     `db:"onboarding_step"`
+	Source         *string `db:"source"`
 
 	LastSeen  time.Time `db:"last_seen"`
 	CreatedAt time.Time `db:"created_at"`
@@ -81,6 +82,7 @@ func (r userRow) toEntity(ctx context.Context) entity.User {
 
 		Status:         entity.ParseStatus(r.Status),
 		OnboardingStep: r.OnboardingStep,
+		Source:         pointer.Get(r.Source),
 
 		LastSeen:  r.LastSeen,
 		CreatedAt: r.CreatedAt,

@@ -21,6 +21,7 @@ type Accounts interface {
 	UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error)
 	SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error)
 	Submit(ctx context.Context, id uuid.UUID) (entity.User, error)
+	SetSource(ctx context.Context, id uuid.UUID, raw string) error
 	OwnPhotoURL(u entity.User) string
 }
 
@@ -45,6 +46,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Patch("/me/profile", h.updateProfile)
 	r.Post("/me/photo", h.uploadPhoto)
 	r.Post("/me/submit", h.submit)
+	r.Post("/me/source", h.setSource)
 	return r
 }
 
@@ -123,6 +125,29 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.respondSelf(w, r, updated)
+}
+
+func (h *Handler) setSource(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	var body sourceRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		httpx.BadRequest(w, r, httpx.CodeBadRequest, "cannot read the request body", nil, err)
+		return
+	}
+
+	if err := h.accounts.SetSource(r.Context(), user.ID, body.Source); err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusNoContent, nil)
 }
 
 func (h *Handler) respondSelf(w http.ResponseWriter, r *http.Request, u entity.User) {

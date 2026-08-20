@@ -23,6 +23,17 @@ type pointDTO struct {
 	Label string    `json:"label"`
 }
 
+type reportContext struct {
+	ZoneID  string `json:"zone_id"`
+	PointID string `json:"point_id"`
+	MatchID string `json:"match_id"`
+}
+
+type reportRequest struct {
+	Reason  string         `json:"reason"`
+	Context *reportContext `json:"context"`
+}
+
 type profileResponse struct {
 	UserID   uuid.UUID `json:"user_id"`
 	Name     string    `json:"name"`
@@ -61,6 +72,23 @@ type sharedDTO struct {
 type budgetDTO struct {
 	Remaining  int        `json:"remaining"`
 	NextFreeAt *time.Time `json:"next_free_at,omitempty"`
+}
+
+func (r reportRequest) contextKey() string {
+	if r.Context == nil {
+		return ""
+	}
+
+	switch {
+	case r.Context.ZoneID != "":
+		return entity.ReportContextZone + ":" + r.Context.ZoneID
+	case r.Context.PointID != "":
+		return entity.ReportContextPoint + ":" + r.Context.PointID
+	case r.Context.MatchID != "":
+		return entity.ReportContextMatch + ":" + r.Context.MatchID
+	default:
+		return ""
+	}
 }
 
 func toProfile(

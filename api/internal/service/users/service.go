@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 
 	"github.com/google/uuid"
 
@@ -18,6 +19,7 @@ type Repository interface {
 	UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error)
 	SetPhoto(ctx context.Context, id uuid.UUID, key string) (entity.User, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status entity.Status) (entity.User, error)
+	SetSourceIfEmpty(ctx context.Context, id uuid.UUID, source string) error
 }
 
 type PhotoStore interface {
@@ -39,11 +41,14 @@ type Service struct {
 var (
 	ErrBanned = errors.New("user is banned")
 
-	ErrInvalidPatch = errors.New("profile patch has invalid fields")
-	ErrIncomplete   = errors.New("profile is not filled in")
+	ErrInvalidPatch  = errors.New("profile patch has invalid fields")
+	ErrInvalidSource = errors.New("source code is not a valid tracking code")
+	ErrIncomplete    = errors.New("profile is not filled in")
 
 	ErrUnsupportedImage = imagetype.ErrUnsupported
 )
+
+var sourceCode = regexp.MustCompile(`^[a-z0-9_]{1,32}$`)
 
 func New(repo Repository, photos PhotoStore, notify Notifier) *Service {
 	return &Service{repo: repo, photos: photos, notify: notify}
@@ -114,6 +119,13 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error)
 		s.enqueue(ctx, submitted)
 	}
 	return submitted, nil
+}
+
+func (s *Service) SetSource(ctx context.Context, id uuid.UUID, raw string) error {
+	if !sourceCode.MatchString(raw) {
+		return &entity.FieldsError{Err: ErrInvalidSource, Fields: []string{"source"}}
+	}
+	return s.repo.SetSourceIfEmpty(ctx, id, raw)
 }
 
 func (s *Service) PhotoURL(u entity.User) string {

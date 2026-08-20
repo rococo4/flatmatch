@@ -182,6 +182,26 @@ func (r *Repo) ClearPushBlocked(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (r *Repo) SetSourceIfEmpty(ctx context.Context, id uuid.UUID, source string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET source = $2 WHERE id = $1 AND source IS NULL`, id, source)
+	if err != nil {
+		return fmt.Errorf("set source of user %s: %w", id, err)
+	}
+	return nil
+}
+
+func (r *Repo) Block(ctx context.Context, blockerID, blockedID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO blocks (blocker_id, blocked_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING`, blockerID, blockedID)
+	if err != nil {
+		return fmt.Errorf("block %s for %s: %w", blockedID, blockerID, err)
+	}
+	return nil
+}
+
 func (r *Repo) one(ctx context.Context, query string, args ...any) (entity.User, error) {
 	var user entity.User
 

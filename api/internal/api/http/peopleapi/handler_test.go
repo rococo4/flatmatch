@@ -52,7 +52,7 @@ type fakeAccounts struct{ user entity.User }
 func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 	likes := &fakeLikes{}
 	pointCalls := 0
-	router := newRouter(New(&fakePeople{err: entity.ErrNotFound}, likes, fakePhotos{},
+	router := newRouter(New(&fakeService{}, &fakePeople{err: entity.ErrNotFound}, likes, fakePhotos{},
 		fakeSearches{}, fakePoints{calls: &pointCalls}, fakeMatches{}, fakeDir{}), uuid.New())
 
 	rec := get(router, "/people/"+uuid.NewString()+"?point="+uuid.NewString())
@@ -73,7 +73,7 @@ func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 	likes := &fakeLikes{}
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
-	router := newRouter(New(&fakePeople{user: target}, likes, fakePhotos{},
+	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, likes, fakePhotos{},
 		fakeSearches{met: true}, fakePoints{}, fakeMatches{}, fakeDir{}), uuid.New())
 
 	rec := get(router, "/people/"+target.ID.String())
@@ -88,7 +88,7 @@ func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 
 func TestProfileHiddenWithoutMeeting(t *testing.T) {
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
-	router := newRouter(New(&fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
+	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
 		fakeSearches{}, fakePoints{}, fakeMatches{}, fakeDir{}), uuid.New())
 
 	rec := get(router, "/people/"+target.ID.String())
@@ -152,7 +152,7 @@ func TestProfileOpensToThePointRelation(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			router := newRouter(New(&fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
+			router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
 				fakeSearches{}, tc.points, fakeMatches{}, fakeDir{}), viewer)
 
 			rec := get(router, "/people/"+target.ID.String()+"?point="+tc.points.point.ID.String())
@@ -175,7 +175,7 @@ func TestProfileOpensToThePointRelation(t *testing.T) {
 func TestProfileIgnoresAnUnrelatedPointParam(t *testing.T) {
 	viewer := uuid.New()
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
-	router := newRouter(New(&fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
+	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
 		fakeSearches{}, fakePoints{}, fakeMatches{}, fakeDir{}), viewer)
 
 	for _, param := range []string{uuid.NewString(), "not-a-uuid"} {
@@ -191,7 +191,7 @@ func newRouter(h *Handler, viewerID uuid.UUID) chi.Router {
 	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: viewerID, Status: entity.StatusActive},
 	}, nil))
-	r.Get("/people/{id}", h.Profile)
+	r.Mount("/people", h.Routes())
 	return r
 }
 

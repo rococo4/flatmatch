@@ -2,6 +2,7 @@ package peopleapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -14,6 +15,14 @@ import (
 	"flatmatch/api/internal/httpx"
 	"flatmatch/api/internal/service/zones"
 )
+
+const maxBodyBytes = 4 << 10
+
+type Service interface {
+	Block(ctx context.Context, viewerID, targetID uuid.UUID) error
+	Report(ctx context.Context, viewer entity.User, targetID uuid.UUID,
+		reason entity.ReportReason, contextKey string) error
+}
 
 type People interface {
 	VisibleByID(ctx context.Context, viewerID, id uuid.UUID) (entity.User, error)
@@ -48,6 +57,7 @@ type ZoneDir interface {
 }
 
 type Handler struct {
+	service  Service
 	people   People
 	likes    Likes
 	photos   Photos
@@ -57,16 +67,28 @@ type Handler struct {
 	dir      ZoneDir
 }
 
-var errNoUserInContext = errors.New("no authenticated user in request context")
+var (
+	errNoUserInContext = errors.New("no authenticated user in request context")
+	errUnknownReason   = errors.New("report reason is outside the allowed set")
+)
 
-func New(people People, likes Likes, photos Photos, searches Searches, points Points, matches Matches, dir ZoneDir) *Handler {
+func New(service Service, people People, likes Likes, photos Photos,
+	searches Searches, points Points, matches Matches, dir ZoneDir) *Handler {
 	return &Handler{
-		people: people, likes: likes, photos: photos,
+		service: service, people: people, likes: likes, photos: photos,
 		searches: searches, points: points, matches: matches, dir: dir,
 	}
 }
 
-func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Routes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/{id}", h.profile)
+	r.Post("/{id}/block", h.block)
+	r.Post("/{id}/report", h.report)
+	return r
+}
+
+func (h *Handler) profile(w http.ResponseWriter, r *http.Request) {
 	viewer, ok := authmw.FromContext(r.Context())
 	if !ok {
 		httpx.Internal(w, r, errNoUserInContext)
@@ -125,6 +147,48 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, toProfile(viewer, target,
 		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")), point,
 		myLike, likedMe, matchID, budget))
+}
+
+func (h *Handler) block(w http.ResponseWriter, r *http.Request) {
+	viewer, id, ok := viewerAndTarget(w, r)
+	if !ok {
+		return
+	}
+
+	if err := h.service.Block(r.Context(), viewer.ID, id); err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusNoContent, nil)
+}
+
+func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
+	viewer, id, ok := viewerAndTarget(w, r)
+	if !ok {
+		return
+	}
+
+	var body reportRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		httpx.BadRequest(w, r, httpx.CodeBadRequest, "cannot read the request body", nil, err)
+		return
+	}
+
+	reason := entity.ParseReportReason(body.Reason)
+	if !reason.Known() {
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "unknown report reason",
+			[]string{"reason"}, errUnknownReason)
+		return
+	}
+
+	if err := h.service.Report(r.Context(), viewer, id, reason, body.contextKey()); err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusNoContent, nil)
 }
 
 func (h *Handler) metInPool(ctx context.Context, viewerID, targetID uuid.UUID) (bool, error) {
@@ -206,7 +270,26 @@ func (h *Handler) contextZone(id string) *zoneDTO {
 	return pointer.To(toZoneDTO(zone))
 }
 
+func viewerAndTarget(w http.ResponseWriter, r *http.Request) (entity.User, uuid.UUID, bool) {
+	viewer, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return entity.User{}, uuid.Nil, false
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "user id is not a uuid", []string{"id"}, err)
+		return entity.User{}, uuid.Nil, false
+	}
+	return viewer, id, true
+}
+
 func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, entity.ErrSelfTarget) {
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "the target is you", []string{"id"}, err)
+		return
+	}
 	if errors.Is(err, entity.ErrNotFound) {
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such person", err)
 		return

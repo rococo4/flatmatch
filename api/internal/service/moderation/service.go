@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
@@ -68,6 +69,13 @@ func (s *Service) PointPending(ctx context.Context, p entity.Point) {
 	})
 }
 
+func (s *Service) ReportFiled(ctx context.Context, r entity.Report, reporter, target entity.User) {
+	s.send(ctx, subjectReport, r.ID, target.PhotoKey, s.reportCaption(ctx, r, reporter, target), [][2]string{
+		{"Забанить", callback(subjectReport, opBan, r.ID)},
+		{"Пропустить", callback(subjectReport, opSkip, r.ID)},
+	})
+}
+
 func (s *Service) SendQueue(ctx context.Context) error {
 	users, err := s.users.PendingModeration(ctx)
 	if err != nil {
@@ -125,6 +133,64 @@ func (s *Service) pointCaption(p entity.Point) string {
 		caption += fmt.Sprintf(" · %d комн.", *p.Rooms)
 	}
 	return caption
+}
+
+func (s *Service) reportCaption(ctx context.Context, r entity.Report, reporter, target entity.User) string {
+	caption := fmt.Sprintf("Жалоба: %s → %s (%d) · %s",
+		reporter.Name, target.Name, target.Profile.Age, entity.ReportReasonLabel(r.Reason))
+
+	if line := s.reportContext(ctx, r.ContextKey); line != "" {
+		caption += "\nКонтекст: " + line
+	}
+
+	about := target.Profile.About
+	if about == "" {
+		about = "—"
+	}
+	return caption + "\nО себе цели: " + about
+}
+
+func (s *Service) reportContext(ctx context.Context, key string) string {
+	kind, value, ok := strings.Cut(key, ":")
+	if !ok {
+		return ""
+	}
+
+	switch kind {
+	case entity.ReportContextZone:
+		zone, ok := s.dir.Get(value)
+		if !ok {
+			return ""
+		}
+		return "пул " + zone.NameGen
+	case entity.ReportContextPoint:
+		return s.pointContext(ctx, value)
+	case entity.ReportContextMatch:
+		return "мэтч"
+	default:
+		return ""
+	}
+}
+
+func (s *Service) pointContext(ctx context.Context, raw string) string {
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	point, err := s.points.ByID(ctx, id)
+	if err != nil {
+		logctx.From(ctx).Warn("read the point a complaint points at", "point", id, "error", err)
+		return ""
+	}
+
+	station := point.ZoneID
+	if zone, ok := s.dir.Get(point.ZoneID); ok {
+		station = zone.Name
+	}
+	if point.Type == entity.PointIntentHome {
+		return "комната у метро " + station
+	}
+	return "квартира у метро " + station
 }
 
 func userCaption(u entity.User) string {

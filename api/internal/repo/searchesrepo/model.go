@@ -24,6 +24,11 @@ const candidateColumns = `s.id, s.user_id, s.zone_id, s.price_min, s.price_max,
 	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
 
+type ZoneUsers struct {
+	ZoneID  string
+	UserIDs []uuid.UUID
+}
+
 type searchRow struct {
 	ID           uuid.UUID  `db:"id"`
 	UserID       uuid.UUID  `db:"user_id"`
@@ -63,6 +68,11 @@ type candidateRow struct {
 	UPhotoKey    *string   `db:"u_photo_key"`
 	UPhotoStatus string    `db:"u_photo_status"`
 	ULastSeen    time.Time `db:"u_last_seen"`
+}
+
+type zoneUsersRow struct {
+	ZoneID  string      `db:"zone_id"`
+	UserIDs []uuid.UUID `db:"user_ids"`
 }
 
 func (r searchRow) toEntity() entity.Search {

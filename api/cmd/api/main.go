@@ -253,7 +253,7 @@ func router(
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authmw.New(validator, d.accounts, d.pairSearches))
 		r.Mount("/", usersapi.New(d.accounts, d.bot).Routes())
-		r.Method(http.MethodGet, "/zones", zonesapi.New(d.dir))
+		r.Mount("/zones", zonesapi.New(d.dir, d.pools).Routes())
 		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.points, d.dir).Routes())
 		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.pairPoints, d.dir).Routes())
 		r.Mount("/matches", matchesapi.New(d.matches, d.accounts, d.dir).Routes())

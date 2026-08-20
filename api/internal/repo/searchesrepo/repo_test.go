@@ -1,7 +1,10 @@
 package searchesrepo
 
 import (
+	"bytes"
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -364,5 +367,84 @@ func TestHasActiveIn(t *testing.T) {
 	}
 	if got, err := repo.HasActiveIn(t.Context(), user, []string{"d-khamovniki"}); err != nil || got {
 		t.Errorf("HasActiveIn(closed search) = %v, %v; want false", got, err)
+	}
+}
+
+func TestActiveZonesVisibleGroupsPeopleByZone(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+
+	viewer := seedUser(t, pool, 1, "active", "male", "any")
+	mate := seedUser(t, pool, 2, "active", "female", "any")
+	twoZones := seedUser(t, pool, 3, "active", "male", "any")
+	otherGender := seedUser(t, pool, 4, "active", "female", "same")
+	blocked := seedUser(t, pool, 5, "active", "male", "any")
+
+	for _, s := range []struct {
+		user uuid.UUID
+		zone string
+	}{
+		{viewer, "d-khamovniki"},
+		{mate, "d-khamovniki"},
+		{twoZones, "d-khamovniki"},
+		{twoZones, "line-1"},
+		{otherGender, "d-khamovniki"},
+		{blocked, "d-khamovniki"},
+	} {
+		if _, err := repo.Create(t.Context(), s.user, testParams(s.zone)); err != nil {
+			t.Fatalf("Create(%s) failed: %v", s.zone, err)
+		}
+	}
+
+	if _, err := pool.Exec(t.Context(),
+		`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, blocked); err != nil {
+		t.Fatalf("insert block: %v", err)
+	}
+
+	closed, err := repo.Create(t.Context(), mate, testParams("s-sokol"))
+	if err != nil {
+		t.Fatalf("Create(s-sokol) failed: %v", err)
+	}
+	if _, err := repo.Close(t.Context(), mate, closed.ID, entity.CloseFoundHere); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+
+	rows, err := repo.ActiveZonesVisible(t.Context(), viewer)
+	if err != nil {
+		t.Fatalf("ActiveZonesVisible() failed: %v", err)
+	}
+
+	mine := map[uuid.UUID]bool{viewer: true, mate: true, twoZones: true,
+		otherGender: true, blocked: true}
+	got := make(map[string][]uuid.UUID, len(rows))
+	for _, row := range rows {
+		if _, dup := got[row.ZoneID]; dup {
+			t.Fatalf("zone %s came twice — the query must group by zone", row.ZoneID)
+		}
+		var ids []uuid.UUID
+		for _, id := range row.UserIDs {
+			if mine[id] {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		slices.SortFunc(ids, func(a, b uuid.UUID) int { return bytes.Compare(a[:], b[:]) })
+		got[row.ZoneID] = ids
+	}
+
+	want := map[string][]uuid.UUID{
+		"d-khamovniki": {mate, twoZones},
+		"line-1":       {twoZones},
+	}
+	for zone, ids := range want {
+		slices.SortFunc(ids, func(a, b uuid.UUID) int { return bytes.Compare(a[:], b[:]) })
+		want[zone] = ids
+	}
+	if !maps.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("ActiveZonesVisible() = %v, want %v — свой поиск, невидимые и закрытые не считаются",
+			got, want)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -87,6 +88,50 @@ func (s *Service) Counts(ctx context.Context, viewerID uuid.UUID, params entity.
 		}
 	}
 	return c, nil
+}
+
+func (s *Service) Top(ctx context.Context, viewerID uuid.UUID, limit int) ([]ZoneTop, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+
+	rows, err := s.repo.ActiveZonesVisible(ctx, viewerID)
+	if err != nil {
+		return nil, err
+	}
+
+	people := make(map[string]map[uuid.UUID]bool)
+	for _, row := range rows {
+		for _, zoneID := range s.dir.Intersecting(row.ZoneID) {
+			set, ok := people[zoneID]
+			if !ok {
+				set = make(map[uuid.UUID]bool, len(row.UserIDs))
+				people[zoneID] = set
+			}
+			for _, userID := range row.UserIDs {
+				set[userID] = true
+			}
+		}
+	}
+
+	top := make([]ZoneTop, 0, len(people))
+	for zoneID, set := range people {
+		zone, ok := s.dir.Get(zoneID)
+		if !ok || len(set) == 0 {
+			continue
+		}
+		top = append(top, ZoneTop{Zone: zone, People: len(set)})
+	}
+	slices.SortFunc(top, func(a, b ZoneTop) int {
+		if a.People != b.People {
+			return b.People - a.People
+		}
+		return strings.Compare(a.Zone.Name, b.Zone.Name)
+	})
+	if len(top) > limit {
+		top = top[:limit]
+	}
+	return top, nil
 }
 
 func bestPerUser(mine entity.SearchParams, cands []entity.PoolCandidate) bestByUser {

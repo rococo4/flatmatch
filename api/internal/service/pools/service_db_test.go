@@ -3,6 +3,7 @@ package pools
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"slices"
 	"testing"
@@ -397,6 +398,88 @@ func testDir(t *testing.T) *zones.Directory {
 		t.Fatalf("load zones fixture: %v", err)
 	}
 	return dir
+}
+
+func TestTopCountsPeopleOfIntersectingZones(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := searchesrepo.New(pool)
+	svc := New(repo, testDir(t), staticPhotos{})
+
+	viewer := seedUser(t, pool, testUser{n: 1, gender: entity.GenderMale, pref: entity.GenderPrefAny})
+	station := seedUser(t, pool, testUser{n: 2, gender: entity.GenderFemale, pref: entity.GenderPrefAny})
+	twoSearches := seedUser(t, pool, testUser{n: 3, gender: entity.GenderMale, pref: entity.GenderPrefAny})
+	invisible := seedUser(t, pool, testUser{n: 4, gender: entity.GenderFemale, pref: entity.GenderPrefSame})
+
+	mustCreate(t, repo, viewer.ID, zoneParams("pz-district", 35000, 45000, moveSept))
+	mustCreate(t, repo, station.ID, zoneParams("pz-station-east", 40000, 55000, moveSept))
+	mustCreate(t, repo, twoSearches.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+	mustCreate(t, repo, twoSearches.ID, zoneParams("pz-line-west", 40000, 55000, moveSept))
+	mustCreate(t, repo, invisible.ID, zoneParams("pz-district", 40000, 55000, moveSept))
+
+	got, err := svc.Top(t.Context(), viewer.ID, 10)
+	if err != nil {
+		t.Fatalf("Top() failed: %v", err)
+	}
+
+	counts := make(map[string]int, len(got))
+	for _, z := range got {
+		counts[z.Zone.ID] = z.People
+	}
+	want := map[string]int{
+		"pz-district":     2,
+		"pz-line-east":    2,
+		"pz-station-east": 2,
+		"pz-line-west":    1,
+		"pz-line-cross":   1,
+	}
+	if !maps.Equal(counts, want) {
+		t.Errorf("Top() = %v, want %v — район считает людей со своих станций, "+
+			"два пересекающихся поиска одного человека считаются раз, пустые зоны не выводятся",
+			counts, want)
+	}
+
+	for i := 1; i < len(got); i++ {
+		prev, cur := got[i-1], got[i]
+		if prev.People < cur.People ||
+			prev.People == cur.People && prev.Zone.Name > cur.Zone.Name {
+			t.Errorf("zone %d (%s, %d) stands before %s, %d — want people desc, then name",
+				i, prev.Zone.Name, prev.People, cur.Zone.Name, cur.People)
+		}
+	}
+
+	capped, err := svc.Top(t.Context(), viewer.ID, 2)
+	if err != nil {
+		t.Fatalf("Top(limit 2) failed: %v", err)
+	}
+	if !slices.EqualFunc(capped, got[:2], func(a, b ZoneTop) bool {
+		return a.Zone.ID == b.Zone.ID && a.People == b.People
+	}) {
+		t.Errorf("Top(limit 2) = %v, want the first two of %v", zoneIDs(capped), zoneIDs(got))
+	}
+}
+
+func TestTopOnAnEmptyCityIsEmpty(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	svc := New(searchesrepo.New(pool), testDir(t), staticPhotos{})
+	viewer := seedUser(t, pool, testUser{n: 1, gender: entity.GenderMale, pref: entity.GenderPrefAny})
+
+	got, err := svc.Top(t.Context(), viewer.ID, 5)
+	if err != nil {
+		t.Fatalf("Top() failed: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("Top() = %v, want nothing — никто не ищет", got)
+	}
+}
+
+func zoneIDs(top []ZoneTop) []string {
+	out := make([]string, 0, len(top))
+	for _, z := range top {
+		out = append(out, z.Zone.ID)
+	}
+	return out
 }
 
 func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {

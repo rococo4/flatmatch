@@ -89,6 +89,27 @@ func (r *Repo) PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs [
 	return out, nil
 }
 
+func (r *Repo) ActiveZonesVisible(ctx context.Context, viewerID uuid.UUID) ([]ZoneUsers, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT s.zone_id, array_agg(DISTINCT s.user_id) AS user_ids
+		FROM searches s
+		JOIN visible_people($1) vp ON vp = s.user_id
+		WHERE s.status = 'active'
+		GROUP BY s.zone_id`, viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("active zones visible to %s: %w", viewerID, err)
+	}
+	raw, err := pgx.CollectRows(rows, pgx.RowToStructByName[zoneUsersRow])
+	if err != nil {
+		return nil, fmt.Errorf("active zones visible to %s: %w", viewerID, err)
+	}
+	out := make([]ZoneUsers, 0, len(raw))
+	for _, row := range raw {
+		out = append(out, ZoneUsers{ZoneID: row.ZoneID, UserIDs: row.UserIDs})
+	}
+	return out, nil
+}
+
 func (r *Repo) HasActiveIn(ctx context.Context, userID uuid.UUID, zoneIDs []string) (bool, error) {
 	var one int
 	err := r.pool.QueryRow(ctx, `

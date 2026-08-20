@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/service/zones"
 )
 
@@ -17,6 +18,7 @@ const (
 
 type Repository interface {
 	PoolCandidates(ctx context.Context, viewerID uuid.UUID, zoneIDs []string) ([]entity.PoolCandidate, error)
+	ActiveZonesVisible(ctx context.Context, viewerID uuid.UUID) ([]searchesrepo.ZoneUsers, error)
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]entity.Search, error)
 	MarkPoolSeen(ctx context.Context, userID uuid.UUID, zoneID string) error
 }
@@ -47,6 +49,11 @@ type Pool struct {
 	Ranked   bool
 	Sections []Section
 	People   []Person
+}
+
+type ZoneTop struct {
+	Zone   zones.Zone
+	People int
 }
 
 type Counts struct {

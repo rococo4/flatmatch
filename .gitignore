@@ -7,7 +7,7 @@
 
 # Go
 /api/bin/
-# Локальное хранилище фото (photostore), боевое — Yandex Object Storage
+# Локальное хранилище фото (photostore); в проде — docker-том photos
 /api/.data/
 *.test
 *.out

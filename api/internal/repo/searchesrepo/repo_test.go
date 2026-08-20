@@ -380,6 +380,7 @@ func TestActiveZonesVisibleGroupsPeopleByZone(t *testing.T) {
 	twoZones := seedUser(t, pool, 3, "active", "male", "any")
 	otherGender := seedUser(t, pool, 4, "active", "female", "same")
 	blocked := seedUser(t, pool, 5, "active", "male", "any")
+	matched := seedUser(t, pool, 6, "active", "female", "any")
 
 	for _, s := range []struct {
 		user uuid.UUID
@@ -391,6 +392,7 @@ func TestActiveZonesVisibleGroupsPeopleByZone(t *testing.T) {
 		{twoZones, "line-1"},
 		{otherGender, "d-khamovniki"},
 		{blocked, "d-khamovniki"},
+		{matched, "d-khamovniki"},
 	} {
 		if _, err := repo.Create(t.Context(), s.user, testParams(s.zone)); err != nil {
 			t.Fatalf("Create(%s) failed: %v", s.zone, err)
@@ -401,6 +403,7 @@ func TestActiveZonesVisibleGroupsPeopleByZone(t *testing.T) {
 		`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, blocked); err != nil {
 		t.Fatalf("insert block: %v", err)
 	}
+	seedMatch(t, pool, viewer, matched, time.Hour)
 
 	closed, err := repo.Create(t.Context(), mate, testParams("s-sokol"))
 	if err != nil {
@@ -416,7 +419,7 @@ func TestActiveZonesVisibleGroupsPeopleByZone(t *testing.T) {
 	}
 
 	mine := map[uuid.UUID]bool{viewer: true, mate: true, twoZones: true,
-		otherGender: true, blocked: true}
+		otherGender: true, blocked: true, matched: true}
 	got := make(map[string][]uuid.UUID, len(rows))
 	for _, row := range rows {
 		if _, dup := got[row.ZoneID]; dup {
@@ -444,7 +447,7 @@ func TestActiveZonesVisibleGroupsPeopleByZone(t *testing.T) {
 		want[zone] = ids
 	}
 	if !maps.EqualFunc(got, want, slices.Equal) {
-		t.Errorf("ActiveZonesVisible() = %v, want %v — свой поиск, невидимые и закрытые не считаются",
+		t.Errorf("ActiveZonesVisible() = %v, want %v — свой поиск, невидимые, смэтченные и закрытые не считаются",
 			got, want)
 	}
 }

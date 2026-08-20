@@ -7,7 +7,7 @@ Telegram Mini App для поиска со-съёмщика квартиры в 
 Спека продукта — [`CLAUDE.md`](./CLAUDE.md), единственный источник правды.
 Если код расходится со спекой — прав документ.
 
-Продукт собран по §12 целиком: онбординг и модерация, поиски и зонные пулы,
+Код по §12 закрыт, дальше посев (§13): онбординг и модерация, поиски и зонные пулы,
 дорогой лайк и мэтч, точки с квартирами, пуши, свежесть, парсер ТГ-каналов с
 досыпкой, блок с жалобой, src-трекинг и пустые состояния. Живёт на
 [flatmatch.ru](https://flatmatch.ru) (см. «Деплой»). Дальше — §13: посев.
@@ -294,8 +294,10 @@ goose postgres '...' down
 сертификатом от Let's Encrypt (§10). Kubernetes, Redis и очередей нет и не
 планируется.
 
-Доступ — по алиасу из `~/.ssh/config` (ssh слушает нестандартный порт 2222,
-22-й оставлен открытым на случай, если конфиг поедет):
+Доступ — по алиасу из `~/.ssh/config`. sshd слушает и 22, и 2222: в части
+сетей (в том числе в домашней у основателя) исходящий 22 закрыт, поэтому
+ходим на 2222; 22 оставлен как запасной вход с других сетей, если drop-in с
+портом поедет:
 
 ```
 Host flatmatch
@@ -356,11 +358,17 @@ postgres` и кладёт gzip в `/opt/flatmatch/backups/flatmatch-<дата>.s
 0 4 * * * /opt/flatmatch/scripts/backup.sh >> /var/log/flatmatch-backup.log 2>&1
 ```
 
-Восстановление — из того же дампа:
+Восстановление — из того же дампа, в ПУСТУЮ базу (дамп — plain SQL, поверх
+живой схемы он упадёт на первом же объекте), поэтому сначала гасим тех, кто к
+ней подключён:
 
 ```sh
+docker compose stop api parser
+docker compose exec -T postgres dropdb --force -U flatmatch flatmatch
+docker compose exec -T postgres createdb -U flatmatch flatmatch
 gunzip -c backups/flatmatch-2026-08-21.sql.gz \
-  | docker compose exec -T postgres psql -U flatmatch -d flatmatch
+  | docker compose exec -T postgres psql -U flatmatch -d flatmatch -v ON_ERROR_STOP=1
+docker compose start api parser
 ```
 
 ### Что где хранится
@@ -376,11 +384,16 @@ gunzip -c backups/flatmatch-2026-08-21.sql.gz \
 1. Домен A-записью на IP: Caddy выпишет сертификат сам, но только если домен
    уже резолвится.
 2. `curl -fsSL https://get.docker.com | sh`.
-3. `ufw allow 22,2222,80,443`, ssh на 2222, ключ `~/.ssh/flatmatch`.
-4. `mkdir -p /opt/flatmatch`, `scripts/deploy.sh` с локальной машины, затем
+3. ssh: публичный ключ `~/.ssh/flatmatch.pub` в `/root/.ssh/authorized_keys`;
+   `/etc/ssh/sshd_config.d/port.conf` с двумя строками `Port 22` и
+   `Port 2222`, `/etc/ssh/sshd_config.d/hardening.conf` с
+   `PasswordAuthentication no`; `systemctl restart ssh` и проверить вход на
+   2222 ДО того, как закрывать консоль провайдера.
+4. `ufw allow 22,2222,80,443/tcp && ufw enable`.
+5. `mkdir -p /opt/flatmatch`, `scripts/deploy.sh` с локальной машины, затем
    `.env` руками на сервере (шаблон — `.env.example`) и ещё раз
    `docker compose up -d --build`.
-5. Адрес Mini App в BotFather — `https://<домен>`.
+6. Крон бэкапа (строка выше) и адрес Mini App в BotFather — `https://<домен>`.
 
 ## Переменные окружения
 

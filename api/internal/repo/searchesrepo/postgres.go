@@ -95,6 +95,10 @@ func (r *Repo) ActiveZonesVisible(ctx context.Context, viewerID uuid.UUID) ([]Zo
 		FROM searches s
 		JOIN visible_people($1) vp ON vp = s.user_id
 		WHERE s.status = 'active'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM matches m
+		      WHERE m.a_id = least($1::uuid, s.user_id)
+		        AND m.b_id = greatest($1::uuid, s.user_id))
 		GROUP BY s.zone_id`, viewerID)
 	if err != nil {
 		return nil, fmt.Errorf("active zones visible to %s: %w", viewerID, err)

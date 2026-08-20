@@ -123,7 +123,8 @@ mod:r:ban:<id>] [Пропустить mod:r:skip:<id>]])`. Подпись:
 - `scripts/deploy.sh [host]`: хост по умолчанию `flatmatch` (alias из
   ~/.ssh/config); `rsync -az --delete` с исключениями (`.git node_modules .venv
   .dev api/.data web/dist .superpowers .env *.png .claude web/.env.local
-  __pycache__ .pytest_cache`) в `/opt/flatmatch`; затем по ssh `docker compose
+  __pycache__ .pytest_cache backups`; `backups` — серверный каталог дампов,
+  `--delete` без исключения стёр бы его) в `/opt/flatmatch`; затем по ssh `docker compose
   up -d --build && docker image prune -f`; печатает `docker compose ps`.
   `.env` на сервере скрипт НЕ трогает.
 - `scripts/backup.sh` (кладётся на сервер тем же rsync): `docker compose exec

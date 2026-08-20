@@ -13,7 +13,7 @@ cd "$ROOT"
 say() { printf '\033[1;34m▸\033[0m %s\n' "$*"; }
 ok()  { printf '\033[1;32m✓\033[0m %s\n' "$*"; }
 
-for name in api web tunnel; do
+for name in api web tunnel parser; do
   pidfile="$RUN_DIR/$name.pid"
   [ -f "$pidfile" ] || continue
 
@@ -28,6 +28,8 @@ for name in api web tunnel; do
 done
 
 # Подчищаем то, что осталось от запусков мимо скрипта.
+stray="$(lsof -t "$RUN_DIR/parser.log" 2>/dev/null)"
+[ -n "$stray" ] && kill $stray 2>/dev/null && ok "лишний parser убран"
 pkill -f "cloudflared tunnel --url http://localhost:5173" 2>/dev/null && ok "лишний cloudflared убран"
 for port in 8080 5173; do
   pids="$(lsof -ti ":$port" 2>/dev/null)"

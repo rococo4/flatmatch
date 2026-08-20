@@ -116,6 +116,24 @@ done
 grep -q '"msg":"bot polling started"' "$RUN_DIR/api.log" 2>/dev/null \
   || die "api не начал опрашивать бота, смотри .dev/api.log"
 
+# --- parser ----------------------------------------------------------------
+# Локально — из venv, а не из compose: база на localhost, фото и справочник
+# зон берутся прямо из репо. Без venv или ключа LLM молча пропускаем — стенд
+# без парсера полноценен, просто лента не пополняется сама.
+if [ -x "$ROOT/parser/.venv/bin/python" ] && grep -q '^ANTHROPIC_API_KEY=.\+' "$ROOT/.env"; then
+  say "запускаю parser"
+  # venv-python в ps выглядит как системный Python, по имени его не найти —
+  # ищем по открытому логу: его держат только процессы парсера этого стенда.
+  old="$(lsof -t "$RUN_DIR/parser.log" 2>/dev/null)"; [ -n "$old" ] && kill $old 2>/dev/null
+  (cd "$ROOT/parser" && set -a && . "$ROOT/.env" && set +a \
+    && DATABASE_URL="postgres://${POSTGRES_USER:-flatmatch}:${POSTGRES_PASSWORD:-flatmatch}@localhost:5432/${POSTGRES_DB:-flatmatch}?sslmode=disable" \
+       PHOTO_DIR="$ROOT/api/.data/photos" ZONES_PATH="$ROOT/api/internal/service/zones/moscow.json" \
+       nohup .venv/bin/python main.py >"$RUN_DIR/parser.log" 2>&1 & echo $! >"$RUN_DIR/parser.pid")
+  ok "parser запущен (лог .dev/parser.log)"
+else
+  say "parser пропущен: нет parser/.venv или ANTHROPIC_API_KEY в .env"
+fi
+
 bot="$(grep -o '"username":"[^"]*"' "$RUN_DIR/api.log" | head -1 | cut -d'"' -f4)"
 ok "api слушает :8080, бот $bot"
 
@@ -129,7 +147,7 @@ cat <<EOF
   @BotFather → /mybots → Bot Settings → Configure Mini App → этот URL.
   Кнопка /start и кнопки пушей работают и без этого.
 
-  Логи:      .dev/{api,web,tunnel}.log
+  Логи:      .dev/{api,web,tunnel,parser}.log
   Остановить: scripts/dev-down.sh
 
 EOF

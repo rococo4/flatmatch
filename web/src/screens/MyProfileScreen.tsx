@@ -247,44 +247,57 @@ export function MyProfileScreen({
           </div>
         </div>
 
-        {/* Пустая секция не рисуется: «МОИ МЭТЧИ · 0» — шум, а не информация. */}
-        {matches.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={S.sectionTitle}>МОИ МЭТЧИ · {matches.length}</span>
-            {matches.map((m) => (
-              <div
-                key={m.id}
-                style={{
-                  ...L.block,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  cursor: 'pointer',
-                }}
-                onClick={() => onOpenMatch?.(m.id)}
-              >
-                <Avatar name={m.name} size={44} src={m.photoUrl} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                  <span style={{ fontSize: 15, fontWeight: 590 }}>
-                    {m.name}, {m.age}
-                    {m.context ? ` · ${m.context}` : ''}
-                  </span>
-                  <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{m.when}</span>
-                </div>
-                <span
-                  style={{
-                    marginLeft: 'auto',
-                    fontSize: 17,
-                    color: 'var(--tg-theme-hint-color)',
-                    lineHeight: 1,
-                  }}
-                >
-                  ›
+        {/* Счётчика у пустой секции нет: «· 0» — шум, а строка под ней говорит
+            то же самое словами и заодно называет ближайший путь к первому
+            мэтчу (§6, пустые состояния). */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span style={S.sectionTitle}>
+            МОИ МЭТЧИ{matches.length > 0 ? ` · ${matches.length}` : ''}
+          </span>
+          {matches.length === 0 && (
+            <span
+              style={{
+                fontSize: 14,
+                color: 'var(--tg-theme-subtitle-text-color)',
+                textWrap: 'pretty',
+              }}
+            >
+              Мэтчей пока нет — ответный лайк на входящий даёт первый
+            </span>
+          )}
+          {matches.map((m) => (
+            <div
+              key={m.id}
+              style={{
+                ...L.block,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                cursor: 'pointer',
+              }}
+              onClick={() => onOpenMatch?.(m.id)}
+            >
+              <Avatar name={m.name} size={44} src={m.photoUrl} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 590 }}>
+                  {m.name}, {m.age}
+                  {m.context ? ` · ${m.context}` : ''}
                 </span>
+                <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{m.when}</span>
               </div>
-            ))}
-          </div>
-        )}
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 17,
+                  color: 'var(--tg-theme-hint-color)',
+                  lineHeight: 1,
+                }}
+              >
+                ›
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

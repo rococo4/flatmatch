@@ -18,6 +18,7 @@ import type {
   PoolPersonDTO,
   PoolSectionDTO,
   Questionnaire,
+  ReportReason,
   Restriction,
   SearchParamsNoZone,
   Term,
@@ -141,6 +142,16 @@ const CLOSE_REASON_LABEL: Record<CloseReason, string> = {
   found_here: 'нашёл здесь',
   found_elsewhere: 'нашёл в другом месте',
   changed_mind: 'передумал',
+};
+
+/** Причины жалобы (§5). Порядок — от частого к редкому, «Другое» последним. */
+const REPORT_REASONS: ReportReason[] = ['spam', 'scam', 'abuse', 'other'];
+
+const REPORT_REASON_LABEL: Record<ReportReason, string> = {
+  spam: 'Спам/реклама',
+  scam: 'Мошенничество',
+  abuse: 'Оскорбления/угрозы',
+  other: 'Другое',
 };
 
 /** Подписи строк блока «ПО ПАРАМЕТРАМ» на экране мэтча (§6). */
@@ -377,6 +388,11 @@ export function sectionTitle(id: PoolSectionDTO['id'], n: number): string {
  */
 export function closeReasonLabel(reason?: CloseReason): string {
   return reason ? CLOSE_REASON_LABEL[reason] : '';
+}
+
+/** Чипы шторки жалобы: код едет на сервер, метка стоит на экране (§5). */
+export function reportReasonOptions(): { value: ReportReason; label: string }[] {
+  return REPORT_REASONS.map((value) => ({ value, label: REPORT_REASON_LABEL[value] }));
 }
 
 /* ── Точки (§2.2, §6) ───────────────────────────────────────────────────── */

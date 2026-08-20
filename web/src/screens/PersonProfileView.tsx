@@ -17,9 +17,18 @@ import {
   setMainButtonParams,
 } from '@telegram-apps/sdk-react';
 
-import { ApiError, fetchPerson, postLike, type PersonProfileDTO } from '../api/client';
+import {
+  ApiError,
+  blockPerson,
+  fetchPerson,
+  postLike,
+  reportPerson,
+  type PersonProfileDTO,
+  type ReportReason,
+} from '../api/client';
 import { fieldLabel, occupationLabel, untilTime } from '../api/format';
 import { launchedByTelegram } from '../telegram/mockEnv';
+import { BlockPersonSheet, ReportPersonSheet } from './EdgeStates';
 import { PersonProfileScreen, type LikeAction, type MatchRow } from './PersonProfileScreen';
 
 /** Слотов дорогих лайков на окне 24ч (§2.3). Сервер шлёт остаток, потолок знает спека. */
@@ -71,6 +80,7 @@ export function PersonProfileView({
   onLiked,
   onMatched,
   onNeedSearch,
+  onBlocked,
 }: {
   userId: string;
   /** Пул, из которого открыт профиль: и строка «пересеклись», и контекст лайка. */
@@ -94,6 +104,11 @@ export function PersonProfileView({
   onMatched?: (matchId: string) => void;
   /** Лайк без активного поиска: продукт просит мини-форму поиска, не отказ. */
   onNeedSearch?: (message: string) => void;
+  /**
+   * Заблокирован (§5). Смотреть на экране больше нечего: цель стала невидимой,
+   * и повторный запрос профиля ответил бы 404 — уводит оболочка.
+   */
+  onBlocked?: () => void;
 }) {
   const [person, setPerson] = useState<PersonProfileDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +116,13 @@ export function PersonProfileView({
   /** Отказ сервера под кнопкой: лимит, непроверенная анкета, сеть. */
   const [refusal, setRefusal] = useState<string | null>(null);
   const [native, setNative] = useState(false);
+  /** Открытая шторка жалобы или блока (§5). */
+  const [sheet, setSheet] = useState<'report' | 'block' | null>(null);
+  /** Жалоба ушла: шторка меняется на «Спасибо, разберёмся». */
+  const [reported, setReported] = useState(false);
+  const [sheetBusy, setSheetBusy] = useState(false);
+  /** Отказ жалобы или блока: он живёт в шторке, а не под кнопкой лайка. */
+  const [sheetError, setSheetError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +175,46 @@ export function PersonProfileView({
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * Жалоба (§5). Контекст — то место, откуда открыт профиль: модератору без
+   * него непонятно, где эти двое встретились. Нет контекста — уходит без него.
+   */
+  const report = async (reason: ReportReason) => {
+    if (sheetBusy) return;
+    setSheetBusy(true);
+    setSheetError(null);
+    try {
+      await reportPerson(userId, reason, { zoneId, pointId });
+      setReported(true);
+    } catch (e: unknown) {
+      setSheetError(message(e));
+    } finally {
+      setSheetBusy(false);
+    }
+  };
+
+  /** Блокировка (§5): обоюдная невидимость, отменить её нечем. */
+  const block = async () => {
+    if (sheetBusy) return;
+    setSheetBusy(true);
+    setSheetError(null);
+    try {
+      await blockPerson(userId);
+      setSheet(null);
+      onBlocked?.();
+    } catch (e: unknown) {
+      setSheetError(message(e));
+    } finally {
+      setSheetBusy(false);
+    }
+  };
+
+  const openSheet = (which: 'report' | 'block') => {
+    setSheetError(null);
+    if (which === 'report') setReported(false);
+    setSheet(which);
   };
 
   // Свежий обработчик в ref: подписка на MainButton ставится один раз, а like
@@ -215,20 +277,46 @@ export function PersonProfileView({
   }
 
   return (
-    <PersonProfileScreen
-      name={person.name}
-      age={person.age}
-      occupation={occupationLabel(person.occupation)}
-      photoUrl={person.photo_url || undefined}
-      zone={person.context_zone?.name}
-      point={person.context_point?.label}
-      matches={toRows(person)}
-      matchesTotal={HABIT_FIELDS}
-      about={person.about}
-      like={action}
-      onBack={onBack}
-      onLike={() => void like()}
-    />
+    <>
+      <PersonProfileScreen
+        name={person.name}
+        age={person.age}
+        occupation={occupationLabel(person.occupation)}
+        photoUrl={person.photo_url || undefined}
+        zone={person.context_zone?.name}
+        point={person.context_point?.label}
+        matches={toRows(person)}
+        matchesTotal={HABIT_FIELDS}
+        about={person.about}
+        like={action}
+        onBack={onBack}
+        onLike={() => void like()}
+        onReport={() => openSheet('report')}
+        onBlock={() => openSheet('block')}
+      />
+      {sheet === 'report' && (
+        <ReportPersonSheet
+          name={person.name}
+          sent={reported}
+          busy={sheetBusy}
+          error={sheetError}
+          onSend={(reason) => void report(reason)}
+          // «Заблокировать» после жалобы ведёт в ту же шторку с
+          // подтверждением: невидимость необратима, и спросить надо один раз.
+          onBlock={() => openSheet('block')}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === 'block' && (
+        <BlockPersonSheet
+          name={person.name}
+          busy={sheetBusy}
+          error={sheetError}
+          onCancel={() => setSheet(null)}
+          onBlock={() => void block()}
+        />
+      )}
+    </>
   );
 }
 

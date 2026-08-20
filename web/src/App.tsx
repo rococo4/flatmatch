@@ -28,9 +28,11 @@ import {
   fetchPoint,
   fetchPointsMine,
   fetchSearches,
+  fetchTopZones,
   fetchZones,
   pointShareUrl,
   postLike,
+  postSource,
   reactivateSearch,
   restorePoint,
   startParam,
@@ -45,6 +47,7 @@ import {
   type Profile,
   type SearchResponse,
   type StartTarget,
+  type TopZoneDTO,
   type Zone,
 } from './api/client';
 import {
@@ -77,6 +80,7 @@ import { ZonePoolView } from './screens/ZonePoolView';
 import { PersonProfileView } from './screens/PersonProfileView';
 import { MatchView } from './screens/MatchView';
 import { FlatPoolView } from './screens/FlatPoolView';
+import { HomePointView } from './screens/HomePointView';
 import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
 import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
 import { MyProfileScreen, type FixTarget, type MyMatch } from './screens/MyProfileScreen';
@@ -91,6 +95,7 @@ type View =
   | 'person'
   | 'match'
   | 'flatPool'
+  | 'homePoint'
   | 'incoming'
   | 'flatForm'
   | 'homeForm'
@@ -212,6 +217,15 @@ export function App() {
   const [poolZone, setPoolZone] = useState<string | null>(null);
   /** Открытая квартира: её карточка и пул грузит FlatPoolView. */
   const [flatPoint, setFlatPoint] = useState<string | null>(null);
+  /** Открытая карточка «к себе»: пула у неё нет, только витрина и отклик (§2.2). */
+  const [homePoint, setHomePoint] = useState<string | null>(null);
+  /**
+   * «Где уже ищут» для пустой ленты (§6).
+   *
+   * Грузится один раз и только когда пусто: топ зон одинаков для всей выдачи,
+   * а тратить запрос на каждую непустую ленту незачем.
+   */
+  const [topZones, setTopZones] = useState<TopZoneDTO[] | null>(null);
   /**
    * Остаток дорогих лайков для подписи на карточке «к себе».
    *
@@ -476,6 +490,14 @@ export function App() {
       setStartTarget(null);
       return;
     }
+    // Ссылка посева никуда не ведёт — она только помечает первое касание, и
+    // помечать его надо в том числе у пришедшего в draft: он и есть тот, кого
+    // привёл посев. Отказ переживаем молча: трекинг не гейт на входе.
+    if (startTarget.kind === 'source') {
+      void postSource(startTarget.code).catch(() => undefined);
+      setStartTarget(null);
+      return;
+    }
     // Остальные цели ведут в продукт, а незаполненная анкета его не показывает.
     if (state.profile.status === 'draft') {
       setStartTarget(null);
@@ -484,16 +506,20 @@ export function App() {
 
     switch (startTarget.kind) {
       case 'point': {
-        // Тип решает, куда вести: у квартиры есть свой экран, а карточка «к
-        // себе» живёт в ленте, отдельного экрана у неё нет (§2.2). Отказ
-        // переживаем молча — точку могли закрыть или она ещё на проверке, и
-        // приложение всё равно открывается, просто с обычного входа.
+        // Тип решает, куда вести: у квартиры экран с пулом, у «к себе» — та же
+        // карточка, что в ленте, без пула (§2.2). Отказ переживаем молча —
+        // точку могли закрыть или она ещё на проверке, и приложение всё равно
+        // открывается, просто с обычного входа.
         const pointId = startTarget.id;
         void fetchPoint(pointId)
           .then((point) => {
-            if (point.type !== 'flat') return;
-            setFlatPoint(point.id);
-            setView('flatPool');
+            if (point.type === 'flat') {
+              setFlatPoint(point.id);
+              setView('flatPool');
+              return;
+            }
+            setHomePoint(point.id);
+            setView('homePoint');
           })
           .catch(() => undefined);
         break;
@@ -530,6 +556,26 @@ export function App() {
     }
     setStartTarget(null);
   }, [startTarget, state, searches, openLookForm, toTab]);
+
+  /**
+   * Пустая зона (§6): ни людей в промо, ни точек — тогда и только тогда ленте
+   * нужен топ живых зон. Считается прямо здесь, а не в экране: от него зависит
+   * запрос, а экран о запросах не знает.
+   */
+  const emptyZone =
+    feed.mode === 'results' &&
+    feed.data !== null &&
+    feed.data.points.length === 0 &&
+    feed.data.promo.people === 0;
+
+  useEffect(() => {
+    if (!emptyZone || topZones) return;
+    void fetchTopZones(5)
+      .then(setTopZones)
+      .catch(() => {
+        // Без топа пустая лента остаётся с промо-блоком — этого хватает.
+      });
+  }, [emptyZone, topZones]);
 
   if (state.kind === 'loading') return <Centered>Секунду…</Centered>;
   if (state.kind === 'failed') return <Failure error={state.error} />;
@@ -945,6 +991,7 @@ export function App() {
             likesRemaining={likesRemaining ?? undefined}
             myUserId={profile.id}
             respondedPoints={respondedPoints}
+            topZones={topZones ?? undefined}
             onEditParams={() => openLookForm(feed.draft)}
             onJoinPool={() => void joinPool()}
             onOpenPool={() => openZonePool(promo.zone.id)}
@@ -959,6 +1006,9 @@ export function App() {
               point.author &&
               openPerson({ userId: point.author.user_id, pointId: point.id, back: 'tab' })
             }
+            // «Где уже ищут» из пустой ленты: форма просмотра с этой зоной —
+            // подписки тап не создаёт, смотреть можно без неё (§3).
+            onPickZone={(zoneId) => openLookForm({ ...EMPTY_DRAFT, zoneId })}
           />
         );
       }
@@ -1093,6 +1143,14 @@ export function App() {
             }}
             onMatched={openMatch}
             onNeedSearch={(serverMessage) => askSearchForLike(target, serverMessage)}
+            // Заблокированный стал невидимым: профиль по нему ответил бы 404,
+            // а списки, где он стоял, обязаны перечитаться (§5).
+            onBlocked={() => {
+              setView(target.back);
+              reloadLikes();
+              reloadPoints();
+              void refreshFeed();
+            }}
           />
         );
       }
@@ -1124,6 +1182,29 @@ export function App() {
             }}
             onLeft={back}
             onShare={sharePoint}
+          />
+        );
+      }
+      case 'homePoint': {
+        if (!homePoint) return tabScreen();
+        const pointId = homePoint;
+        return (
+          <HomePointView
+            key={pointId}
+            pointId={pointId}
+            likesRemaining={likesRemaining ?? undefined}
+            myUserId={profile.id}
+            respondedPoints={respondedPoints}
+            matchedAuthors={matches.map((m) => m.peer.user_id)}
+            // Отказ отклика оболочка кладёт в состояние ленты — тем же путём,
+            // что и с карточки в выдаче: жест и обработчик у них один.
+            error={feed.error}
+            onBack={back}
+            onWantRoom={(point) => void wantRoom(point)}
+            onOpenProfile={(point) =>
+              point.author &&
+              openPerson({ userId: point.author.user_id, pointId: point.id, back: 'homePoint' })
+            }
           />
         );
       }

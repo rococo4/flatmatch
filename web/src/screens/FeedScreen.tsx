@@ -3,7 +3,7 @@
    Сохранение поиска живёт только в промо-блоке людей.
    Микрокопия дословная. */
 import type { CSSProperties } from 'react';
-import type { PointDTO } from '../api/client';
+import type { PointDTO, TopZoneDTO } from '../api/client';
 import {
   addedLabel,
   dayMonth,
@@ -102,6 +102,7 @@ export function FeedScreen({
   myUserId,
   respondedPoints,
   matchedAuthors,
+  topZones,
   onEditParams,
   onJoinPool,
   onOpenPool,
@@ -110,6 +111,7 @@ export function FeedScreen({
   onOpenFlat,
   onWantRoom,
   onOpenProfile,
+  onPickZone,
 }: {
   zone: string;
   params: string[]; // текущие фильтры просмотра, только чтение
@@ -125,6 +127,8 @@ export function FeedScreen({
   respondedPoints?: string[];
   /** Авторы «к себе», с которыми уже мэтч: карточка остаётся, кнопка гаснет. */
   matchedAuthors?: string[];
+  /** «Где уже ищут» — топ живых зон, нужен только пустой выдаче (§6). */
+  topZones?: TopZoneDTO[];
   onEditParams?: () => void;
   onJoinPool?: () => void;
   onOpenPool?: () => void;
@@ -137,7 +141,13 @@ export function FeedScreen({
   onWantRoom?: (point: PointDTO) => void;
   /** Тап по строке автора → полный профиль с анкетой и «о себе». */
   onOpenProfile?: (point: PointDTO) => void;
+  /** Строка «Где уже ищут»: смотрим ту зону — форма просмотра с ней внутри. */
+  onPickZone?: (zoneId: string) => void;
 }) {
+  // Пусто и по людям, и по квартирам — «растём из района в район» (§6). Одной
+  // пустоты по точкам мало: пул людей в зоне и есть главный ответ ленты.
+  const empty = points.length === 0 && promo.peopleCount === 0;
+
   return (
     <div style={L.screen}>
       <div style={L.header}>
@@ -180,6 +190,8 @@ export function FeedScreen({
               {error}
             </span>
           )}
+          {empty && <EmptyZoneNote />}
+
           <PoolPromoBlock
             data={promo}
             onJoin={onJoinPool}
@@ -187,7 +199,9 @@ export function FeedScreen({
             onFreeSlot={onFreeSlot}
           />
 
-          {points.length === 0 ? (
+          {empty ? (
+            <TopZonesBlock zones={topZones ?? []} onPick={onPickZone} />
+          ) : points.length === 0 ? (
             <PointsSoon />
           ) : (
             points.map((p) =>
@@ -213,6 +227,67 @@ export function FeedScreen({
             )
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Пустая зона (§6): ни людей в промо, ни квартир.
+ *
+ * Сначала честная строка, а следом — обычное промо: войти первым в пул своей
+ * зоны важнее, чем уйти в чужую, и звать в чужую вместо своей нельзя.
+ */
+function EmptyZoneNote() {
+  return (
+    <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
+      Пусто — растём из района в район
+    </span>
+  );
+}
+
+/**
+ * «Где уже ищут» — топ живых зон по числу видимых ищущих.
+ *
+ * Пустой топ не рисуется вовсе: строка «нигде никого» не помогает никому, а
+ * промо-блок выше и так зовёт войти первым.
+ */
+function TopZonesBlock({ zones, onPick }: { zones: TopZoneDTO[]; onPick?: (zoneId: string) => void }) {
+  if (zones.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={S.sectionTitle}>ГДЕ УЖЕ ИЩУТ</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {zones.map((z) => (
+          <div
+            key={z.id}
+            onClick={onPick ? () => onPick(z.id) : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '11px 12px',
+              borderRadius: 11,
+              background: 'var(--card-bg)',
+              border: '1px solid var(--sep)',
+              cursor: onPick ? 'pointer' : 'default',
+            }}
+          >
+            <span style={{ fontSize: 15, fontWeight: 510 }}>
+              {z.name} · {z.people}
+            </span>
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 17,
+                lineHeight: 1,
+                color: 'var(--tg-theme-hint-color)',
+              }}
+            >
+              ›
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -328,8 +403,10 @@ function FlatPointCard({
 }
 
 /** Сосед к себе: пула нет. Счётчик откликов + дорогой лайк автору (filled).
- *  Тап по строке человека — полный профиль (тот же экран, что из пула). */
-function HomePointCard({
+ *  Тап по строке человека — полный профиль (тот же экран, что из пула).
+ *  Экспортируется ради диплинка `point_<id>`: карточка на своём экране обязана
+ *  быть той же самой, иначе кнопка пуша ведёт в другой продукт (§6). */
+export function HomePointCard({
   point,
   likesRemaining,
   mine,

@@ -79,6 +79,23 @@ const L = {
     borderRadius: 11,
     background: both ? 'var(--verdict-ok-bg)' : 'var(--app-bg)',
   }),
+  /** Тихая строка действий: жалоба и блок не соревнуются с дорогим лайком. */
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 2,
+  } as CSSProperties,
+  quiet: {
+    border: 'none',
+    background: 'none',
+    font: 'inherit',
+    fontSize: 13,
+    color: 'var(--tg-theme-hint-color)',
+    cursor: 'pointer',
+    padding: 0,
+  } as CSSProperties,
   fixed: {
     position: 'sticky',
     bottom: 0,
@@ -136,6 +153,8 @@ export function PersonProfileScreen({
   like,
   onBack,
   onLike,
+  onReport,
+  onBlock,
 }: {
   name: string;
   age: number;
@@ -161,6 +180,9 @@ export function PersonProfileScreen({
   like: LikeAction;
   onBack?: () => void;
   onLike?: () => void;
+  /** Жалоба и блок (§5) — тихой строкой под контентом, а не кнопками наравне. */
+  onReport?: () => void;
+  onBlock?: () => void;
 }) {
   const bothCount = matches.filter((m) => m.tone === 'both').length;
 
@@ -257,6 +279,18 @@ export function PersonProfileScreen({
           <div style={L.block}>
             <span style={S.blockTitle}>О себе</span>
             <span style={{ fontSize: 14, lineHeight: 1.45, textWrap: 'pretty' }}>{about}</span>
+          </div>
+        )}
+
+        {(onReport || onBlock) && (
+          <div style={L.actions}>
+            <button type="button" style={L.quiet} onClick={onReport}>
+              Пожаловаться
+            </button>
+            <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>·</span>
+            <button type="button" style={L.quiet} onClick={onBlock}>
+              Заблокировать
+            </button>
           </div>
         )}
       </div>

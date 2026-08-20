@@ -98,6 +98,20 @@ export interface ZoneDirectory {
 }
 
 /**
+ * Строка «Где уже ищут» из пустой ленты (§6).
+ *
+ * `people` — сколько ВИДИМЫХ смотрящему людей с активным поиском пересекают
+ * зону, поэтому счётчик персональный, как и все остальные. Зон с нулём в
+ * ответе нет: звать в пустую зону из пустой зоны незачем.
+ */
+export interface TopZoneDTO {
+  id: string;
+  name: string;
+  name_in: string;
+  people: number;
+}
+
+/**
  * Зона в ответах поисков и пулов — только имена и склонения.
  *
  * Урезана намеренно: множество станций там не нужно, а гонять его в каждом
@@ -747,6 +761,21 @@ export function submitProfile(): Promise<Profile> {
 }
 
 /**
+ * Откуда человек пришёл: код из `startapp=src_<код>` (§13, посев).
+ *
+ * Сервер запишет его, только если источника ещё нет: побеждает ПЕРВОЕ касание,
+ * поэтому звать можно на каждом запуске — повтор с другим кодом он молча
+ * игнорирует. Отказ ничего не ломает: трекинг посева не гейт на входе.
+ */
+export function postSource(source: string): Promise<void> {
+  return requestNoContent('/api/v1/me/source', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source }),
+  });
+}
+
+/**
  * Кэш справочника зон.
  *
  * Хранится именно промис, а не разобранный ответ: два параллельных вызова
@@ -755,6 +784,16 @@ export function submitProfile(): Promise<Profile> {
  * оставила бы пикер пустым до перезапуска приложения.
  */
 let zonesCache: Promise<ZoneDirectory> | null = null;
+
+/**
+ * Топ живых зон для пустой ленты: «Где уже ищут» (§6).
+ *
+ * Не кэшируется в отличие от справочника: это счётчики людей, а не словарь, и
+ * показываются они ровно там, где своя зона оказалась пустой.
+ */
+export function fetchTopZones(limit = 5): Promise<TopZoneDTO[]> {
+  return request<{ zones: TopZoneDTO[] }>(`/api/v1/zones/top?limit=${limit}`).then((r) => r.zones);
+}
 
 /** Справочник зон целиком. Второй вызов запроса не делает. */
 export function fetchZones(): Promise<ZoneDirectory> {
@@ -954,6 +993,16 @@ let botUsername = '';
 const POINT_START_PARAM = 'point_';
 const POOL_START_PARAM = 'pool_';
 const MATCH_START_PARAM = 'match_';
+const SOURCE_START_PARAM = 'src_';
+
+/**
+ * Код источника посева: `?startapp=src_hsetndr`.
+ *
+ * Тот же набор, что проверяет сервер, — иначе кривая ссылка из чужого поста
+ * стоила бы приложению 400 на входе. Не подошёл — цели просто нет, вход
+ * обычный: трекинг не повод не пустить человека внутрь.
+ */
+const SOURCE_CODE = /^[a-z0-9_]{1,32}$/;
 
 /** Куда открыть приложение по диплинку. */
 export type StartTarget =
@@ -964,7 +1013,9 @@ export type StartTarget =
   | { kind: 'feed' }
   | { kind: 'photo' }
   | { kind: 'about' }
-  | { kind: 'mine' };
+  | { kind: 'mine' }
+  /** Ссылка посева: никуда не ведёт, только помечает первое касание. */
+  | { kind: 'source'; code: string };
 
 /**
  * Ссылка «Позвать в пул — поделиться в чат»: открывает у гостя карточку точки.
@@ -1025,6 +1076,10 @@ function parseStartParam(raw?: string): StartTarget | null {
     const id = raw.slice(MATCH_START_PARAM.length);
     return id ? { kind: 'match', id } : null;
   }
+  if (raw.startsWith(SOURCE_START_PARAM)) {
+    const code = raw.slice(SOURCE_START_PARAM.length);
+    return SOURCE_CODE.test(code) ? { kind: 'source', code } : null;
+  }
   switch (raw) {
     case 'incoming':
       return { kind: 'incoming' };
@@ -1057,6 +1112,53 @@ export function fetchPerson(id: string, ctx?: MeetingContext): Promise<PersonPro
   return request<PersonProfileDTO>(
     `/api/v1/people/${encodeURIComponent(id)}${query ? `?${query}` : ''}`,
   );
+}
+
+/** Причины жалобы — коды провода; русские чипы собирает api/format.ts. */
+export type ReportReason = 'spam' | 'scam' | 'abuse' | 'other';
+
+/**
+ * Откуда пожаловались: пул, точка или мэтч — модератору это половина разбора.
+ *
+ * Все три взаимоисключимы и все три необязательны: жалоба из места, которого
+ * экран не знает, уходит без контекста, а не с выдуманным.
+ */
+export interface ReportContext {
+  zoneId?: string;
+  pointId?: string;
+  matchId?: string;
+}
+
+/**
+ * Блокировка (§5): невидимость обоюдная и немедленная.
+ *
+ * Разблокировки нет ни в API, ни в UI. После вызова профиль цели отвечает тем
+ * же 404, что и невидимый по полу, — экрану остаётся уйти назад, а не
+ * показывать отказ.
+ */
+export function blockPerson(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/people/${encodeURIComponent(id)}/block`, { method: 'POST' });
+}
+
+/**
+ * Жалоба модератору (§5). Повтор той же пары — тот же 204 без новой карточки.
+ *
+ * Блокировки за собой НЕ несёт: заблокировать предлагается отдельной кнопкой
+ * после отправки — иногда хватает разбора, а иногда нужно и то и другое.
+ */
+export function reportPerson(id: string, reason: ReportReason, ctx?: ReportContext): Promise<void> {
+  const context = ctx?.zoneId
+    ? { zone_id: ctx.zoneId }
+    : ctx?.pointId
+      ? { point_id: ctx.pointId }
+      : ctx?.matchId
+        ? { match_id: ctx.matchId }
+        : undefined;
+  return requestNoContent(`/api/v1/people/${encodeURIComponent(id)}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(context ? { reason, context } : { reason }),
+  });
 }
 
 /**

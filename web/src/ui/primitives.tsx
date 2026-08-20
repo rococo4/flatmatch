@@ -264,7 +264,18 @@ export function PersonRow({
 }
 
 /** Счётчик пула точки. hint = «увидишь после входа» у квартир с рынка. */
-export function PoolCount({ n, kind, hint }: { n: number; kind: CardKind; hint?: string }) {
+export function PoolCount({
+  n,
+  kind,
+  hint,
+  sep = '—',
+}: {
+  n: number;
+  kind: CardKind;
+  hint?: string;
+  /** Разделитель перед подсказкой: тире у обещания, точка у состояния (§6). */
+  sep?: string;
+}) {
   return (
     <div
       style={{
@@ -286,7 +297,7 @@ export function PoolCount({ n, kind, hint }: { n: number; kind: CardKind; hint?:
       />
       <span>
         <b style={{ color: 'var(--tg-theme-text-color)', fontWeight: 510 }}>в пуле {n}</b>
-        {hint ? ` — ${hint}` : ''}
+        {hint ? ` ${sep} ${hint}` : ''}
       </span>
     </div>
   );

@@ -348,15 +348,25 @@ export function FlatPoolScreen({
 
         {members === null ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <PoolCount n={poolCount} kind="flat" hint="увидишь после входа" />
             {/* В скрытую голосами квартиру не войти: сервер пускает только в
-                активную. Кнопка на паузе обещала бы вход и получила бы 404. */}
-            {!flat.gone && (
-              <PoolEntryButton
-                label="Интересно — войти в пул"
-                caption="Вход бесплатный и безлимитный"
-                onClick={busy ? undefined : onEnter}
+                активную. Кнопка на паузе обещала бы вход и получила бы 404,
+                поэтому вместо неё — строка о том, почему входа нет (§6). */}
+            {flat.gone ? (
+              <PoolCount
+                n={poolCount}
+                kind="flat"
+                sep="·"
+                hint="вход закрыт, пока квартиру не подтвердят"
               />
+            ) : (
+              <>
+                <PoolCount n={poolCount} kind="flat" hint="увидишь после входа" />
+                <PoolEntryButton
+                  label="Интересно — войти в пул"
+                  caption="Вход бесплатный и безлимитный"
+                  onClick={busy ? undefined : onEnter}
+                />
+              </>
             )}
           </div>
         ) : (

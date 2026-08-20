@@ -1,10 +1,13 @@
 /* Пограничные состояния — §6 / §2.3.
    1) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
-   2) шторка закрытия поиска с причиной
-   3) свежесть точки (спит до шага 7)
-   4) гейт второго «живу» в форме «к себе» */
+   2) шторки блокировки и жалобы (§5)
+   3) шторка закрытия поиска с причиной
+   4) свежесть точки (спит до шага 7)
+   5) гейт второго «живу» в форме «к себе» */
+import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { CloseReason } from '../api/client';
+import type { CloseReason, ReportReason } from '../api/client';
+import { reportReasonOptions } from '../api/format';
 import { S } from '../ui/primitives';
 
 const E = {
@@ -79,6 +82,30 @@ const E = {
     color: 'var(--tg-theme-destructive-text-color)',
     cursor: 'pointer',
   } as CSSProperties,
+  /** Чип причины жалобы: выбранный обведён акцентом, а не залит. */
+  reasonChip: (picked: boolean): CSSProperties => ({
+    padding: '9px 12px',
+    borderRadius: 10,
+    border: picked ? '1.5px solid var(--tg-theme-button-color)' : '1px solid var(--sep)',
+    background: picked ? 'var(--chip-bg)' : 'var(--app-bg)',
+    font: 'inherit',
+    fontSize: 14,
+    fontWeight: 510,
+    color: picked ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
+    cursor: 'pointer',
+  }),
+  send: (disabled: boolean): CSSProperties => ({
+    flex: '1 1 0',
+    padding: 13,
+    border: 'none',
+    borderRadius: 11,
+    background: disabled ? 'var(--chip-bg)' : 'var(--tg-theme-button-color)',
+    font: 'inherit',
+    fontSize: 15,
+    fontWeight: 590,
+    color: disabled ? 'var(--tg-theme-hint-color)' : 'var(--tg-theme-button-text-color)',
+    cursor: disabled ? 'default' : 'pointer',
+  }),
 };
 
 /**
@@ -122,6 +149,136 @@ export function LeavePoolSheet({
         </button>
         <button type="button" style={E.leave} onClick={onLeave}>
           Выйти
+        </button>
+      </div>
+    </SheetShell>
+  );
+}
+
+/**
+ * Блокировка человека (§5).
+ *
+ * Про необратимость сказано прямо в шторке: разблокировки в продукте нет ни
+ * кнопкой, ни ручкой API, и узнавать об этом после тапа человек не должен.
+ */
+export function BlockPersonSheet({
+  name,
+  busy,
+  error,
+  onCancel,
+  onBlock,
+}: {
+  name: string;
+  busy?: boolean;
+  /** Отказ сервера: шторка остаётся на месте, чтобы тап можно было повторить. */
+  error?: string | null;
+  onCancel?: () => void;
+  onBlock?: () => void;
+}) {
+  return (
+    <SheetShell onDismiss={onCancel}>
+      <span style={E.grabber} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
+          Заблокировать {name}?
+        </span>
+        <span
+          style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)', textWrap: 'pretty' }}
+        >
+          Вы перестанете видеть друг друга везде — в пулах, лайках и пушах. Отменить нельзя.
+        </span>
+      </div>
+      {error && (
+        <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" style={E.stay} onClick={onCancel}>
+          Отмена
+        </button>
+        <button type="button" style={E.leave} disabled={busy} onClick={onBlock}>
+          Заблокировать
+        </button>
+      </div>
+    </SheetShell>
+  );
+}
+
+/**
+ * Жалоба модератору (§5): чипы причин, отправка, и только потом — блокировка.
+ *
+ * Жалоба и блок разведены намеренно: разбор нужен модератору, а невидимость —
+ * пожаловавшемуся, и одно не подразумевает другое. Поэтому после отправки
+ * шторка не закрывается сама, а предлагает второй жест отдельной кнопкой.
+ */
+export function ReportPersonSheet({
+  name,
+  sent,
+  busy,
+  error,
+  onSend,
+  onBlock,
+  onClose,
+}: {
+  name: string;
+  /** Жалоба ушла: вместо чипов — благодарность и предложение заблокировать. */
+  sent?: boolean;
+  busy?: boolean;
+  error?: string | null;
+  onSend?: (reason: ReportReason) => void;
+  onBlock?: () => void;
+  onClose?: () => void;
+}) {
+  const [reason, setReason] = useState<ReportReason | null>(null);
+
+  if (sent) {
+    return (
+      <SheetShell onDismiss={onClose}>
+        <span style={E.grabber} />
+        <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px' }}>
+          Спасибо, разберёмся
+        </span>
+        <button type="button" style={{ ...E.leave, flex: '0 0 auto' }} onClick={onBlock}>
+          Заблокировать {name}
+        </button>
+        <button type="button" style={E.stay} onClick={onClose}>
+          Готово
+        </button>
+      </SheetShell>
+    );
+  }
+
+  return (
+    <SheetShell onDismiss={onClose}>
+      <span style={E.grabber} />
+      <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
+        Пожаловаться на {name}?
+      </span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {reportReasonOptions().map((r) => (
+          <button
+            key={r.value}
+            type="button"
+            style={E.reasonChip(reason === r.value)}
+            onClick={() => setReason(r.value)}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      {error && (
+        <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" style={E.stay} onClick={onClose}>
+          Отмена
+        </button>
+        <button
+          type="button"
+          style={E.send(reason === null || Boolean(busy))}
+          disabled={reason === null || busy}
+          onClick={() => reason && onSend?.(reason)}
+        >
+          Отправить
         </button>
       </div>
     </SheetShell>

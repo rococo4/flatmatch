@@ -584,7 +584,7 @@ func TestPointPingAsksWithTwoAnswers(t *testing.T) {
 		{entity.PointFlat, "Квартира у метро Сокол ещё актуальна?", "Да, живая", "Уже сдана",
 			func(point entity.Point) string { return "point_" + point.ID.String() }},
 		{entity.PointIntentHome, "Комната у метро Сокол ещё свободна?", "Да", "Нашёл соседа",
-			func(entity.Point) string { return "mine" }},
+			func(point entity.Point) string { return "point_" + point.ID.String() }},
 	}
 
 	for _, tc := range cases {

@@ -246,7 +246,7 @@ function FlatPointCard({
   onEnterPool?: (id: string) => void;
   onOpenFlat?: (point: PointDTO) => void;
 }) {
-  const share = pricePerPerson(point.price_total, point.rooms);
+  const share = pricePerPerson(point.price_total);
   return (
     <article style={S.card}>
       <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>

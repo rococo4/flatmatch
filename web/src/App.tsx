@@ -1200,7 +1200,7 @@ export function App() {
         );
       case 'pointCreated': {
         if (!createdPoint) return tabScreen();
-        const share = pricePerPerson(createdPoint.price_total, createdPoint.rooms);
+        const share = pricePerPerson(createdPoint.price_total);
         return (
           <PointCreatedScreen
             title={pointTitle(createdPoint)}

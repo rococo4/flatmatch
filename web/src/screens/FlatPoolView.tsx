@@ -290,7 +290,7 @@ export function FlatPoolView({
  * не всегда, и придумывать «на двоих» за него нельзя (то же правило в ленте).
  */
 function toCard(p: PointDTO): FlatPoolCard {
-  const share = pricePerPerson(p.price_total, p.rooms);
+  const share = pricePerPerson(p.price_total);
   const total = `${money(p.price_total ?? 0)} / мес за квартиру`;
   return {
     title: pointTitle(p),

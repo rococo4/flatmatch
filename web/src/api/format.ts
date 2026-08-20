@@ -495,11 +495,11 @@ export function lastSeenLabel(iso: string): string {
  * Без комнатности доли нет: делить «на двоих» наугад — это обещание, которого
  * объявление не давало. Округляем до тысяч, чтобы не показывать 31 666 ₽.
  */
-export function pricePerPerson(total?: number, rooms?: number): number | null {
-  if (total == null || rooms == null || rooms < 1) return null;
-  // Жильцов — по числу комнат, но минимум двое: однушку в этом продукте
-  // снимают вдвоём в одну комнату, полная цена «с человека» врала бы.
-  return Math.round(total / Math.max(rooms, 2) / 1000) * 1000;
+export function pricePerPerson(total?: number): number | null {
+  if (total == null) return null;
+  // Всегда на двоих: пул собирает минимум пару, а сколько их въедет в 3к —
+  // неизвестно; половина — честный ориентир и для однушки, и для трёшки.
+  return Math.round(total / 2 / 1000) * 1000;
 }
 
 /**

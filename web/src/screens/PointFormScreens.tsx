@@ -575,7 +575,7 @@ export function FlatLinkFormScreen({
   const source = SOURCES.find((s) => url.includes(s.host));
   const zone = zoneId ? ((zones ?? []).find((z) => z.id === zoneId) ?? null) : null;
   const priceTotal = Number(price) || 0;
-  const perPerson = pricePerPerson(priceTotal || undefined, rooms ?? undefined);
+  const perPerson = pricePerPerson(priceTotal || undefined);
   const bad = (field: string) => form.invalid.includes(field);
   const ready = Boolean(url.trim() && zoneId && priceTotal > 0 && photoKeys.length) && !form.busy;
 

@@ -477,7 +477,7 @@ function FlatRow({
   /** Быстрый выход из чужого пула прямо из списка (§6). */
   onLeave?: (id: string) => void;
 }) {
-  const share = pricePerPerson(point.price_total, point.rooms);
+  const share = pricePerPerson(point.price_total);
   return (
     <article style={S.card}>
       <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>

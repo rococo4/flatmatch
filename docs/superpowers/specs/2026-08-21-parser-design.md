@@ -115,7 +115,7 @@ flats_4_friends, nebabushkin_msk.
    20000 ≤ price_month_total ≤ 300000; rooms null|1..20; deposit null|0..1000000;
    restrictions ⊂ словаря; иначе skipped (`no_zone`/`no_price`/`bad_fields`).
    Однушки и студии НЕ отсекаются (решение Арсения): их снимают вдвоём в одну
-   комнату, «с человека» на фронте считается делением минимум на двоих.
+   комнату, «с человека» на фронте — всегда половина цены.
 6. url_norm: listing_url → нормализация как validate.go; иначе t.me-ссылка.
    SELECT живой точки с тем же url_norm → skipped 'dup' (+point_id найденной);
    гонку закрывает уникальный индекс (IntegrityError → тот же 'dup').

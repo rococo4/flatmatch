@@ -19,6 +19,7 @@ type Sender interface {
 
 type UsersMod interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.User, error)
+	SetStatus(ctx context.Context, id uuid.UUID, status entity.Status) (entity.User, error)
 	SetModeration(ctx context.Context, id uuid.UUID, status *entity.Status, photo, about *entity.ModerationStatus) (entity.User, error)
 	PendingModeration(ctx context.Context) ([]entity.User, error)
 }
@@ -29,9 +30,19 @@ type PointsMod interface {
 	PendingModeration(ctx context.Context) ([]entity.Point, error)
 }
 
+type Reports interface {
+	ByID(ctx context.Context, id uuid.UUID) (entity.Report, error)
+	Resolve(ctx context.Context, id uuid.UUID, verdict entity.ReportVerdict) (bool, error)
+	Unresolved(ctx context.Context) ([]entity.Report, error)
+}
+
 type Pushes interface {
 	ProfileVerdict(ctx context.Context, userID uuid.UUID, typ entity.NotificationType)
 	PointVerdict(ctx context.Context, point entity.Point, ok bool)
+}
+
+type Queue interface {
+	FailAllPending(ctx context.Context, userID uuid.UUID) error
 }
 
 type PhotoURLs interface {
@@ -39,19 +50,21 @@ type PhotoURLs interface {
 }
 
 type Service struct {
-	bot    Sender
-	chatID int64
-	users  UsersMod
-	points PointsMod
-	photos PhotoURLs
-	dir    *zones.Directory
-	pushes Pushes
+	bot     Sender
+	chatID  int64
+	users   UsersMod
+	points  PointsMod
+	reports Reports
+	photos  PhotoURLs
+	dir     *zones.Directory
+	pushes  Pushes
+	queue   Queue
 }
 
-func New(bot Sender, chatID int64, users UsersMod, points PointsMod, photos PhotoURLs,
-	dir *zones.Directory, pushes Pushes) *Service {
-	return &Service{bot: bot, chatID: chatID, users: users, points: points,
-		photos: photos, dir: dir, pushes: pushes}
+func New(bot Sender, chatID int64, users UsersMod, points PointsMod, reports Reports,
+	photos PhotoURLs, dir *zones.Directory, pushes Pushes, queue Queue) *Service {
+	return &Service{bot: bot, chatID: chatID, users: users, points: points, reports: reports,
+		photos: photos, dir: dir, pushes: pushes, queue: queue}
 }
 
 func (s *Service) UserPending(ctx context.Context, u entity.User) {
@@ -92,7 +105,29 @@ func (s *Service) SendQueue(ctx context.Context) error {
 	for _, p := range points {
 		s.PointPending(ctx, p)
 	}
+
+	reports, err := s.reports.Unresolved(ctx)
+	if err != nil {
+		return err
+	}
+	for _, r := range reports {
+		s.resendReport(ctx, r)
+	}
 	return nil
+}
+
+func (s *Service) resendReport(ctx context.Context, r entity.Report) {
+	reporter, err := s.users.ByID(ctx, r.ReporterID)
+	if err != nil {
+		logctx.From(ctx).Warn("read the author of a complaint", "report", r.ID, "error", err)
+		return
+	}
+	target, err := s.users.ByID(ctx, r.TargetID)
+	if err != nil {
+		logctx.From(ctx).Warn("read the target of a complaint", "report", r.ID, "error", err)
+		return
+	}
+	s.ReportFiled(ctx, r, reporter, target)
 }
 
 func (s *Service) send(ctx context.Context, subject string, id uuid.UUID, photoKey, caption string, buttons [][2]string) {

@@ -141,7 +141,7 @@ func run() error {
 
 	botClient := tgbot.NewClient(cfg.BotToken)
 	moderator := moderation.New(tgbot.NewModerationSender(botClient),
-		cfg.ModerationChatID, usersRepo, pointsRepo, photos, dir, pushes)
+		cfg.ModerationChatID, usersRepo, pointsRepo, reportsRepo, photos, dir, pushes, notificationsRepo)
 
 	pushWorker := notifications.NewWorker(notificationsRepo,
 		tgbot.NewPushSender(botClient, cfg.AppURL), usersRepo, searchesRepo,

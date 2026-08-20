@@ -34,11 +34,18 @@ type setCall struct {
 	about  *entity.ModerationStatus
 }
 
+type statusSet struct {
+	id     uuid.UUID
+	status entity.Status
+}
+
 type fakeUsers struct {
-	user    entity.User
-	pending []entity.User
-	sets    []setCall
-	setErr  error
+	user     entity.User
+	byID     map[uuid.UUID]entity.User
+	pending  []entity.User
+	sets     []setCall
+	setErr   error
+	statuses []statusSet
 }
 
 type statusCall struct {
@@ -63,8 +70,21 @@ func (f *fakeSender) SendModerationPhoto(_ context.Context, chatID int64, path, 
 	return len(f.sent), f.err
 }
 
-func (f *fakeUsers) ByID(context.Context, uuid.UUID) (entity.User, error) {
+func (f *fakeUsers) ByID(_ context.Context, id uuid.UUID) (entity.User, error) {
+	if u, ok := f.byID[id]; ok {
+		return u, nil
+	}
 	return f.user, nil
+}
+
+func (f *fakeUsers) SetStatus(_ context.Context, id uuid.UUID, status entity.Status) (entity.User, error) {
+	f.statuses = append(f.statuses, statusSet{id: id, status: status})
+	if f.setErr != nil {
+		return entity.User{}, f.setErr
+	}
+	u := f.user
+	u.Status = status
+	return u, nil
 }
 
 func (f *fakeUsers) SetModeration(_ context.Context, id uuid.UUID, status *entity.Status, photo, about *entity.ModerationStatus) (entity.User, error) {
@@ -104,11 +124,17 @@ func (fakePhotos) Path(key string) (string, error) {
 
 func newService(t *testing.T, chatID int64, bot Sender, users UsersMod, points PointsMod) *Service {
 	t.Helper()
+	return newReportService(t, chatID, bot, users, points, &fakeReports{}, &fakeQueue{})
+}
+
+func newReportService(t *testing.T, chatID int64, bot Sender, users UsersMod, points PointsMod,
+	reports Reports, queue Queue) *Service {
+	t.Helper()
 	dir, err := zones.Load()
 	if err != nil {
 		t.Fatalf("load zones: %v", err)
 	}
-	return New(bot, chatID, users, points, fakePhotos{}, dir, nil)
+	return New(bot, chatID, users, points, reports, fakePhotos{}, dir, nil, queue)
 }
 
 func submitted() entity.User {
@@ -315,7 +341,7 @@ func TestHandleCallbackRefusesGarbage(t *testing.T) {
 	for _, data := range []string{
 		"", "mod", "mod:u:ok", "mod:u:ok:" + id + ":extra",
 		"mod:u:ok:not-a-uuid", "mod:x:ok:" + id, "mod:u:burn:" + id,
-		"mod:p:burn:" + id, "moderate:u:ok:" + id,
+		"mod:p:burn:" + id, "mod:r:burn:" + id, "moderate:u:ok:" + id,
 	} {
 		t.Run(data, func(t *testing.T) {
 			users, points := &fakeUsers{user: submitted()}, &fakePoints{}

@@ -34,6 +34,9 @@ const (
 	ackPhotoRejected = "✕ Фото отклонено"
 	ackAboutRejected = "✕ Текст отклонён"
 	ackRejected      = "✕ Отклонено"
+	ackBanned        = "✓ Забанен"
+	ackBannedAlready = "уже забанен"
+	ackSkipped       = "✓ Пропущено"
 	ackDone          = "уже обработано"
 )
 
@@ -55,7 +58,7 @@ func (s *Service) HandleCallback(ctx context.Context, data string) (string, erro
 	case subjectPoint:
 		return s.pointVerdict(ctx, parts[2], id)
 	case subjectReport:
-		return "", fmt.Errorf("moderation callback %q: report verdicts are not wired yet", data)
+		return s.reportVerdict(ctx, parts[2], id)
 	default:
 		return "", fmt.Errorf("moderation callback %q: unknown subject", data)
 	}
@@ -135,6 +138,51 @@ func (s *Service) pointVerdict(ctx context.Context, op string, id uuid.UUID) (st
 		return ackRejected, nil
 	}
 	return ackApproved, nil
+}
+
+func (s *Service) reportVerdict(ctx context.Context, op string, id uuid.UUID) (string, error) {
+	report, err := s.reports.ByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if report.Resolved() {
+		return ackDone, nil
+	}
+
+	switch op {
+	case opBan:
+		return s.ban(ctx, report)
+	case opSkip:
+		if _, err := s.reports.Resolve(ctx, report.ID, entity.ReportSkipped); err != nil {
+			return "", err
+		}
+		return ackSkipped, nil
+	default:
+		return "", fmt.Errorf("moderation callback for report %s: unknown verdict %q", id, op)
+	}
+}
+
+func (s *Service) ban(ctx context.Context, report entity.Report) (string, error) {
+	target, err := s.users.ByID(ctx, report.TargetID)
+	if err != nil {
+		return "", err
+	}
+
+	ack := ackBannedAlready
+	if target.Status != entity.StatusBanned {
+		if _, err := s.users.SetStatus(ctx, target.ID, entity.StatusBanned); err != nil {
+			return "", err
+		}
+		if err := s.queue.FailAllPending(ctx, target.ID); err != nil {
+			return "", err
+		}
+		ack = ackBanned
+	}
+
+	if _, err := s.reports.Resolve(ctx, report.ID, entity.ReportBanned); err != nil {
+		return "", err
+	}
+	return ack, nil
 }
 
 func (s *Service) pushVerdict(ctx context.Context, id uuid.UUID, ok bool) {

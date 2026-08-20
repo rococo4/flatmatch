@@ -82,12 +82,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
-  # Telegram channel parser (§12 step 7b). It is behind a profile so
-  # `docker compose up` does not start it:
-  #   docker compose --profile parser up -d
+  # Telegram channel parser (§8): polls the rental channels, turns posts into
+  # flats, closes points whose post is gone. Part of the stack — without it the
+  # feed stops growing.
   parser:
     build: ./parser
-    profiles: ["parser"]
     restart: unless-stopped
     depends_on:
       postgres:
@@ -101,8 +100,13 @@ services:
       # Same path and same volume as api — photos are keyed the same way
       # regardless of which service downloaded them.
       PHOTO_DIR: /data/photos
+      ZONES_PATH: /app/zones/moscow.json
     volumes:
       - photos:/data/photos
+      # The zone directory is generated into api/ and versioned in the repo.
+      # Bound read-only rather than copied into the image: one file, one source
+      # of truth, no drift between a rebuilt api and a stale parser.
+      - ./api/internal/service/zones/moscow.json:/app/zones/moscow.json:ro
 
 volumes:
   postgres_data:

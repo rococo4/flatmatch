@@ -16,11 +16,18 @@ COPY . .
 ENV CGO_ENABLED=0
 RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
 
+# An empty photo directory to carry into the final image. A named volume takes
+# its ownership from the image path it covers, and only if that path exists —
+# otherwise Docker creates it as root and nothing running unprivileged (here or
+# in parser) can write a single photo.
+RUN mkdir -p /out/photos
+
 # Distroless: no shell, no package manager, nothing to exploit that we did not
 # put there. static-debian12 is the right variant for a CGO-free binary.
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=build /out/api /api
+COPY --from=build --chown=nonroot:nonroot /out/photos /data/photos
 
 # Unprivileged by default — the nonroot tag ships uid 65532.
 USER nonroot:nonroot

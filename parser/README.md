@@ -1,73 +1,150 @@
 # parser — квартиры из ТГ-каналов
 
-Отдельный сервис, который наполняет `points` квартирами с рынка (§8, §12 шаг 7b).
+Отдельный сервис: наполняет `points` квартирами с рынка (§8, §12 шаг 7b) и
+гасит те, чей пост исчез из канала. С бэкендом общается **только через базу**
+(§10) — общего кода, очередей и HTTP-вызовов между `api` и `parser` нет и не
+планируется.
 
-## Что уже есть
-
-1. `fetch.py` — HTTP-поллинг ленты `https://t.me/s/<канал>` (без MTProto:
-   превью-страницы канала хватает на ~20 последних постов) и проверка жизни
-   поста через `https://t.me/<канал>/<id>?embed=1`.
-2. `ingest.py` — сырьё поста в таблицу `channel_posts`, идемпотентно по
-   `(channel, message_id)`; форварды сразу `skipped/forward`.
-3. `extract.py` — один вызов `claude-sonnet-5` на пост: классификация
-   (`rent_flat` / `rent_room` / `wanted` / `roommate` / `other`) и поля
-   объявления по json-схеме. Список станций едет стабильным префиксом
-   системного промпта под `cache_control`.
-4. `zones.py` — станции из `moscow.json` (`ZONES_PATH`): имя из ответа LLM →
-   `zone_id`, регистр и «ё» не важны.
-5. `norm.py` — нормализация ссылки avito/cian, порт `normalizeURL` из
-   `api/internal/service/points/validate.go`: одна ссылка обязана давать одну
-   строку `url_norm` в обоих сервисах, иначе дедуп молча ломается.
-6. `pipeline.py` — пост → точка: автовалидация (зона, цена 20–300к, комнаты,
-   залог, ограничения), `url_norm` (ссылка из поста, иначе `t.me/<канал>/<id>`),
-   дедуп по живой точке с тем же `url_norm`, пометка `possible_dup` по
-   совпадению зоны, цены и комнат за неделю, INSERT `points`
-   `source='tg_channel'` сразу `active`.
-7. `kill.py` — раз в `ALIVE_HOURS` обход живых `tg_channel`/`manual`-точек с
-   t.me-ссылкой: `fetch.post_alive` однозначно говорит «поста нет» →
-   `points` тихо в `closed/gone` + `channel_posts.deleted_at`; неопределённый
-   ответ (сеть, не-200) точку не трогает, только отметка `last_checked_at`.
-8. `main.py` — цикл: раз в `POLL_MINUTES` (джиттер ±20%) инжест всех
-   `PARSER_CHANNELS`, разбор новых постов, затем — раз в `ALIVE_HOURS` —
-   гашение (`kill.sweep`).
-
-Каждый пост заканчивается ровно одной записью в `channel_posts`: точкой
-(`point_created`), скипом с причиной (`forward`, `no_text`, `wanted`,
-`roommate`, `room`, `other`, `no_zone`, `no_price`, `bad_fields`, `dup`) или
-`error`/`llm_error` — когда модель дважды подряд ответила не по схеме. Сеть и
-лимиты постов не жгут: такой пост остаётся `new` и уедет в следующий тик.
-
-Дальше по плану: CLI досыпки `source='manual'`.
-
-Авито и Циан не парсим — оттуда приходят только пользовательские ссылки
+Авито и Циан не парсим: оттуда приходят только пользовательские ссылки
 (`source='user_link'`), которые люди добавляют под себя.
 
-## Границы
+## Как работает
 
-С бэкендом общается **только через базу** (§10). Общего кода, общих очередей
-и HTTP-вызовов между `api` и `parser` нет и не планируется — это единственный
-интерфейс между ними.
+Тик раз в `POLL_MINUTES` (джиттер ±20%, между каналами пауза 3 с):
+
+1. **Инжест.** `fetch.py` тянет превью-ленту `https://t.me/s/<канал>` — это
+   последние ~10 постов, MTProto не нужен. `ingest.py` кладёт сырьё в
+   `channel_posts`; идемпотентность держит PK `(channel, message_id)`, так что
+   повторный тик по той же ленте не создаёт ни строки. Форварды пишутся сразу
+   `skipped/forward`.
+2. **Разбор.** `pipeline.process_new` берёт все строки `status='new'`. Пустой
+   текст (медиа без подписи — почти половина ленты) скипается `no_text` ДО
+   вызова модели. Остальное уходит в `extract.py`: один вызов `claude-sonnet-5`
+   со structured outputs, классификация (`rent_flat` / `rent_room` / `wanted` /
+   `roommate` / `other`) плюс поля объявления. Список станций едет стабильным
+   префиксом системного промпта под `cache_control` — он же единственный
+   источник имён, из которых модели разрешено выбирать.
+3. **Автовалидация** (`pipeline.verdict`, зеркало правил `user_link` минус
+   фото): станция из `zones.py` → `zone_id`, цена 20 000–300 000 ₽ за объект,
+   комнаты 1–20, залог до 1 000 000, ограничения из словаря. Не прошло —
+   `skipped` с причиной.
+4. **Дедуп.** `url_norm` = ссылка avito/cian из поста (нормализация
+   `norm.py` — байт-в-байт порт `normalizeURL` из
+   `api/internal/service/points/validate.go`), иначе `https://t.me/<канал>/<id>`.
+   Живая точка с тем же `url_norm` → `skipped/dup`; гонку закрывает уникальный
+   индекс. Похожая точка (та же зона, цена и комнаты за неделю) — только
+   пометка `possible_dup`, не блокировка.
+5. **Фото.** До 5 штук с CDN превью в общее хранилище ключами
+   `points/<uuid>.<ext>`; тип решают magic bytes, а не Content-Type. Битое
+   фото выпадает, пост от этого не пропадает.
+6. **Точка.** INSERT `points`: `type='flat'`, `source='tg_channel'`, сразу
+   `active`, без `created_by` — квартира с рынка ничья (§8).
+7. **Гашение.** Раз в `ALIVE_HOURS` `kill.py` обходит живые `tg_channel` и
+   `manual`-точки с t.me-ссылкой и проверяет пост через
+   `https://t.me/<канал>/<id>?embed=1`. Однозначное «поста нет» →
+   `closed/gone` тихо, без пуша (как TTL-архив §8). Неопределённый ответ
+   (сеть, не-200) точку не трогает вовсе. `last_seen_alive` парсер НЕ
+   продлевает: живость рыночной квартиры держат голоса и TTL 14 дней.
+
+Каждый пост заканчивается ровно одной записью в `channel_posts`: точкой
+(`point_created`), скипом с причиной или `error`. Сеть, лимиты и недоступный
+ключ постов не жгут — такой пост остаётся `new` и уедет в следующий тик; тик
+целиком тоже под стражем, упавший тик не роняет процесс.
 
 ## Запуск
+
+Локально (Postgres из compose, парсер на хосте):
 
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-DATABASE_URL='postgres://flatmatch:flatmatch@localhost:5432/flatmatch?sslmode=disable' .venv/bin/python main.py
+set -a && . ../.env && set +a
+DATABASE_URL='postgres://flatmatch:flatmatch@localhost:5432/flatmatch?sslmode=disable' \
+  .venv/bin/python main.py
 ```
 
-В докере сервис пока под профилем: `docker compose --profile parser up -d`.
+Первый тик идёт сразу на старте — форс-тика отдельной командой нет, для
+разового прогона хватает запустить и остановить по Ctrl+C.
 
-Переменные окружения (`config.py`): `DATABASE_URL` (обязательна),
-`ANTHROPIC_API_KEY`, `PARSER_CHANNELS` (csv, дефолт — пять каналов старта),
-`PHOTO_DIR`, `ZONES_PATH`, `POLL_MINUTES` (20), `ALIVE_HOURS` (4).
+В compose парсер — обычный сервис, поднимается вместе со стеком:
+
+```sh
+docker compose up -d --build parser
+docker compose logs -f parser
+```
+
+## Окружение
+
+| Переменная | Дефолт | Что делает |
+|---|---|---|
+| `DATABASE_URL` | — | обязательна, без неё старта нет |
+| `ANTHROPIC_API_KEY` | — | ключ с console.anthropic.com; пусто — посты копятся неразобранными |
+| `PARSER_CHANNELS` | пять каналов старта | csv, без `@` |
+| `POLL_MINUTES` | 20 | период тика |
+| `ALIVE_HOURS` | 4 | как часто перепроверять живость постов |
+| `PHOTO_DIR` | `../api/.data/photos` | общее с api хранилище фото |
+| `ZONES_PATH` | `../api/internal/service/zones/moscow.json` | справочник станций |
+
+Дефолты `PHOTO_DIR` и `ZONES_PATH` рассчитаны на локальный запуск, когда
+`parser/` и `api/` рядом на диске; в контейнере оба заданы явно
+(`/data/photos` — общий том с api, `/app/zones/moscow.json` — read-only
+бинд файла из репо).
+
+Каналы старта: `arendamsc`, `ugnest_msk`, `norealtor`, `flats_4_friends`,
+`nebabushkin_msk`.
+
+## Досыпка руками (`add.py`)
+
+Точки `source='manual'` — плотность в районах посева, когда каналов мало
+(§8). Правила те же, что у ленты: руками нельзя завести точку, которую
+парсер бы отверг, форса нет.
+
+```sh
+# пост из канала (текст и фото берутся из превью-ленты)
+.venv/bin/python add.py --url https://t.me/arendamsc/26240
+
+# свой текст и свои фото (до 5)
+.venv/bin/python add.py --text "Сдаётся двушка у Сокола, 85 000 ₽" \
+  --photo room.jpg --photo kitchen.jpg
+
+# в докере
+docker compose exec parser python add.py --text "..."
+```
+
+Успех — строка `точка <uuid> · зона Сокол (st-sokol) · фото 2`. Отказ —
+причина в stderr и код возврата 1: «цена вне диапазона», «станция не
+распозналась», «такая квартира уже есть: <uuid>». Пост старше окна
+превью-ленты через `--url` не достать (t.me/s отдаёт последние ~10) — такой
+досыпается через `--text`.
+
+## Что видно в базе
+
+Скип-статистика — один SELECT:
+
+```sql
+SELECT skip_reason, count(*) FROM channel_posts GROUP BY 1 ORDER BY 2 DESC;
+```
+
+Причины: `forward`, `no_text`, `wanted`, `roommate`, `room`, `other`,
+`no_zone`, `no_price`, `bad_fields`, `dup`, `llm_error`. Здоровая лента —
+это много `no_text` и `other`; всплеск `no_zone` означает, что модель не
+попадает в справочник станций, всплеск `llm_error` — что сломался контракт
+ответа. Сырой ответ модели лежит в `channel_posts.llm`, так что любой скип
+можно разобрать глазами:
+
+```sql
+SELECT channel, message_id, skip_reason, llm FROM channel_posts
+WHERE status <> 'point_created' ORDER BY first_seen_at DESC LIMIT 20;
+```
 
 ## Тесты
 
 ```sh
-.venv/bin/python -m pytest -q
+TEST_DATABASE_URL='postgres://flatmatch:flatmatch@localhost:5432/flatmatch?sslmode=disable' \
+  .venv/bin/python -m pytest -q
 ```
 
-Сетевых тестов нет: разбор проверяется на сохранённых фикстурах
-`tests/fixtures/`. Тесты инжеста ходят в базу из `TEST_DATABASE_URL` (без неё
-пропускаются) и трогают только каналы с префиксом `test-`.
+Живых запросов в тестах нет: HTTP разбирается на сохранённых фикстурах
+`tests/fixtures/`, модель мокается (`tests/conftest.py`). Тесты, которым нужна
+база, без `TEST_DATABASE_URL` пропускаются и трогают только каналы с префиксом
+`test-` и точки, созданные внутри теста.

@@ -132,6 +132,39 @@ TEST_DATABASE_URL='postgres://flatmatch:flatmatch@localhost:5432/flatmatch?sslmo
   go test ./internal/repo/... ./internal/postgres/...
 ```
 
+## Парсер каналов
+
+Стенду он не нужен — приложение работает и без него, — но лента квартир
+растёт только с ним. На хосте (Postgres из compose уже поднят):
+
+```sh
+cd parser
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt  # один раз
+set -a && . ../.env && set +a                                       # ANTHROPIC_API_KEY
+DATABASE_URL='postgres://flatmatch:flatmatch@localhost:5432/flatmatch?sslmode=disable' \
+  .venv/bin/python main.py
+```
+
+Либо вместе со стеком: `docker compose up -d parser`, логи —
+`docker compose logs -f parser`. Без `ANTHROPIC_API_KEY` парсер поднимется,
+но посты будут копиться неразобранными.
+
+Форс-тика отдельной командой нет: первый тик идёт сразу на старте. Разовый
+прогон — запустить, дождаться в логе `parser: ленты: …` и строк по постам,
+остановить (Ctrl+C, в докере `docker compose stop parser`).
+
+Что вышло — одним SELECT:
+
+```sh
+docker compose exec postgres psql -U flatmatch -d flatmatch \
+  -c "SELECT status, skip_reason, count(*) FROM channel_posts GROUP BY 1,2 ORDER BY 3 DESC"
+```
+
+`point_created` — посты, ставшие квартирами; остальное — скипы с причиной
+(`no_text` и `other` в норме составляют большую часть ленты), сырой ответ
+модели лежит в `channel_posts.llm`. Досыпать квартиру руками — `add.py`,
+см. `parser/README.md`.
+
 ## Чего скрипт не делает
 
 - Не выключает Docker Desktop — только контейнеры.

@@ -6,6 +6,7 @@ channel_posts: точкой, скипом с причиной или ошибк�
 """
 
 import sys
+from dataclasses import dataclass
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -68,14 +69,24 @@ SELECT EXISTS (
       AND created_at >= now() - interval '{TWIN_DAYS} days')
 """
 
-_INSERT_POINT = f"""
+_INSERT_POINT = """
 INSERT INTO points (
     type, status, source, created_by, zone_id,
     price_total, rooms, isolated, bathrooms, utilities,
     deposit, restrictions, move_in, photo_keys, url_norm)
-VALUES ('flat', 'active', '{SOURCE}', NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES ('flat', 'active', %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id
 """
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """Приговор разобранному посту: причина отказа либо поля будущей точки."""
+
+    reason: str | None = None
+    point_id: str | None = None
+    zone_id: str | None = None
+    url_norm: str | None = None
 
 
 def process_new(conn, llm, cfg) -> None:
@@ -109,62 +120,83 @@ def process_post(conn, llm, cfg, post, photo_client) -> str:
         log(f"пост {_where(post)}: {err}", stream=sys.stderr)
         return _finish(conn, post, STATUS_ERROR, SKIP_LLM_ERROR, None)
 
-    if got.kind in SKIP_BY_KIND:
-        return _finish(conn, post, STATUS_SKIPPED, SKIP_BY_KIND[got.kind], raw)
-
-    zone_id = _zone(cfg, got.station)
-    if zone_id is None:
-        return _finish(conn, post, STATUS_SKIPPED, SKIP_NO_ZONE, raw)
-    if got.price_month_total is None or not MIN_PRICE <= got.price_month_total <= MAX_PRICE:
-        return _finish(conn, post, STATUS_SKIPPED, SKIP_NO_PRICE, raw)
-    if not _fields_ok(got):
-        return _finish(conn, post, STATUS_SKIPPED, SKIP_BAD_FIELDS, raw)
-
-    url_norm = normalize_listing_url(got.listing_url or "") or POST_URL.format(
-        channel=post["channel"], message_id=post["message_id"]
+    ready = verdict(
+        conn,
+        cfg,
+        got,
+        POST_URL.format(channel=post["channel"], message_id=post["message_id"]),
     )
-    live = _live_point(conn, url_norm)
-    if live is not None:
-        return _finish(conn, post, STATUS_SKIPPED, SKIP_DUP, raw, point_id=live)
+    if ready.reason is not None:
+        return _finish(conn, post, STATUS_SKIPPED, ready.reason, raw, point_id=ready.point_id)
 
     photo_keys = photos.download(photo_client, post["photo_urls"], cfg.photo_dir)
 
     try:
-        return _create(conn, post, got, raw, zone_id, url_norm, photo_keys)
+        return _create(conn, post, got, raw, ready, photo_keys)
     except psycopg.errors.UniqueViolation:
         # Гонку с параллельной подачей той же ссылки закрывает уникальный индекс.
-        live = _live_point(conn, url_norm)
+        live = _live_point(conn, ready.url_norm)
         return _finish(conn, post, STATUS_SKIPPED, SKIP_DUP, raw, point_id=live)
 
 
-def log(message: str, stream=sys.stdout) -> None:
-    print(f"parser: {message}", file=stream, flush=True)
+def verdict(conn, cfg, got, fallback_url: str | None) -> Verdict:
+    """Правила §3 дизайна, шаги 4–6: годится ли разбор в точку.
+
+    Общие для ленты и досыпки (add.py) — расхождение здесь означало бы, что
+    руками можно завести точку, которую парсер бы не завёл.
+    """
+    if got.kind in SKIP_BY_KIND:
+        return Verdict(reason=SKIP_BY_KIND[got.kind])
+
+    zone_id = _zone(cfg, got.station)
+    if zone_id is None:
+        return Verdict(reason=SKIP_NO_ZONE)
+    if got.price_month_total is None or not MIN_PRICE <= got.price_month_total <= MAX_PRICE:
+        return Verdict(reason=SKIP_NO_PRICE)
+    if not _fields_ok(got):
+        return Verdict(reason=SKIP_BAD_FIELDS)
+
+    url_norm = normalize_listing_url(got.listing_url or "") or fallback_url
+    if url_norm is not None:
+        live = _live_point(conn, url_norm)
+        if live is not None:
+            return Verdict(reason=SKIP_DUP, point_id=live, url_norm=url_norm)
+    return Verdict(zone_id=zone_id, url_norm=url_norm)
+
+
+def insert_point(cur, got, zone_id: str, url_norm: str | None, photo_keys: list[str], source: str):
+    cur.execute(
+        _INSERT_POINT,
+        (
+            source,
+            zone_id,
+            got.price_month_total,
+            got.rooms,
+            got.isolated,
+            got.bathrooms,
+            got.utilities,
+            got.deposit,
+            got.restrictions,
+            got.move_in,
+            photo_keys,
+            url_norm,
+        ),
+    )
+    return cur.fetchone()[0]
+
+
+def log(message: str, stream=None) -> None:
+    print(f"parser: {message}", file=stream or sys.stdout, flush=True)
 
 
 def _where(post) -> str:
     return f"{post['channel']}/{post['message_id']}"
 
 
-def _create(conn, post, got, raw, zone_id: str, url_norm: str, photo_keys: list[str]) -> str:
-    twin = _twin(conn, zone_id, got.price_month_total, got.rooms)
+def _create(conn, post, got, raw, ready: Verdict, photo_keys: list[str]) -> str:
+    twin = _twin(conn, ready.zone_id, got.price_month_total, got.rooms)
     with conn.transaction(), conn.cursor() as cur:
-        cur.execute(
-            _INSERT_POINT,
-            (
-                zone_id,
-                got.price_month_total,
-                got.rooms,
-                got.isolated,
-                got.bathrooms,
-                got.utilities,
-                got.deposit,
-                got.restrictions,
-                got.move_in,
-                photo_keys,
-                url_norm,
-            ),
-        )
-        point_id = cur.fetchone()[0]
+        point_id = insert_point(cur, got, ready.zone_id, ready.url_norm, photo_keys, SOURCE)
         cur.execute(
             _FINISH,
             (

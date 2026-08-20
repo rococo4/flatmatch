@@ -27,6 +27,7 @@ type UsersMod interface {
 type PointsMod interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status entity.PointStatus, closeReason *string) (bool, error)
+	CloseByCreator(ctx context.Context, userID uuid.UUID) (int, error)
 	PendingModeration(ctx context.Context) ([]entity.Point, error)
 }
 

@@ -55,12 +55,13 @@ type statusCall struct {
 }
 
 type fakePoints struct {
-	pending []entity.Point
-	sets    []statusCall
-	changed bool
-	setErr  error
-	point   entity.Point
-	byIDErr error
+	pending  []entity.Point
+	sets     []statusCall
+	changed  bool
+	setErr   error
+	point    entity.Point
+	byIDErr  error
+	closedBy []uuid.UUID
 }
 
 type fakePhotos struct{}
@@ -109,6 +110,11 @@ func (f *fakePoints) SetStatus(_ context.Context, id uuid.UUID, status entity.Po
 		return false, f.setErr
 	}
 	return f.changed, nil
+}
+
+func (f *fakePoints) CloseByCreator(_ context.Context, userID uuid.UUID) (int, error) {
+	f.closedBy = append(f.closedBy, userID)
+	return 1, nil
 }
 
 func (f *fakePoints) PendingModeration(context.Context) ([]entity.Point, error) {

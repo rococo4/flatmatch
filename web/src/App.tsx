@@ -518,6 +518,7 @@ export function App() {
               setView('flatPool');
               return;
             }
+            setFeed((f) => ({ ...f, error: null }));
             setHomePoint(point.id);
             setView('homePoint');
           })
@@ -1471,8 +1472,10 @@ function Centered({ children }: { children: React.ReactNode }) {
 function Failure({ error }: { error: ApiError }) {
   // 401 в разработке почти всегда значит, что мок initData подписан не тем
   // токеном, — так и скажем, вместо голого «unauthorized».
-  const hint =
-    error.status === 401
+  const banned = error.status === 403;
+  const hint = banned
+    ? 'Аккаунт заблокирован'
+    : error.status === 401
       ? 'Проверь BOT_TOKEN у api и VITE_MOCK_INIT_DATA в web/.env.local — см. README.'
       : error.message;
 
@@ -1480,7 +1483,7 @@ function Failure({ error }: { error: ApiError }) {
     <Centered>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'center' }}>
         <span style={{ fontSize: 18, fontWeight: 640, color: 'var(--tg-theme-text-color)' }}>
-          Не получилось войти
+          {banned ? 'Доступ закрыт' : 'Не получилось войти'}
         </span>
         <span>{hint}</span>
         <span style={{ fontSize: 12 }}>

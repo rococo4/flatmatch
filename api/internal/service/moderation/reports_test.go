@@ -162,7 +162,8 @@ func TestReportBanSilencesTheTarget(t *testing.T) {
 	users := &fakeUsers{user: target}
 	reports := &fakeReports{report: report}
 	queue := &fakeQueue{}
-	svc := newReportService(t, testChat, &fakeSender{}, users, &fakePoints{}, reports, queue)
+	points := &fakePoints{}
+	svc := newReportService(t, testChat, &fakeSender{}, users, points, reports, queue)
 
 	ack, err := svc.HandleCallback(t.Context(), callback(subjectReport, opBan, report.ID))
 	if err != nil {
@@ -170,6 +171,9 @@ func TestReportBanSilencesTheTarget(t *testing.T) {
 	}
 	if ack != ackBanned {
 		t.Errorf("ack = %q, want %q", ack, ackBanned)
+	}
+	if len(points.closedBy) != 1 || points.closedBy[0] != target.ID {
+		t.Errorf("closed points of = %v, want the points of %s", points.closedBy, target.ID)
 	}
 	if len(users.statuses) != 1 || users.statuses[0].id != target.ID ||
 		users.statuses[0].status != entity.StatusBanned {

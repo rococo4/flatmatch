@@ -64,6 +64,63 @@ func TestSetStatusMovesOnlyPendingPoints(t *testing.T) {
 	}
 }
 
+func TestCloseByCreatorClosesEverythingStillOpen(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	banned := seedUser(t, pool, 1)
+	other := seedUser(t, pool, 2)
+
+	create := func(u *uuid.UUID, url string, status entity.PointStatus) entity.Point {
+		t.Helper()
+		p, err := repo.Create(t.Context(), flatPoint(u, entity.SourceUserLink, url, status))
+		if err != nil {
+			t.Fatalf("Create(%s) failed: %v", url, err)
+		}
+		return p
+	}
+	live := create(&banned, "https://avito.ru/ban-1", entity.PointActive)
+	queued := create(&banned, "https://avito.ru/ban-2", entity.PointPending)
+	gone := create(&banned, "https://avito.ru/ban-3", entity.PointActive)
+	if _, err := repo.CloseWithReason(t.Context(), gone.ID, entity.CloseReasonGone); err != nil {
+		t.Fatalf("CloseWithReason() failed: %v", err)
+	}
+	foreign := create(&other, "https://avito.ru/other-1", entity.PointActive)
+
+	n, err := repo.CloseByCreator(t.Context(), banned)
+	if err != nil || n != 2 {
+		t.Fatalf("CloseByCreator() = %d, %v, want 2, nil", n, err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		id     uuid.UUID
+		status entity.PointStatus
+		reason string
+	}{
+		{"live", live.ID, entity.PointClosed, "rejected"},
+		{"queued", queued.ID, entity.PointClosed, "rejected"},
+		{"gone", gone.ID, entity.PointClosed, "gone"},
+		{"foreign", foreign.ID, entity.PointActive, ""},
+	} {
+		got, err := repo.ByID(t.Context(), tc.id)
+		if err != nil {
+			t.Fatalf("ByID(%s) failed: %v", tc.name, err)
+		}
+		reason := ""
+		if got.CloseReason != nil {
+			reason = *got.CloseReason
+		}
+		if got.Status != tc.status || reason != tc.reason {
+			t.Errorf("%s point = %s / %q, want %s / %q", tc.name, got.Status, reason, tc.status, tc.reason)
+		}
+	}
+
+	if n, err := repo.CloseByCreator(t.Context(), banned); err != nil || n != 0 {
+		t.Errorf("second CloseByCreator() = %d, %v, want 0, nil", n, err)
+	}
+}
+
 func TestPendingModerationListsBothForms(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

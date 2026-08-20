@@ -255,7 +255,7 @@ export function ReportPersonSheet({
   }
 
   return (
-    <SheetShell onDismiss={onClose}>
+    <SheetShell onDismiss={busy ? undefined : onClose}>
       <span style={E.grabber} />
       <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
         Пожаловаться на {name}?
@@ -266,6 +266,7 @@ export function ReportPersonSheet({
             key={r.value}
             type="button"
             style={E.reasonChip(reason === r.value)}
+            disabled={busy}
             onClick={() => setReason(r.value)}
           >
             {r.label}
@@ -276,7 +277,7 @@ export function ReportPersonSheet({
         <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
       )}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" style={E.stay} onClick={onClose}>
+        <button type="button" style={E.stay} disabled={busy} onClick={onClose}>
           Отмена
         </button>
         <button

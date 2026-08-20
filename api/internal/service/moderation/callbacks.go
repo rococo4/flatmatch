@@ -176,6 +176,9 @@ func (s *Service) ban(ctx context.Context, report entity.Report) (string, error)
 		if err := s.queue.FailAllPending(ctx, target.ID); err != nil {
 			return "", err
 		}
+		if _, err := s.points.CloseByCreator(ctx, target.ID); err != nil {
+			return "", err
+		}
 		ack = ackBanned
 	}
 

@@ -271,6 +271,16 @@ func (r *Repo) CloseWithReason(ctx context.Context, pointID uuid.UUID, reason en
 	return tag.RowsAffected() > 0, nil
 }
 
+func (r *Repo) CloseByCreator(ctx context.Context, userID uuid.UUID) (int, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE points SET status = 'closed', close_reason = 'rejected', edited_at = now()
+		WHERE created_by = $1 AND status <> 'closed'`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("close points of %s: %w", userID, err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 func (r *Repo) Vote(ctx context.Context, userID, pointID uuid.UUID, alive bool) (VoteOutcome, error) {
 	var out VoteOutcome
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {

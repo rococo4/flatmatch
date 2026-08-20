@@ -41,6 +41,20 @@ def conn(points, users):
 
 
 @pytest.fixture(autouse=True)
+def _only_test_rows(monkeypatch):
+    # Свип ходит по всей общей дев-базе: без сужения тестовый мок post_alive
+    # отвечал бы и за настоящие точки стенда (однажды закрыл четыре живых).
+    monkeypatch.setattr(
+        kill,
+        "_SELECT",
+        kill._SELECT.replace(
+            "AND url_norm LIKE 'https://t.me/%'",
+            f"AND url_norm LIKE 'https://t.me/{CHANNEL}/%'",
+        ),
+    )
+
+
+@pytest.fixture
 def sleep_calls(monkeypatch):
     calls = []
     monkeypatch.setattr(kill.time, "sleep", lambda seconds: calls.append(seconds))

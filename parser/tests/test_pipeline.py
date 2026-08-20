@@ -149,15 +149,12 @@ def test_foreign_kinds_are_skipped(conn, cfg, kind, reason):
     assert row["llm"] == answer
 
 
-def test_one_room_flat_is_skipped(conn, cfg):
+def test_one_room_flat_still_makes_a_point(conn, cfg):
     _post(conn, 55, "Сдаётся однушка у Сокола, 65 000")
 
     pipeline.process_new(conn, FakeClient(json.dumps(dict(FLAT, rooms=1))), cfg)
 
-    row = _post_row(conn, 55)
-    assert row["status"] == "skipped"
-    assert row["skip_reason"] == "one_room"
-    assert row["point_id"] is None
+    assert _post_row(conn, 55)["status"] == "point_created"
 
 
 def test_unknown_rooms_still_makes_a_point(conn, cfg):

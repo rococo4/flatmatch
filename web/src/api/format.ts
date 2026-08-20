@@ -497,7 +497,9 @@ export function lastSeenLabel(iso: string): string {
  */
 export function pricePerPerson(total?: number, rooms?: number): number | null {
   if (total == null || rooms == null || rooms < 1) return null;
-  return Math.round(total / rooms / 1000) * 1000;
+  // Жильцов — по числу комнат, но минимум двое: однушку в этом продукте
+  // снимают вдвоём в одну комнату, полная цена «с человека» врала бы.
+  return Math.round(total / Math.max(rooms, 2) / 1000) * 1000;
 }
 
 /**

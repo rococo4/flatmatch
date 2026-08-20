@@ -150,7 +150,7 @@ SELECT skip_reason, count(*) FROM channel_posts GROUP BY 1 ORDER BY 2 DESC;
 Тесты гоняются по той же дев-базе: работающий рядом парсер может дать
 ложные падения (гонки за строки) — на время прогона его лучше остановить.
 
-Причины: `forward`, `no_text`, `wanted`, `roommate`, `room`, `other`, `one_room`,
+Причины: `forward`, `no_text`, `wanted`, `roommate`, `room`, `other`,
 `no_zone`, `no_price`, `bad_fields`, `dup`, `llm_error`. Здоровая лента —
 это много `no_text` и `other`; всплеск `no_zone` означает, что модель не
 попадает в справочник станций, всплеск `llm_error` — что сломался контракт

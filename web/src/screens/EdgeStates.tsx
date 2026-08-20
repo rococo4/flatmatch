@@ -176,7 +176,7 @@ export function BlockPersonSheet({
   onBlock?: () => void;
 }) {
   return (
-    <SheetShell onDismiss={onCancel}>
+    <SheetShell onDismiss={busy ? undefined : onCancel}>
       <span style={E.grabber} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
@@ -192,10 +192,17 @@ export function BlockPersonSheet({
         <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
       )}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" style={E.stay} onClick={onCancel}>
+        {/* «Отмена» гаснет вместе с красной: пока запрос в пути, шторка не
+            должна закрываться под уже улетевшей блокировкой. */}
+        <button type="button" style={E.stay} disabled={busy} onClick={onCancel}>
           Отмена
         </button>
-        <button type="button" style={E.leave} disabled={busy} onClick={onBlock}>
+        <button
+          type="button"
+          style={{ ...E.leave, opacity: busy ? 0.6 : 1 }}
+          disabled={busy}
+          onClick={onBlock}
+        >
           Заблокировать
         </button>
       </div>

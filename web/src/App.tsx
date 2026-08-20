@@ -1144,9 +1144,12 @@ export function App() {
             onMatched={openMatch}
             onNeedSearch={(serverMessage) => askSearchForLike(target, serverMessage)}
             // Заблокированный стал невидимым: профиль по нему ответил бы 404,
-            // а списки, где он стоял, обязаны перечитаться (§5).
+            // а списки, где он стоял, обязаны перечитаться (§5). Карточка «к
+            // себе» уходит вместе с автором, поэтому назад в неё не возвращаем:
+            // экран показал бы отказ сервера вместо результата блокировки.
             onBlocked={() => {
-              setView(target.back);
+              if (target.back === 'homePoint') toTab('feed');
+              else setView(target.back);
               reloadLikes();
               reloadPoints();
               void refreshFeed();

@@ -252,15 +252,20 @@ export function PersonProfileView({
 
   // Параметры кнопки — отдельным эффектом: текст и запрет меняются на каждый
   // ответ сервера, а подписка на клик от этого пересобираться не должна.
+  //
+  // Открытая шторка прячет кнопку: затемнение лежит внутри webview, а родную
+  // кнопку Telegram рисует поверх него сам клиент. Промах по ней стоил бы
+  // необратимого слота — и как раз на том, кого сейчас блокируют.
+  const sheetOpen = sheet !== null;
   useEffect(() => {
     if (!native || !setMainButtonParams.isAvailable()) return;
     setMainButtonParams({
       text: action.label,
-      isEnabled: !action.disabled,
-      isVisible: Boolean(action.label),
+      isEnabled: !action.disabled && !sheetOpen,
+      isVisible: Boolean(action.label) && !sheetOpen,
       isLoaderVisible: busy,
     });
-  }, [native, action.label, action.disabled, busy]);
+  }, [native, action.label, action.disabled, busy, sheetOpen]);
 
   if (error || !person) {
     return (

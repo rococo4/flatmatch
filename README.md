@@ -15,7 +15,7 @@ Telegram Mini App для поиска со-съёмщика квартиры в 
 ```
 api/       Go, структурированный монолит: SQL руками через pgx, без ORM
 web/       React + TypeScript + Vite, @telegram-apps/sdk-react + telegram-ui
-parser/    заглушка парсера ТГ-каналов (§12 шаг 7)
+parser/    Python: парсер ТГ-каналов аренды + LLM, досыпка add.py (§12 шаг 7b)
 migrations в api/migrations, goose, вшиты в бинарь и применяются на старте
 ```
 

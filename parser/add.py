@@ -10,11 +10,13 @@
 import argparse
 import re
 import sys
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import anthropic
 import httpx
+import psycopg
 
 import db
 import extract
@@ -25,6 +27,11 @@ import zones
 from config import Config
 
 SOURCE = "manual"
+
+NO_LINK_WARNING = (
+    "внимание: без ссылки в тексте точка не дедупится и не голосуется — "
+    "если ссылка на оригинал есть, добавь её прямо в --text"
+)
 
 _POST_URL_RE = re.compile(r"^https?://t\.me/([A-Za-z0-9_]{3,})/(\d+)/?$")
 
@@ -55,10 +62,11 @@ class Draft:
 
 @dataclass(frozen=True)
 class Added:
-    point_id: str
+    point_id: uuid.UUID
     zone_id: str
-    station: str
+    station: str | None
     photos: int
+    url_norm: str | None
 
 
 def main(argv=None) -> int:
@@ -109,6 +117,8 @@ def run(conn, llm, cfg, draft: Draft) -> int:
         print(f"не добавлено: {err}", file=sys.stderr)
         return 1
     print(f"точка {added.point_id} · зона {added.station} ({added.zone_id}) · фото {added.photos}")
+    if added.url_norm is None:
+        print(NO_LINK_WARNING, file=sys.stderr)
     return 0
 
 
@@ -127,15 +137,21 @@ def add(conn, llm, cfg, draft: Draft) -> Added:
         raise Refusal(_reason(ready))
 
     photo_keys = _photo_keys(cfg, draft)
-    with conn.transaction(), conn.cursor() as cur:
-        point_id = pipeline.insert_point(
-            cur, got, ready.zone_id, ready.url_norm, photo_keys, SOURCE
-        )
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            point_id = pipeline.insert_point(
+                cur, got, ready.zone_id, ready.url_norm, photo_keys, SOURCE
+            )
+    except psycopg.errors.UniqueViolation as err:
+        # Ту же ссылку успел вставить тик парсера, пока мы разбирали текст.
+        raise Refusal(_dup(pipeline.live_point(conn, ready.url_norm))) from err
+
     return Added(
         point_id=point_id,
         zone_id=ready.zone_id,
         station=got.station,
         photos=len(photo_keys),
+        url_norm=ready.url_norm,
     )
 
 
@@ -163,7 +179,8 @@ def draft_from_url(client: httpx.Client, url: str) -> Draft:
         # Превью-лента отдаёт только хвост канала: старый пост оттуда не достать.
         raise Refusal(
             f"поста {channel}/{message_id} нет в превью-ленте канала (t.me/s отдаёт "
-            'последние ~10) — досыпь текстом: --text "..." --photo файл'
+            "последние ~10–20, зависит от канала) — досыпь текстом: "
+            '--text "..." --photo файл'
         )
     return Draft(
         text=post.text,
@@ -174,8 +191,12 @@ def draft_from_url(client: httpx.Client, url: str) -> Draft:
 
 def _reason(ready: pipeline.Verdict) -> str:
     if ready.reason == pipeline.SKIP_DUP:
-        return f"такая квартира уже есть: {ready.point_id}"
+        return _dup(ready.point_id)
     return _REASONS.get(ready.reason, ready.reason)
+
+
+def _dup(point_id) -> str:
+    return f"такая квартира уже есть: {point_id}" if point_id else "такая квартира уже есть"
 
 
 def _photo_keys(cfg, draft: Draft) -> list[str]:

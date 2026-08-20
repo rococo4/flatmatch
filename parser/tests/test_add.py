@@ -87,13 +87,34 @@ def test_text_becomes_a_manual_point(conn, cfg, added, capsys):
     assert point["photo_keys"] == []
 
 
-def test_listing_url_from_the_text_is_stored(conn, cfg, added):
+def test_point_without_a_link_warns_the_operator(conn, cfg, added, capsys):
+    add.run(conn, FakeClient(json.dumps(FLAT)), cfg, add.Draft(text="Сдаётся двушка у Сокола"))
+
+    assert "не дедупится и не голосуется" in capsys.readouterr().err
+    assert _only_point(conn, added())["url_norm"] is None
+
+
+def test_listing_url_from_the_text_is_stored(conn, cfg, added, capsys):
     answer = dict(FLAT, listing_url="https://www.avito.ru/moskva/kvartiry/2-k_kvartira_77?x=1")
 
-    add.add(conn, FakeClient(json.dumps(answer)), cfg, add.Draft(text="Сокол, авито"))
+    add.run(conn, FakeClient(json.dumps(answer)), cfg, add.Draft(text="Сокол, авито"))
 
     point = _only_point(conn, added())
     assert point["url_norm"] == "https://avito.ru/moskva/kvartiry/2-k_kvartira_77"
+    assert "не дедупится" not in capsys.readouterr().err
+
+
+def test_race_with_a_tick_is_refused_not_traced(conn, cfg, added, capsys, monkeypatch):
+    def taken(cur, got, zone_id, url_norm, photo_keys, source):
+        raise psycopg.errors.UniqueViolation("points_url_norm_idx")
+
+    monkeypatch.setattr(add.pipeline, "insert_point", taken)
+
+    code = add.run(conn, FakeClient(json.dumps(FLAT)), cfg, add.Draft(text="Сокол"))
+
+    assert code == 1
+    assert "уже есть" in capsys.readouterr().err
+    assert added() == []
 
 
 def test_price_out_of_range_prints_the_reason(conn, cfg, added, capsys):

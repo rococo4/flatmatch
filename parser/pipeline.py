@@ -135,7 +135,7 @@ def process_post(conn, llm, cfg, post, photo_client) -> str:
         return _create(conn, post, got, raw, ready, photo_keys)
     except psycopg.errors.UniqueViolation:
         # Гонку с параллельной подачей той же ссылки закрывает уникальный индекс.
-        live = _live_point(conn, ready.url_norm)
+        live = live_point(conn, ready.url_norm)
         return _finish(conn, post, STATUS_SKIPPED, SKIP_DUP, raw, point_id=live)
 
 
@@ -158,7 +158,7 @@ def verdict(conn, cfg, got, fallback_url: str | None) -> Verdict:
 
     url_norm = normalize_listing_url(got.listing_url or "") or fallback_url
     if url_norm is not None:
-        live = _live_point(conn, url_norm)
+        live = live_point(conn, url_norm)
         if live is not None:
             return Verdict(reason=SKIP_DUP, point_id=live, url_norm=url_norm)
     return Verdict(zone_id=zone_id, url_norm=url_norm)
@@ -183,6 +183,13 @@ def insert_point(cur, got, zone_id: str, url_norm: str | None, photo_keys: list[
         ),
     )
     return cur.fetchone()[0]
+
+
+def live_point(conn, url_norm: str | None):
+    with conn.cursor() as cur:
+        cur.execute(_LIVE_BY_URL, (url_norm,))
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 def log(message: str, stream=None) -> None:
@@ -241,13 +248,6 @@ def _fields_ok(got) -> bool:
     if got.deposit is not None and not 0 <= got.deposit <= DEPOSIT_CAP:
         return False
     return all(code in RESTRICTIONS for code in got.restrictions)
-
-
-def _live_point(conn, url_norm: str):
-    with conn.cursor() as cur:
-        cur.execute(_LIVE_BY_URL, (url_norm,))
-        row = cur.fetchone()
-    return row[0] if row else None
 
 
 def _twin(conn, zone_id: str, price: int, rooms: int | None) -> bool:

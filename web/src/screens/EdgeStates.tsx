@@ -1,6 +1,6 @@
 /* Пограничные состояния — §6 / §2.3.
    1) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
-   2) шторки блокировки и жалобы (§5)
+   2) шторки блокировки, удаления мэтча и жалобы (§5, §2.3)
    3) шторка закрытия поиска с причиной
    4) свежесть точки (спит до шага 7)
    5) гейт второго «живу» в форме «к себе» */
@@ -163,12 +163,20 @@ export function LeavePoolSheet({
  */
 export function BlockPersonSheet({
   name,
+  note,
   busy,
   error,
   onCancel,
   onBlock,
 }: {
   name: string;
+  /**
+   * Что ещё случится вместе с блоком — «Мэтч тоже удалится» из мэтча (§5).
+   *
+   * Второй строкой, а не вместо предупреждения: невидимость обоюдна везде,
+   * и это правило одно для всех мест, откуда блокируют.
+   */
+  note?: string;
   busy?: boolean;
   /** Отказ сервера: шторка остаётся на месте, чтобы тап можно было повторить. */
   error?: string | null;
@@ -187,6 +195,13 @@ export function BlockPersonSheet({
         >
           Вы перестанете видеть друг друга везде — в пулах, лайках и пушах. Отменить нельзя.
         </span>
+        {note && (
+          <span
+            style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)', textWrap: 'pretty' }}
+          >
+            {note}
+          </span>
+        )}
       </div>
       {error && (
         <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
@@ -204,6 +219,62 @@ export function BlockPersonSheet({
           onClick={onBlock}
         >
           Заблокировать
+        </button>
+      </div>
+    </SheetShell>
+  );
+}
+
+/**
+ * Удаление мэтча (§2.3).
+ *
+ * Про сгорание лайков сказано прямо: пара снова увидит друг друга в пулах, но
+ * повторный лайк снова стоит слота — узнавать об этом после тапа поздно.
+ * Второй стороне ничего не уходит, поэтому и спрашиваем только один раз.
+ */
+export function UnmatchSheet({
+  name,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  busy?: boolean;
+  /** Отказ сервера: шторка остаётся на месте, чтобы тап можно было повторить. */
+  error?: string | null;
+  onCancel?: () => void;
+  onConfirm?: () => void;
+}) {
+  return (
+    <SheetShell onDismiss={busy ? undefined : onCancel}>
+      <span style={E.grabber} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
+          Удалить мэтч с {name}?
+        </span>
+        <span
+          style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)', textWrap: 'pretty' }}
+        >
+          Он пропадёт у обоих, лайки сгорят, и вы снова увидите друг друга в пулах. Отменить нельзя.
+        </span>
+      </div>
+      {error && (
+        <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {/* «Отмена» гаснет вместе с красной: пока запрос в пути, шторка не
+            должна закрываться под уже улетевшим удалением. */}
+        <button type="button" style={E.stay} disabled={busy} onClick={onCancel}>
+          Отмена
+        </button>
+        <button
+          type="button"
+          style={{ ...E.leave, opacity: busy ? 0.6 : 1 }}
+          disabled={busy}
+          onClick={onConfirm}
+        >
+          Удалить
         </button>
       </div>
     </SheetShell>

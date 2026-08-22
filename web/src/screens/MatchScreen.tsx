@@ -41,6 +41,23 @@ const L = {
     letterSpacing: '.05em',
     color: 'var(--tg-theme-hint-color)',
   } as CSSProperties,
+  /** Тихая строка действий: удаление и блок не соревнуются с контактом. */
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 2,
+  } as CSSProperties,
+  quiet: {
+    border: 'none',
+    background: 'none',
+    font: 'inherit',
+    fontSize: 13,
+    color: 'var(--tg-theme-hint-color)',
+    cursor: 'pointer',
+    padding: 0,
+  } as CSSProperties,
   fixed: {
     position: 'sticky',
     bottom: 0,
@@ -103,6 +120,8 @@ export function MatchScreen({
   profileMatches,
   contact,
   onWrite,
+  onUnmatch,
+  onBlock,
   onToFeed,
 }: {
   name: string;
@@ -123,6 +142,15 @@ export function MatchScreen({
    */
   contact: { label: string; hint?: string } | null;
   onWrite?: () => void;
+  /**
+   * Удалить мэтч (§2.3): любой стороной, без согласия второй.
+   *
+   * Стоит рядом с блоком и так же тихо: экран про то, что вы совпали, а не
+   * про то, как это отменить.
+   */
+  onUnmatch?: () => void;
+  /** Заблокировать (§5). Мэтч уходит вместе с блоком — об этом говорит шторка. */
+  onBlock?: () => void;
   onToFeed?: () => void;
 }) {
   const initials = name.slice(0, 2).toUpperCase();
@@ -246,6 +274,18 @@ export function MatchScreen({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {(onUnmatch || onBlock) && (
+          <div style={L.actions}>
+            <button type="button" style={L.quiet} onClick={onUnmatch}>
+              Удалить мэтч
+            </button>
+            <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>·</span>
+            <button type="button" style={L.quiet} onClick={onBlock}>
+              Заблокировать
+            </button>
           </div>
         )}
       </div>

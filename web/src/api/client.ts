@@ -1203,6 +1203,17 @@ export function fetchMatch(id: string): Promise<MatchDetail> {
 }
 
 /**
+ * Удаление мэтча любой стороной (§2.3).
+ *
+ * Стирает мэтч и ОБА лайка пары: люди снова видят друг друга в пулах, а
+ * потраченные слоты не возвращаются. Второй стороне не уходит ничего — ни
+ * пуша, ни следа. Повторный вызов отвечает 404: удалять уже нечего.
+ */
+export function deleteMatch(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/matches/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/**
  * Тело POST/PATCH поиска.
  *
  * Ровно семь ключей и ни одного лишнего: декодер сервера с

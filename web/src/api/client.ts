@@ -136,18 +136,18 @@ export type SearchStatus = 'unknown' | 'active' | 'paused' | 'closed';
 /**
  * Параметры поиска — они же фильтры ленты: поиск это снапшот фильтров (§2.1).
  *
- * Обязательны только зона (граница пула) и «до» по цене; всё остальное
- * отсутствующее или null означает «неважно» и совпадает со всем.
+ * Обязательны только зона (граница пула) и «до» по цене; комнатность, срок и
+ * заезд — НАБОРЫ, и пустой набор означает «неважно», совпадающее со всем.
  */
 export interface SearchParams {
   zone_id: string;
   price_min?: number | null;
   price_max: number;
-  rooms_min?: number | null;
-  rooms_max?: number | null;
-  /** Месяц заезда, «2026-09». Дня в модели нет — обещать его нельзя. */
-  move_in?: string | null;
-  term?: Term | null;
+  /** Комнатность набором: 1–4, где 4 значит «4+». */
+  rooms: number[];
+  terms: Term[];
+  /** Месяцы заезда, «2026-09». Дня в модели нет — обещать его нельзя. */
+  move_in: string[];
   has_stuff?: string[];
 }
 
@@ -578,13 +578,17 @@ export interface MatchDTO {
   at: string;
 }
 
-/** Пересечение одного параметра поисков: вилка, месяц или срок — что уж есть. */
+/**
+ * Пересечение одного параметра поисков.
+ *
+ * У цены это вилка (`min`/`max`), у наборов — общие значения (`values`):
+ * комнаты числами-строками, месяцы «2026-09», сроки — коды Term.
+ */
 export interface ParamOverlap {
   param: 'price' | 'rooms' | 'move_in' | 'term';
   min?: number;
   max?: number;
-  month?: string;
-  term?: Term;
+  values?: string[];
 }
 
 /** «Это мэтч» тремя блоками (§6): где, по параметрам, по анкете. */
@@ -811,16 +815,16 @@ export function fetchZones(): Promise<ZoneDirectory> {
  *
  * Смотреть — не подписываться: этот вызов ничего не сохраняет, поиск создаёт
  * только кнопка внутри промо-блока. Пустые ключи опускаются — сервер считает
- * отсутствующий параметр «неважно», а `rooms_min=` разобрал бы как ошибку.
+ * отсутствующий параметр «неважно», а `rooms=` разобрал бы как ошибку.
+ * Наборы едут повторяющимися ключами (`rooms=2&rooms=3`).
  * `has_stuff` не отправляется вовсе: сервер их из query не читает.
  */
 export function fetchFeed(p: SearchParams): Promise<FeedResponse> {
   const q = new URLSearchParams({ zone_id: p.zone_id, price_max: String(p.price_max) });
   if (p.price_min != null) q.set('price_min', String(p.price_min));
-  if (p.rooms_min != null) q.set('rooms_min', String(p.rooms_min));
-  if (p.rooms_max != null) q.set('rooms_max', String(p.rooms_max));
-  if (p.move_in) q.set('move_in', p.move_in);
-  if (p.term) q.set('term', p.term);
+  for (const r of p.rooms) q.append('rooms', String(r));
+  for (const t of p.terms) q.append('terms', t);
+  for (const m of p.move_in) q.append('move_in', m);
   return request<FeedResponse>(`/api/v1/feed?${q.toString()}`);
 }
 
@@ -1201,20 +1205,19 @@ export function fetchMatch(id: string): Promise<MatchDetail> {
 /**
  * Тело POST/PATCH поиска.
  *
- * Ровно восемь ключей и ни одного лишнего: декодер сервера с
+ * Ровно семь ключей и ни одного лишнего: декодер сервера с
  * DisallowUnknownFields ответит 400 на любой `id`, `status` или `zone`,
- * случайно доехавший из ответа обратно в запрос. Отсутствующее едет как null —
- * документированная форма «неважно».
+ * случайно доехавший из ответа обратно в запрос. Пустая цена едет как null,
+ * пустой набор — как `[]`: обе формы означают «неважно».
  */
 function paramsBody(p: SearchParams): string {
   return JSON.stringify({
     zone_id: p.zone_id,
     price_min: p.price_min ?? null,
     price_max: p.price_max,
-    rooms_min: p.rooms_min ?? null,
-    rooms_max: p.rooms_max ?? null,
-    move_in: p.move_in ?? null,
-    term: p.term ?? null,
+    rooms: p.rooms,
+    terms: p.terms,
+    move_in: p.move_in,
     has_stuff: p.has_stuff ?? [],
   });
 }

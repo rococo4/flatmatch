@@ -48,6 +48,9 @@ const NOT_SET: Record<PoolChip['param'], string> = {
   term: 'срок не указан',
 };
 
+/** Потолок комнатности: 4 хранится как «4+» — в наборе выше него ничего нет. */
+const ROOMS_CAP = 4;
+
 const TERM_LABEL: Record<Term, string> = {
   half_year: 'полгода+',
   year: 'год+',
@@ -272,11 +275,11 @@ export function chipLabel(chip: PoolChip, params: SearchParamsNoZone): string {
     case 'price':
       return priceShort(params);
     case 'rooms':
-      return roomsShort(params.rooms_min, params.rooms_max) ?? NOT_SET.rooms;
+      return roomsSetLabel(params.rooms) ?? NOT_SET.rooms;
     case 'move_in':
-      return params.move_in ? monthName(params.move_in) : NOT_SET.move_in;
+      return monthsLabel(params.move_in, 'name') ?? NOT_SET.move_in;
     case 'term':
-      return params.term ? TERM_LABEL[params.term] : NOT_SET.term;
+      return termsLabel(params.terms) ?? NOT_SET.term;
   }
 }
 
@@ -292,10 +295,12 @@ export function paramChips(p: SearchParamsNoZone, opts?: { zoneName?: string }):
   if (opts?.zoneName) out.push(opts.zoneName);
   out.push(`${priceShort(p)} с человека`);
 
-  const rooms = roomsLong(p);
+  const rooms = roomsSetLabel(p.rooms);
   if (rooms) out.push(rooms);
-  if (p.move_in) out.push(`заезд в ${monthIn(p.move_in)}`);
-  if (p.term) out.push(TERM_LABEL[p.term]);
+  const months = monthsLabel(p.move_in, 'in');
+  if (months) out.push(`заезд ${months}`);
+  const terms = termsLabel(p.terms);
+  if (terms) out.push(terms);
   return out;
 }
 
@@ -304,26 +309,80 @@ export function paramChips(p: SearchParamsNoZone, opts?: { zoneName?: string }):
  *
  * Сервер шлёт только пересечение и только по тому, что назвали ОБА, поэтому
  * ветки «не указано» здесь нет: нечего сказать — строки не будет вовсе (null).
- * Вырожденная вилка печатается одним числом («у обоих 45к»), комнаты без
- * верхней границы — «от 2 комн.»: её не назвал никто из двоих.
+ * Вырожденная вилка цены печатается одним числом («у обоих 45к»); у наборов
+ * пересечение приходит списком значений и печатается тем же лейблом, что и
+ * в чипах пула.
  */
 export function overlapRow(o: ParamOverlap): { label: string; value: string } | null {
+  const values = o.values ?? [];
   switch (o.param) {
     case 'price':
       return o.max != null
         ? { label: OVERLAP_LABEL.price, value: `у обоих ${priceRange(o.min ?? 0, o.max)}` }
         : null;
     case 'rooms': {
-      const rooms = roomsShort(o.min, o.max);
+      const rooms = roomsSetLabel(values.map(Number));
       return rooms ? { label: OVERLAP_LABEL.rooms, value: `у обоих ${rooms}` } : null;
     }
-    case 'move_in':
-      return o.month
-        ? { label: OVERLAP_LABEL.move_in, value: `${monthName(o.month)} у обоих` }
-        : null;
-    case 'term':
-      return o.term ? { label: OVERLAP_LABEL.term, value: `${TERM_LABEL[o.term]} у обоих` } : null;
+    case 'move_in': {
+      const months = monthsLabel(values, 'name');
+      return months ? { label: OVERLAP_LABEL.move_in, value: `${months} у обоих` } : null;
+    }
+    case 'term': {
+      const terms = termsLabel(values as Term[]);
+      return terms ? { label: OVERLAP_LABEL.term, value: `${terms} у обоих` } : null;
+    }
   }
+}
+
+/**
+ * Комнатность набором: «2 комн.» / «2–3 комн.» / «1, 3 комн.» / «от 2 комн.».
+ *
+ * 4 значит «4+» (§ решений), поэтому набор с четвёркой сверху печатается
+ * открытой границей: непрерывный {2,3,4} — «от 2 комн.», одинокая {4} —
+ * «4+ комн.». Полный {1,2,3,4} — это и есть «неважно», сказанное явно.
+ * Пустой набор — null: «неважно» показывается не чипом, а его отсутствием.
+ */
+export function roomsSetLabel(rooms: number[]): string | null {
+  const sorted = [...new Set(rooms)].sort((a, b) => a - b);
+  if (sorted.length === 0) return null;
+
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const solid = last - first + 1 === sorted.length;
+
+  if (solid && first === 1 && last === ROOMS_CAP) return 'любая комнатность';
+  if (solid && last === ROOMS_CAP) {
+    return sorted.length === 1 ? `${ROOMS_CAP}+ комн.` : `от ${first} комн.`;
+  }
+  if (solid) return sorted.length === 1 ? `${first} комн.` : `${first}–${last} комн.`;
+  return `${sorted.map(roomLabel).join(', ')} комн.`;
+}
+
+/**
+ * Месяцы заезда: «сентябрь» / «сентябрь или октябрь» / «в сентябре, октябре».
+ *
+ * Форма 'in' несёт и предлог — она встаёт в строку «заезд …», и склеивать
+ * «в» на стороне вызова значило бы разложить один падеж по двум файлам.
+ * Пара печатается через «или» (выбор из двух читается), трое и больше —
+ * запятыми: «или» в длинном списке только шумит.
+ */
+export function monthsLabel(months: string[], form: 'name' | 'in'): string | null {
+  if (months.length === 0) return null;
+  const labels = months.map(form === 'in' ? monthIn : monthName);
+  const list = labels.length === 2 ? `${labels[0]} или ${labels[1]}` : labels.join(', ');
+  return form === 'in' ? `в ${list}` : list;
+}
+
+/**
+ * Сроки набором: «год+» / «полгода+ / год+». Пустой набор — null.
+ *
+ * Незнакомый код молча выпадает: схема может уйти вперёд бинаря, и «undefined»
+ * в чипе хуже, чем на один срок короче.
+ */
+export function termsLabel(terms: Term[]): string | null {
+  const labels = terms.map((t) => TERM_LABEL[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(' / ') : null;
 }
 
 /**
@@ -653,28 +712,9 @@ function thousands(n: number): number {
   return Math.round(n / 1000);
 }
 
-/** Короткая комнатность для вердикт-чипа: «2 комн.» / «2–3 комн.» / «от 3 комн.». */
-function roomsShort(min?: number | null, max?: number | null): string | null {
-  if (min != null && max != null) return min === max ? `${min} комн.` : `${min}–${max} комн.`;
-  if (min != null) return `от ${min} комн.`;
-  if (max != null) return `до ${max} комн.`;
-  return null;
-}
-
-/** Развёрнутая комнатность для чипов фильтров: «2 комнаты» / «от 4 комнат». */
-function roomsLong(p: SearchParamsNoZone): string | null {
-  const min = p.rooms_min ?? null;
-  const max = p.rooms_max ?? null;
-  const nominative = (n: number) => `${n} ${plural(n, 'комната', 'комнаты', 'комнат')}`;
-  // «от» и «до» требуют родительного: «от 1 комнаты», «от 4 комнат».
-  const genitive = (n: number) => `${n} ${plural(n, 'комнаты', 'комнат', 'комнат')}`;
-
-  if (min != null && max != null) {
-    return min === max ? nominative(min) : `${min}–${max} ${plural(max, 'комната', 'комнаты', 'комнат')}`;
-  }
-  if (min != null) return `от ${genitive(min)}`;
-  if (max != null) return `до ${genitive(max)}`;
-  return null;
+/** Одно значение комнатности в перечислении: потолок это «4+», не «4». */
+function roomLabel(n: number): string {
+  return n === ROOMS_CAP ? `${ROOMS_CAP}+` : String(n);
 }
 
 /** «сентябрь», с годом — если он не текущий. */

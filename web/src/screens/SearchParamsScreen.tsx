@@ -24,26 +24,25 @@ import { S } from '../ui/primitives';
 /**
  * Черновик формы. Цены — сырые строки инпутов, а не числа: пустое поле это
  * не ноль, а «неважно», и полунабранное «4» не должно становиться 4 ₽.
+ * Комнатность, срок и заезд — наборы: пустой значит «неважно».
  */
 export type SearchDraft = {
   zoneId: string | null;
   priceMin: string;
   priceMax: string;
-  roomsMin: number | null;
-  roomsMax: number | null;
-  /** «2026-09» */
-  moveIn: string | null;
-  term: Term | null;
+  rooms: number[];
+  terms: Term[];
+  /** Месяцы, «2026-09» */
+  moveIn: string[];
 };
 
 export const EMPTY_DRAFT: SearchDraft = {
   zoneId: null,
   priceMin: '',
   priceMax: '',
-  roomsMin: null,
-  roomsMax: null,
-  moveIn: null,
-  term: null,
+  rooms: [],
+  terms: [],
+  moveIn: [],
 };
 
 // МЦД-платформы отделены от одноимённого метро («Лианозово (МЦД)») — подпись
@@ -70,21 +69,19 @@ const PICKER_GROUPS: { kind: ZoneKind; title: string }[] = [
 const PICKER_GROUP_LIMIT = 30;
 
 /**
- * Комнатность — пресеты, а не пара «от/до».
+ * Комнатность — набор переключателей, а не пара «от/до».
  *
- * §6 просит комнатность одним выбором, и пресет физически не может дать
- * невалидную пару вроде «от 3 до 2».
+ * Пара физически могла дать невалидное «от 3 до 2», а «2 и 3» — не диапазон,
+ * а две одинаково подходящие квартиры. 4 значит «4+»: выше потолка ничего нет.
  */
-const ROOMS_PRESETS: { label: string; min: number | null; max: number | null }[] = [
-  { label: 'неважно', min: null, max: null },
-  { label: '1', min: 1, max: 1 },
-  { label: '2', min: 2, max: 2 },
-  { label: '3', min: 3, max: 3 },
-  { label: '4+', min: 4, max: null },
+const ROOM_CHIPS: { label: string; value: number }[] = [
+  { label: '1', value: 1 },
+  { label: '2', value: 2 },
+  { label: '3', value: 3 },
+  { label: '4+', value: 4 },
 ];
 
-const TERM_PRESETS: { label: string; value: Term | null }[] = [
-  { label: 'неважно', value: null },
+const TERM_CHIPS: { label: string; value: Term }[] = [
   { label: 'полгода+', value: 'half_year' },
   { label: 'год+', value: 'year' },
   { label: 'бессрочно', value: 'open' },
@@ -215,18 +212,18 @@ export function isDraftReady(d: SearchDraft): boolean {
 /**
  * Черновик → параметры провода.
  *
- * Пустое поле едет как null — документированная форма «неважно». has_stuff
- * всегда пуст: чипов «что уже есть» в форме нет (см. шапку файла).
+ * Пустая цена едет как null, пустой набор — как `[]`: обе формы означают
+ * «неважно». has_stuff всегда пуст: чипов «что уже есть» в форме нет
+ * (см. шапку файла).
  */
 export function draftToParams(d: SearchDraft): SearchParams {
   return {
     zone_id: d.zoneId ?? '',
     price_min: d.priceMin ? Number(d.priceMin) : null,
     price_max: Number(d.priceMax),
-    rooms_min: d.roomsMin,
-    rooms_max: d.roomsMax,
+    rooms: d.rooms,
+    terms: d.terms,
     move_in: d.moveIn,
-    term: d.term,
     has_stuff: [],
   };
 }
@@ -237,10 +234,9 @@ export function paramsToDraft(s: SearchResponse): SearchDraft {
     zoneId: s.zone.id,
     priceMin: s.price_min != null ? String(s.price_min) : '',
     priceMax: String(s.price_max),
-    roomsMin: s.rooms_min ?? null,
-    roomsMax: s.rooms_max ?? null,
-    moveIn: s.move_in ?? null,
-    term: s.term ?? null,
+    rooms: s.rooms ?? [],
+    terms: s.terms ?? [],
+    moveIn: s.move_in ?? [],
   };
 }
 
@@ -328,6 +324,7 @@ export function SearchParamsScreen({
   const ready = isDraftReady(value) && !busy;
 
   const digits = (raw: string) => raw.replace(/\D/g, '').slice(0, 7);
+  const months = monthOptions(6);
 
   return (
     <div style={F.frame}>
@@ -420,18 +417,27 @@ export function SearchParamsScreen({
           )}
         </div>
 
+        {/* Наборы: «неважно» это пустой набор, поэтому первый чип не значение,
+            а очистка ряда. Остальные — переключатели: «2» и «3» вместе честно
+            значат «обе подойдут», а не диапазон. */}
         <div style={F.field}>
           <span style={F.label}>Комнатность</span>
           <div style={F.chipRow}>
-            {ROOMS_PRESETS.map((p) => (
+            <Chip
+              label="неважно"
+              active={value.rooms.length === 0}
+              onClick={() => onChange({ ...value, rooms: [] })}
+            />
+            {ROOM_CHIPS.map((r) => (
               <Chip
-                key={p.label}
-                label={p.label}
-                active={value.roomsMin === p.min && value.roomsMax === p.max}
-                onClick={() => onChange({ ...value, roomsMin: p.min, roomsMax: p.max })}
+                key={r.value}
+                label={r.label}
+                active={value.rooms.includes(r.value)}
+                onClick={() => onChange({ ...value, rooms: toggle(value.rooms, r.value, ROOM_CHIPS) })}
               />
             ))}
           </div>
+          <span style={F.hint}>Можно несколько: «2» и «3» — обе подойдут</span>
         </div>
 
         <div style={F.field}>
@@ -439,29 +445,35 @@ export function SearchParamsScreen({
           <div style={F.chipRow}>
             <Chip
               label="неважно"
-              active={value.moveIn === null}
-              onClick={() => onChange({ ...value, moveIn: null })}
+              active={value.moveIn.length === 0}
+              onClick={() => onChange({ ...value, moveIn: [] })}
             />
-            {monthOptions(6).map((m) => (
+            {months.map((m) => (
               <Chip
                 key={m.value}
                 label={m.label}
-                active={value.moveIn === m.value}
-                onClick={() => onChange({ ...value, moveIn: m.value })}
+                active={value.moveIn.includes(m.value)}
+                onClick={() => onChange({ ...value, moveIn: toggle(value.moveIn, m.value, months) })}
               />
             ))}
           </div>
+          <span style={F.hint}>Несколько месяцев — если дата плавает</span>
         </div>
 
         <div style={F.field}>
           <span style={F.label}>Срок</span>
           <div style={F.chipRow}>
-            {TERM_PRESETS.map((t) => (
+            <Chip
+              label="неважно"
+              active={value.terms.length === 0}
+              onClick={() => onChange({ ...value, terms: [] })}
+            />
+            {TERM_CHIPS.map((t) => (
               <Chip
-                key={t.label}
+                key={t.value}
                 label={t.label}
-                active={value.term === t.value}
-                onClick={() => onChange({ ...value, term: t.value })}
+                active={value.terms.includes(t.value)}
+                onClick={() => onChange({ ...value, terms: toggle(value.terms, t.value, TERM_CHIPS) })}
               />
             ))}
           </div>
@@ -502,7 +514,19 @@ export function SearchParamsScreen({
   );
 }
 
-/** Чип одиночного выбора. Идиома та же, что у чипов животных в онбординге. */
+/**
+ * Переключение значения в наборе.
+ *
+ * Порядок держим по ряду чипов, а не по порядку тапов: набор едет в лейблы
+ * («сентябрь или октябрь»), и «октябрь или сентябрь» читался бы как ошибка.
+ */
+function toggle<T>(list: T[], v: T, options: readonly { value: T }[]): T[] {
+  const next = list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+  const rank = (x: T) => options.findIndex((o) => o.value === x);
+  return next.sort((a, b) => rank(a) - rank(b));
+}
+
+/** Чип набора. Идиома та же, что у чипов животных в онбординге. */
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <span

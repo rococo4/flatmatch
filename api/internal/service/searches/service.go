@@ -3,7 +3,6 @@ package searches
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -94,10 +93,7 @@ func (s *Service) announce(ctx context.Context, search entity.Search) {
 }
 
 func (s *Service) validated(p entity.SearchParams) (entity.SearchParams, error) {
-	if p.MoveIn != nil {
-		monthStart := time.Date(p.MoveIn.Year(), p.MoveIn.Month(), 1, 0, 0, 0, 0, time.UTC)
-		p.MoveIn = &monthStart
-	}
+	p = p.Normalized()
 
 	bad := p.InvalidFields()
 	if _, ok := s.dir.Get(p.ZoneID); p.ZoneID != "" && !ok {

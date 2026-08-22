@@ -629,8 +629,8 @@ func TestPoolChipsSpeakFromTheViewerSide(t *testing.T) {
 
 	viewerParams := entity.SearchParams{
 		ZoneID: district, PriceMin: pointer.To(35000), PriceMax: 45000,
-		RoomsMin: pointer.To(2), RoomsMax: pointer.To(2),
-		MoveIn: pointer.To(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)),
+		Rooms:        []int{2},
+		MoveInMonths: []time.Time{time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	member := pointsrepo.Member{
 		User: entity.User{ID: uuid.New()},

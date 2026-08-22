@@ -1,7 +1,9 @@
 package pools
 
 import (
-	"math"
+	"slices"
+	"strconv"
+	"time"
 
 	"flatmatch/api/internal/entity"
 )
@@ -32,7 +34,7 @@ const (
 	SectionNone    SectionID = "none"
 )
 
-const roomsWide = math.MaxInt32
+const monthKeyLayout = "2006-01"
 
 type Chip struct {
 	Param   Param
@@ -40,8 +42,6 @@ type Chip struct {
 }
 
 var sectionRank = map[SectionID]int{SectionNone: 0, SectionPartial: 1, SectionAll: 2}
-
-var termRank = map[entity.Term]int{entity.TermHalfYear: 0, entity.TermYear: 1, entity.TermOpen: 2}
 
 func Compare(mine, theirs entity.SearchParams) ([]Chip, SectionID) {
 	chips := []Chip{
@@ -89,54 +89,54 @@ func priceVerdict(mine, theirs entity.SearchParams) Verdict {
 }
 
 func roomsVerdict(mine, theirs entity.SearchParams) Verdict {
-	if theirs.RoomsMin == nil && theirs.RoomsMax == nil {
+	return setVerdict(roomKeys(mine.Rooms), roomKeys(theirs.Rooms))
+}
+
+func moveInVerdict(mine, theirs entity.SearchParams) Verdict {
+	return setVerdict(monthKeys(mine.MoveInMonths), monthKeys(theirs.MoveInMonths))
+}
+
+func termVerdict(mine, theirs entity.SearchParams) Verdict {
+	return setVerdict(termKeys(mine.Terms), termKeys(theirs.Terms))
+}
+
+func setVerdict(mine, theirs []string) Verdict {
+	if len(theirs) == 0 {
 		return VerdictNone
 	}
-	if mine.RoomsMin == nil && mine.RoomsMax == nil {
+	if len(mine) == 0 {
 		return VerdictGreen
 	}
-	aMin, aMax := orOne(mine.RoomsMin), orWide(mine.RoomsMax)
-	bMin, bMax := orOne(theirs.RoomsMin), orWide(theirs.RoomsMax)
-	if aMax >= bMin && bMax >= aMin {
-		return VerdictGreen
+	for _, v := range mine {
+		if slices.Contains(theirs, v) {
+			return VerdictGreen
+		}
 	}
 	return VerdictGrey
 }
 
-func moveInVerdict(mine, theirs entity.SearchParams) Verdict {
-	if theirs.MoveIn == nil {
-		return VerdictNone
+func roomKeys(rooms []int) []string {
+	out := make([]string, 0, len(rooms))
+	for _, n := range rooms {
+		out = append(out, strconv.Itoa(n))
 	}
-	if mine.MoveIn == nil {
-		return VerdictGreen
-	}
-	a, b := *mine.MoveIn, *theirs.MoveIn
-	apart := (b.Year()-a.Year())*12 + int(b.Month()-a.Month())
-	switch abs(apart) {
-	case 0:
-		return VerdictGreen
-	case 1:
-		return VerdictEdge
-	default:
-		return VerdictGrey
-	}
+	return out
 }
 
-func termVerdict(mine, theirs entity.SearchParams) Verdict {
-	if theirs.Term == nil {
-		return VerdictNone
+func monthKeys(months []time.Time) []string {
+	out := make([]string, 0, len(months))
+	for _, m := range months {
+		out = append(out, m.Format(monthKeyLayout))
 	}
-	if mine.Term == nil {
-		return VerdictGreen
+	return out
+}
+
+func termKeys(terms []entity.Term) []string {
+	out := make([]string, 0, len(terms))
+	for _, t := range terms {
+		out = append(out, string(t))
 	}
-	switch abs(termRank[*mine.Term] - termRank[*theirs.Term]) {
-	case 0:
-		return VerdictGreen
-	case 1:
-		return VerdictEdge
-	default:
-		return VerdictGrey
-	}
+	return out
 }
 
 func orZero(v *int) int {
@@ -144,25 +144,4 @@ func orZero(v *int) int {
 		return 0
 	}
 	return *v
-}
-
-func orOne(v *int) int {
-	if v == nil {
-		return 1
-	}
-	return *v
-}
-
-func orWide(v *int) int {
-	if v == nil {
-		return roomsWide
-	}
-	return *v
-}
-
-func abs(v int) int {
-	if v < 0 {
-		return -v
-	}
-	return v
 }

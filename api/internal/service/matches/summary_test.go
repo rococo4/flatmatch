@@ -16,6 +16,10 @@ var (
 	oct  = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 )
 
+func sameOverlap(a, b ParamOverlap) bool {
+	return a.Param == b.Param && a.Min == b.Min && a.Max == b.Max && slices.Equal(a.Values, b.Values)
+}
+
 func active(p entity.SearchParams) entity.Search {
 	return entity.Search{SearchParams: p, Status: entity.SearchActive}
 }
@@ -50,69 +54,79 @@ func TestParamsOverlap(t *testing.T) {
 			want:   []ParamOverlap{{Param: ParamPrice, Min: 0, Max: 45000}},
 		},
 		"rooms intersect": {
-			mine:   entity.SearchParams{PriceMax: 45000, RoomsMin: pointer.To(1), RoomsMax: pointer.To(2)},
-			theirs: entity.SearchParams{PriceMax: 55000, RoomsMin: pointer.To(2), RoomsMax: pointer.To(3)},
+			mine:   entity.SearchParams{PriceMax: 45000, Rooms: []int{2, 3}},
+			theirs: entity.SearchParams{PriceMax: 55000, Rooms: []int{3, 4}},
 			want: []ParamOverlap{
 				{Param: ParamPrice, Min: 0, Max: 45000},
-				{Param: ParamRooms, Min: 2, Max: 2},
+				{Param: ParamRooms, Values: []string{"3"}},
+			},
+		},
+
+		"rooms intersect in several values": {
+			mine:   entity.SearchParams{PriceMax: 45000, Rooms: []int{1, 2, 3}},
+			theirs: entity.SearchParams{PriceMax: 55000, Rooms: []int{2, 3}},
+			want: []ParamOverlap{
+				{Param: ParamPrice, Min: 0, Max: 45000},
+				{Param: ParamRooms, Values: []string{"2", "3"}},
 			},
 		},
 
 		"rooms unstated on one side": {
-			mine:   entity.SearchParams{PriceMax: 45000, RoomsMin: pointer.To(1), RoomsMax: pointer.To(2)},
+			mine:   entity.SearchParams{PriceMax: 45000, Rooms: []int{1, 2}},
 			theirs: entity.SearchParams{PriceMax: 55000},
 			want:   []ParamOverlap{{Param: ParamPrice, Min: 0, Max: 45000}},
 		},
-		"rooms with no upper bound on either side": {
-			mine:   entity.SearchParams{PriceMax: 45000, RoomsMin: pointer.To(2)},
-			theirs: entity.SearchParams{PriceMax: 55000, RoomsMin: pointer.To(3)},
-			want: []ParamOverlap{
-				{Param: ParamPrice, Min: 0, Max: 45000},
-				{Param: ParamRooms, Min: 3, Max: 0},
-			},
-		},
 		"rooms apart": {
-			mine:   entity.SearchParams{PriceMax: 45000, RoomsMax: pointer.To(1)},
-			theirs: entity.SearchParams{PriceMax: 55000, RoomsMin: pointer.To(3)},
+			mine:   entity.SearchParams{PriceMax: 45000, Rooms: []int{1}},
+			theirs: entity.SearchParams{PriceMax: 55000, Rooms: []int{3, 4}},
 			want:   []ParamOverlap{{Param: ParamPrice, Min: 0, Max: 45000}},
 		},
 		"same move-in month": {
-			mine:   entity.SearchParams{PriceMax: 45000, MoveIn: &sept},
-			theirs: entity.SearchParams{PriceMax: 55000, MoveIn: &sept},
+			mine:   entity.SearchParams{PriceMax: 45000, MoveInMonths: []time.Time{sept}},
+			theirs: entity.SearchParams{PriceMax: 55000, MoveInMonths: []time.Time{sept}},
 			want: []ParamOverlap{
 				{Param: ParamPrice, Min: 0, Max: 45000},
-				{Param: ParamMoveIn, Month: "2026-09"},
+				{Param: ParamMoveIn, Values: []string{"2026-09"}},
+			},
+		},
+		"months intersect in one of two": {
+			mine:   entity.SearchParams{PriceMax: 45000, MoveInMonths: []time.Time{sept, oct}},
+			theirs: entity.SearchParams{PriceMax: 55000, MoveInMonths: []time.Time{oct}},
+			want: []ParamOverlap{
+				{Param: ParamPrice, Min: 0, Max: 45000},
+				{Param: ParamMoveIn, Values: []string{"2026-10"}},
 			},
 		},
 		"different move-in months": {
-			mine:   entity.SearchParams{PriceMax: 45000, MoveIn: &sept},
-			theirs: entity.SearchParams{PriceMax: 55000, MoveIn: &oct},
+			mine:   entity.SearchParams{PriceMax: 45000, MoveInMonths: []time.Time{sept}},
+			theirs: entity.SearchParams{PriceMax: 55000, MoveInMonths: []time.Time{oct}},
 			want:   []ParamOverlap{{Param: ParamPrice, Min: 0, Max: 45000}},
 		},
 		"move-in unstated on one side": {
-			mine:   entity.SearchParams{PriceMax: 45000, MoveIn: &sept},
+			mine:   entity.SearchParams{PriceMax: 45000, MoveInMonths: []time.Time{sept}},
 			theirs: entity.SearchParams{PriceMax: 55000},
 			want:   []ParamOverlap{{Param: ParamPrice, Min: 0, Max: 45000}},
 		},
 		"same term": {
-			mine:   entity.SearchParams{PriceMax: 45000, Term: pointer.To(entity.TermYear)},
-			theirs: entity.SearchParams{PriceMax: 55000, Term: pointer.To(entity.TermYear)},
+			mine:   entity.SearchParams{PriceMax: 45000, Terms: []entity.Term{entity.TermYear}},
+			theirs: entity.SearchParams{PriceMax: 55000, Terms: []entity.Term{entity.TermYear, entity.TermOpen}},
 			want: []ParamOverlap{
 				{Param: ParamPrice, Min: 0, Max: 45000},
-				{Param: ParamTerm, Term: "year"},
+				{Param: ParamTerm, Values: []string{"year"}},
 			},
 		},
 		"different terms": {
-			mine:   entity.SearchParams{PriceMax: 45000, Term: pointer.To(entity.TermYear)},
-			theirs: entity.SearchParams{PriceMax: 55000, Term: pointer.To(entity.TermOpen)},
+			mine:   entity.SearchParams{PriceMax: 45000, Terms: []entity.Term{entity.TermYear}},
+			theirs: entity.SearchParams{PriceMax: 55000, Terms: []entity.Term{entity.TermOpen}},
 			want:   []ParamOverlap{{Param: ParamPrice, Min: 0, Max: 45000}},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if got := paramsOverlap(tc.mine, tc.theirs); !slices.Equal(got, tc.want) {
-				t.Errorf("paramsOverlap() = %v, want %v", got, tc.want)
+			got := paramsOverlap(tc.mine, tc.theirs)
+			if !slices.EqualFunc(got, tc.want, sameOverlap) {
+				t.Errorf("paramsOverlap() = %+v, want %+v", got, tc.want)
 			}
 		})
 	}
@@ -133,7 +147,7 @@ func TestSummaryReadsTheFreshestActiveSearchOfBothSides(t *testing.T) {
 	_, summary := f.detail(t)
 
 	want := []ParamOverlap{{Param: ParamPrice, Min: 40000, Max: 45000}}
-	if !slices.Equal(summary.ParamsOverlap, want) {
+	if !slices.EqualFunc(summary.ParamsOverlap, want, sameOverlap) {
 		t.Errorf("ParamsOverlap = %v, want %v", summary.ParamsOverlap, want)
 	}
 }

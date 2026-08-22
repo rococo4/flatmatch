@@ -4,10 +4,40 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
 )
+
+func TestParamsDTOSetsAreAlwaysArrays(t *testing.T) {
+	raw, err := json.Marshal(toParamsDTO(entity.SearchParams{PriceMax: 45000}))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, want := range []string{`"rooms":[]`, `"terms":[]`, `"move_in":[]`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("params %s does not contain %s", raw, want)
+		}
+	}
+
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	raw, err = json.Marshal(toParamsDTO(entity.SearchParams{
+		PriceMax:     45000,
+		Rooms:        []int{2, 3},
+		Terms:        []entity.Term{entity.TermYear},
+		MoveInMonths: []time.Time{sept},
+	}))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, want := range []string{`"rooms":[2,3]`, `"terms":["year"]`, `"move_in":["2026-09"]`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("params %s does not contain %s", raw, want)
+		}
+	}
+}
 
 func TestPoolResponseListsAreAlwaysArrays(t *testing.T) {
 	zone := zones.Zone{ID: "d-khamovniki", Kind: zones.KindDistrict, Name: "Хамовники"}

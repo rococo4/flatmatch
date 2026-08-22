@@ -569,10 +569,10 @@ func mustCreate(t *testing.T, repo *searchesrepo.Repo, userID uuid.UUID, p entit
 
 func zoneParams(zone string, min, max int, move time.Time) entity.SearchParams {
 	return entity.SearchParams{
-		ZoneID:   zone,
-		PriceMin: pointer.To(min),
-		PriceMax: max,
-		MoveIn:   &move,
+		ZoneID:       zone,
+		PriceMin:     pointer.To(min),
+		PriceMax:     max,
+		MoveInMonths: []time.Time{move},
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/AlekSi/pointer"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -20,13 +19,14 @@ func (r *Repo) Create(ctx context.Context, userID uuid.UUID, p entity.SearchPara
 		if err := lockAndCheckSlots(ctx, tx, userID); err != nil {
 			return err
 		}
+		p = p.Normalized()
 		rows, err := tx.Query(ctx, `
 			INSERT INTO searches (user_id, zone_id, price_min, price_max,
-				rooms_min, rooms_max, move_in, term, has_stuff)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				rooms, terms, move_in_months, has_stuff)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING `+searchColumns,
-			userID, p.ZoneID, p.PriceMin, p.PriceMax, p.RoomsMin, p.RoomsMax,
-			p.MoveIn, termArg(p.Term), stuffArg(p.HasStuff))
+			userID, p.ZoneID, p.PriceMin, p.PriceMax, roomsArg(p.Rooms),
+			termsArg(p.Terms), monthsArg(p.MoveInMonths), stuffArg(p.HasStuff))
 		if err != nil {
 			return err
 		}
@@ -130,14 +130,15 @@ func (r *Repo) HasActiveIn(ctx context.Context, userID uuid.UUID, zoneIDs []stri
 }
 
 func (r *Repo) UpdateParams(ctx context.Context, userID, id uuid.UUID, p entity.SearchParams) (entity.Search, error) {
+	p = p.Normalized()
 	search, err := r.oneEditable(ctx, userID, id, `
 		UPDATE searches SET zone_id = $3, price_min = $4, price_max = $5,
-			rooms_min = $6, rooms_max = $7, move_in = $8, term = $9,
-			has_stuff = $10, updated_at = now()
+			rooms = $6, terms = $7, move_in_months = $8,
+			has_stuff = $9, updated_at = now()
 		WHERE id = $1 AND user_id = $2 AND status <> 'closed'
 		RETURNING `+searchColumns,
-		id, userID, p.ZoneID, p.PriceMin, p.PriceMax, p.RoomsMin, p.RoomsMax,
-		p.MoveIn, termArg(p.Term), stuffArg(p.HasStuff))
+		id, userID, p.ZoneID, p.PriceMin, p.PriceMax, roomsArg(p.Rooms),
+		termsArg(p.Terms), monthsArg(p.MoveInMonths), stuffArg(p.HasStuff))
 	if err != nil {
 		return entity.Search{}, fmt.Errorf("update params of search %s: %w", id, err)
 	}
@@ -343,11 +344,24 @@ func collectSearches(rows pgx.Rows) ([]entity.Search, error) {
 	return out, nil
 }
 
-func termArg(t *entity.Term) *string {
-	if t == nil {
-		return nil
+func roomsArg(rooms []int) []int32 {
+	out := make([]int32, 0, len(rooms))
+	for _, n := range rooms {
+		out = append(out, int32(n))
 	}
-	return pointer.To(string(*t))
+	return out
+}
+
+func monthsArg(months []time.Time) []time.Time {
+	return append(make([]time.Time, 0, len(months)), months...)
+}
+
+func termsArg(terms []entity.Term) []string {
+	out := make([]string, 0, len(terms))
+	for _, t := range terms {
+		out = append(out, string(t))
+	}
+	return out
 }
 
 func stuffArg(chips []entity.StuffChip) []string {

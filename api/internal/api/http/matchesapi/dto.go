@@ -58,11 +58,10 @@ type pointDTO struct {
 }
 
 type paramOverlapDTO struct {
-	Param string `json:"param"`
-	Min   *int   `json:"min,omitempty"`
-	Max   *int   `json:"max,omitempty"`
-	Month string `json:"month,omitempty"`
-	Term  string `json:"term,omitempty"`
+	Param  string   `json:"param"`
+	Min    *int     `json:"min,omitempty"`
+	Max    *int     `json:"max,omitempty"`
+	Values []string `json:"values,omitempty"`
 }
 
 type sharedDTO struct {
@@ -112,13 +111,10 @@ func toPeerDTO(u entity.User, photoURL string) peerDTO {
 }
 
 func toParamOverlap(o matches.ParamOverlap) paramOverlapDTO {
-	out := paramOverlapDTO{Param: o.Param, Month: o.Month, Term: o.Term}
-	switch o.Param {
-	case matches.ParamPrice, matches.ParamRooms:
+	out := paramOverlapDTO{Param: o.Param, Values: o.Values}
+	if o.Param == matches.ParamPrice {
 		out.Min = pointer.To(o.Min)
-		if o.Max != 0 {
-			out.Max = pointer.To(o.Max)
-		}
+		out.Max = pointer.To(o.Max)
 	}
 	return out
 }

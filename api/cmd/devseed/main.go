@@ -54,8 +54,7 @@ type seedPerson struct {
 	zone     string
 	priceMin int
 	priceMax int
-	roomsMin int
-	roomsMax int
+	rooms    []int
 	moveIn   string
 	term     entity.Term
 }
@@ -63,75 +62,75 @@ type seedPerson struct {
 var people = []seedPerson{
 	{1, "Катя", 22, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingNo, entity.PetsOwnNone,
 		"Сид для разработки: сплю поздно, работаю из дома, ищу спокойную квартиру.",
-		"d-khamovniki", 40000, 55000, 0, 0, "2026-09-01", entity.TermYear},
+		"d-khamovniki", 40000, 55000, nil, "2026-09-01", entity.TermYear},
 	{2, "Олег", 25, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleLark, entity.SmokingNo, entity.PetsOwnCat,
 		"Сид для разработки: со мной переезжает кот, он тихий.",
-		"d-khamovniki", 35000, 45000, 2, 2, "2026-09-01", ""},
+		"d-khamovniki", 35000, 45000, []int{2}, "2026-09-01", ""},
 
 	{3, "Ира", 23, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingOutside, entity.PetsOwnNone,
 		"Сид для разработки: курю только на балконе, готова смотреть от Сокольников до Юго-Западной.",
-		"line-1", 30000, 42000, 0, 0, "2026-10-01", entity.TermHalfYear},
+		"line-1", 30000, 42000, nil, "2026-10-01", entity.TermHalfYear},
 
 	{4, "Дима", 27, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleFloating, entity.SmokingNo, entity.PetsOwnDog,
 		"Сид для разработки: собака среднего размера, гуляем рано утром.",
-		"d-khamovniki", 45000, 60000, 0, 0, "2026-09-01", ""},
+		"d-khamovniki", 45000, 60000, nil, "2026-09-01", ""},
 
 	{5, "Настя", 24, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingNo, entity.PetsOwnNone,
 		"Сид для разработки: бюджет выше среднего, зато готова на весь год.",
-		"d-khamovniki", 60000, 80000, 0, 0, "2026-09-01", entity.TermYear},
+		"d-khamovniki", 60000, 80000, nil, "2026-09-01", entity.TermYear},
 
 	{6, "Глеб", 30, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleLark, entity.SmokingHome, entity.PetsOwnNone,
 		"Сид для разработки: заезжаю ближе к зиме, ищу вариант подороже.",
-		"d-khamovniki", 70000, 90000, 0, 0, "2026-12-01", ""},
+		"d-khamovniki", 70000, 90000, nil, "2026-12-01", ""},
 
 	{7, "Лена", 21, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleFloating, entity.SmokingNo, entity.PetsOwnNone,
 		"Сид для разработки: сроки плавают, смотрю всё подряд.",
-		"d-khamovniki", 0, 50000, 0, 0, "", ""},
+		"d-khamovniki", 0, 50000, nil, "", ""},
 
 	{8, "Аня", 26, entity.GenderFemale, entity.GenderPrefSame, entity.ScheduleOwl, entity.SmokingNo, entity.PetsOwnCat,
 		"Сид для разработки: съезжаюсь только с девушками.",
-		"d-khamovniki", 35000, 45000, 0, 0, "2026-09-01", ""},
+		"d-khamovniki", 35000, 45000, nil, "2026-09-01", ""},
 	{9, "Марк", 29, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleLark, entity.SmokingOutside, entity.PetsOwnDog,
 		"Сид для разработки: нужна двушка или трёшка, работаю в офисе рядом с кольцом.",
-		"line-5", 38000, 48000, 2, 3, "2026-09-01", entity.TermYear},
+		"line-5", 38000, 48000, []int{2, 3}, "2026-09-01", entity.TermYear},
 	{10, "Соня", 20, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingNo, entity.PetsOwnCat,
 		"Сид для разработки: студентка, заезжаю в августе, если найду с кем.",
-		"d-arbat", 33000, 41000, 1, 1, "2026-08-01", entity.TermHalfYear},
+		"d-arbat", 33000, 41000, []int{1}, "2026-08-01", entity.TermHalfYear},
 	{11, "Тимур", 31, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleFloating, entity.SmokingHome, entity.PetsOwnNone,
 		"Сид для разработки: сменный график, дома бываю днём.",
-		"d-yakimanka", 44000, 52000, 0, 0, "2026-10-01", entity.TermOpen},
+		"d-yakimanka", 44000, 52000, nil, "2026-10-01", entity.TermOpen},
 
 	{12, "Полина", 24, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleLark, entity.SmokingNo, entity.PetsOwnOther,
 		"Сид для разработки: бюджет скромный, зато со мной только черепаха.",
-		"d-ramenki", 25000, 34000, 0, 0, "2026-09-01", ""},
+		"d-ramenki", 25000, 34000, nil, "2026-09-01", ""},
 
 	{13, "Женя", 28, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingOutside, entity.PetsOwnNone,
 		"Сид для разработки: освобождаюсь только к ноябрю, ищу заранее.",
-		"d-dorogomilovo", 36000, 46000, 2, 2, "2026-11-01", entity.TermYear},
+		"d-dorogomilovo", 36000, 46000, []int{2}, "2026-11-01", entity.TermYear},
 	{14, "Артём", 33, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleFloating, entity.SmokingNo, entity.PetsOwnCat,
 		"Сид для разработки: готов платить больше за отдельную комнату побольше.",
-		"line-3", 50000, 70000, 0, 0, "2026-09-01", entity.TermOpen},
+		"line-3", 50000, 70000, nil, "2026-09-01", entity.TermOpen},
 
 	{15, "Даша", 27, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleLark, entity.SmokingNo, entity.PetsOwnNone,
 		"Сид для разработки: ищу трёшку в центре, заезд после Нового года.",
-		"d-presnenskii", 80000, 120000, 3, 3, "2027-01-01", entity.TermOpen},
+		"d-presnenskii", 80000, 120000, []int{3}, "2027-01-01", entity.TermOpen},
 	{16, "Кирилл", 22, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingNo, entity.PetsOwnNone,
 		"Сид для разработки: учусь рядом, с датой заезда пока не определился.",
-		"st-park-kultury", 30000, 45000, 1, 2, "", entity.TermHalfYear},
+		"st-park-kultury", 30000, 45000, []int{1, 2}, "", entity.TermHalfYear},
 
 	{17, "Гриша", 25, entity.GenderMale, entity.GenderPrefSame, entity.ScheduleLark, entity.SmokingOutside, entity.PetsOwnDog,
 		"Сид для разработки: живу только с парнями, собака едет со мной.",
-		"d-tverskoi", 42000, 60000, 0, 0, "2026-09-01", ""},
+		"d-tverskoi", 42000, 60000, nil, "2026-09-01", ""},
 
 	{18, "Максим", 26, entity.GenderMale, entity.GenderPrefAny, entity.ScheduleFloating, entity.SmokingNo, entity.PetsOwnNone,
 		"Сид для разработки: хочу жить у Сокола, оттуда удобно на работу.",
-		"st-sokol", 35000, 45000, 0, 0, "2026-09-01", entity.TermYear},
+		"st-sokol", 35000, 45000, nil, "2026-09-01", entity.TermYear},
 	{19, "Вера", 23, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleOwl, entity.SmokingHome, entity.PetsOwnCat,
 		"Сид для разработки: район знаю, ищу соседку на севере.",
-		"d-aeroport", 30000, 40000, 1, 1, "2026-09-01", ""},
+		"d-aeroport", 30000, 40000, []int{1}, "2026-09-01", ""},
 	{20, "Оля", 29, entity.GenderFemale, entity.GenderPrefAny, entity.ScheduleLark, entity.SmokingNo, entity.PetsOwnOther,
 		"Сид для разработки: смотрю всю зелёную ветку, срок не принципиален.",
-		"line-2", 45000, 65000, 2, 3, "2026-10-01", entity.TermOpen},
+		"line-2", 45000, 65000, []int{2, 3}, "2026-10-01", entity.TermOpen},
 }
 
 var (
@@ -305,17 +304,17 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 
 	const query = `
 		INSERT INTO searches (user_id, zone_id, price_min, price_max,
-			rooms_min, rooms_max, move_in, term)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+			rooms, move_in_months, terms)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	for i, p := range people {
-		moveIn, err := optMonth(p.moveIn)
+		moveIn, err := optMonths(p.moveIn)
 		if err != nil {
 			return 0, fmt.Errorf("search of %s (n=%d): %w", p.name, p.n, err)
 		}
 		_, err = tx.Exec(ctx, query, ids[i], p.zone,
-			optInt(p.priceMin), p.priceMax, optInt(p.roomsMin), optInt(p.roomsMax),
-			moveIn, optText(p.term))
+			optInt(p.priceMin), p.priceMax, setArg(p.rooms), setArg(moveIn),
+			setArg(optTerms(p.term)))
 		if err != nil {
 			return 0, fmt.Errorf("search of %s (n=%d): %w", p.name, p.n, err)
 		}
@@ -522,15 +521,7 @@ func optInt(v int) *int {
 	return &v
 }
 
-func optText[T ~string](v T) *string {
-	if v == "" {
-		return nil
-	}
-	s := string(v)
-	return &s
-}
-
-func optMonth(raw string) (*time.Time, error) {
+func optMonths(raw string) ([]time.Time, error) {
 	if raw == "" {
 		return nil, nil
 	}
@@ -538,5 +529,19 @@ func optMonth(raw string) (*time.Time, error) {
 	if err != nil {
 		return nil, fmt.Errorf("move-in %q: %w", raw, err)
 	}
-	return &month, nil
+	return []time.Time{month}, nil
+}
+
+func setArg[T any](in []T) []T {
+	if in == nil {
+		return []T{}
+	}
+	return in
+}
+
+func optTerms(t entity.Term) []string {
+	if t == "" {
+		return nil
+	}
+	return []string{string(t)}
 }

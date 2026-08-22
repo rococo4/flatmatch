@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -76,6 +78,75 @@ func TestFeedRefusesBrokenFiltersBeforeCounting(t *testing.T) {
 	}
 	if len(points.zones) != 0 {
 		t.Errorf("points were asked about %v for a zone that does not exist", points.zones)
+	}
+}
+
+func TestParseParamsReadsSets(t *testing.T) {
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	tests := map[string]string{
+		"repeated keys": "zone_id=" + zoneID + "&price_max=45000" +
+			"&rooms=3&rooms=2&terms=year&move_in=2026-10&move_in=2026-09",
+		"comma separated": "zone_id=" + zoneID + "&price_max=45000" +
+			"&rooms=3,2&terms=year&move_in=2026-10,2026-09",
+	}
+	for name, raw := range tests {
+		t.Run(name, func(t *testing.T) {
+			q, err := url.ParseQuery(raw)
+			if err != nil {
+				t.Fatalf("ParseQuery: %v", err)
+			}
+
+			p, bad := parseParams(q)
+
+			if len(bad) != 0 {
+				t.Fatalf("bad fields = %v, want none", bad)
+			}
+			if !slices.Equal(p.Rooms, []int{2, 3}) {
+				t.Errorf("Rooms = %v, want [2 3]", p.Rooms)
+			}
+			if !slices.Equal(p.Terms, []entity.Term{entity.TermYear}) {
+				t.Errorf("Terms = %v, want [year]", p.Terms)
+			}
+			if len(p.MoveInMonths) != 2 ||
+				!p.MoveInMonths[0].Equal(sept) || !p.MoveInMonths[1].Equal(oct) {
+				t.Errorf("MoveInMonths = %v, want [sept oct]", p.MoveInMonths)
+			}
+		})
+	}
+}
+
+func TestParseParamsReportsBrokenSets(t *testing.T) {
+	tests := map[string]string{
+		"rooms":   "zone_id=" + zoneID + "&price_max=45000&rooms=две",
+		"move_in": "zone_id=" + zoneID + "&price_max=45000&move_in=сентябрь",
+	}
+	for field, raw := range tests {
+		t.Run(field, func(t *testing.T) {
+			q, err := url.ParseQuery(raw)
+			if err != nil {
+				t.Fatalf("ParseQuery: %v", err)
+			}
+			if _, bad := parseParams(q); !slices.Contains(bad, field) {
+				t.Errorf("bad fields = %v, want to contain %q", bad, field)
+			}
+		})
+	}
+}
+
+func TestParseParamsMissingSetsAreEmpty(t *testing.T) {
+	q, err := url.ParseQuery("zone_id=" + zoneID + "&price_max=45000")
+	if err != nil {
+		t.Fatalf("ParseQuery: %v", err)
+	}
+
+	p, bad := parseParams(q)
+
+	if len(bad) != 0 {
+		t.Fatalf("bad fields = %v, want none", bad)
+	}
+	if len(p.Rooms) != 0 || len(p.Terms) != 0 || len(p.MoveInMonths) != 0 {
+		t.Errorf("sets = %+v, want all empty", p)
 	}
 }
 

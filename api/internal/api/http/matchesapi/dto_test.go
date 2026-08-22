@@ -45,9 +45,9 @@ func TestParamOverlapBounds(t *testing.T) {
 		want    string
 	}{
 		{
-			name:    "rooms without an upper bound",
-			overlap: matches.ParamOverlap{Param: matches.ParamRooms, Min: 2},
-			want:    `{"param":"rooms","min":2}`,
+			name:    "rooms carry values, not bounds",
+			overlap: matches.ParamOverlap{Param: matches.ParamRooms, Values: []string{"2", "3"}},
+			want:    `{"param":"rooms","values":["2","3"]}`,
 		},
 		{
 			name:    "one price for both",
@@ -55,9 +55,14 @@ func TestParamOverlapBounds(t *testing.T) {
 			want:    `{"param":"price","min":45000,"max":45000}`,
 		},
 		{
-			name:    "month carries no bounds",
-			overlap: matches.ParamOverlap{Param: matches.ParamMoveIn, Month: "2026-09"},
-			want:    `{"param":"move_in","month":"2026-09"}`,
+			name:    "months carry values",
+			overlap: matches.ParamOverlap{Param: matches.ParamMoveIn, Values: []string{"2026-09"}},
+			want:    `{"param":"move_in","values":["2026-09"]}`,
+		},
+		{
+			name:    "term carries values",
+			overlap: matches.ParamOverlap{Param: matches.ParamTerm, Values: []string{"year"}},
+			want:    `{"param":"term","values":["year"]}`,
 		},
 	}
 

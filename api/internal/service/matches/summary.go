@@ -1,7 +1,9 @@
 package matches
 
 import (
-	"math"
+	"slices"
+	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -19,11 +21,7 @@ const (
 
 const monthLayout = "2006-01"
 
-const (
-	priceFloor = 0
-	roomsFloor = 1
-	roomsWide  = math.MaxInt32
-)
+const priceFloor = 0
 
 type Summary struct {
 	Zone *zones.Zone
@@ -42,8 +40,7 @@ type PointContext struct {
 type ParamOverlap struct {
 	Param    string
 	Min, Max int
-	Month    string
-	Term     string
+	Values   []string
 }
 
 func pointLabel(kind entity.PointType, author, station string) string {
@@ -72,25 +69,16 @@ func paramsOverlap(mine, theirs entity.SearchParams) []ParamOverlap {
 		out = append(out, ParamOverlap{Param: ParamPrice, Min: lo, Max: hi})
 	}
 
-	if roomsStated(mine) && roomsStated(theirs) {
-		if lo, hi, ok := intersect(
-			or(mine.RoomsMin, roomsFloor), or(mine.RoomsMax, roomsWide),
-			or(theirs.RoomsMin, roomsFloor), or(theirs.RoomsMax, roomsWide)); ok {
-			if hi == roomsWide {
-				hi = 0
-			}
-			out = append(out, ParamOverlap{Param: ParamRooms, Min: lo, Max: hi})
-		}
+	if values := sharedValues(roomKeys(mine.Rooms), roomKeys(theirs.Rooms)); len(values) > 0 {
+		out = append(out, ParamOverlap{Param: ParamRooms, Values: values})
 	}
 
-	if mine.MoveIn != nil && theirs.MoveIn != nil {
-		if month := mine.MoveIn.Format(monthLayout); month == theirs.MoveIn.Format(monthLayout) {
-			out = append(out, ParamOverlap{Param: ParamMoveIn, Month: month})
-		}
+	if values := sharedValues(monthKeys(mine.MoveInMonths), monthKeys(theirs.MoveInMonths)); len(values) > 0 {
+		out = append(out, ParamOverlap{Param: ParamMoveIn, Values: values})
 	}
 
-	if mine.Term != nil && theirs.Term != nil && *mine.Term == *theirs.Term {
-		out = append(out, ParamOverlap{Param: ParamTerm, Term: string(*mine.Term)})
+	if values := sharedValues(termKeys(mine.Terms), termKeys(theirs.Terms)); len(values) > 0 {
+		out = append(out, ParamOverlap{Param: ParamTerm, Values: values})
 	}
 
 	return out
@@ -101,8 +89,38 @@ func intersect(aMin, aMax, bMin, bMax int) (lo, hi int, ok bool) {
 	return lo, hi, lo <= hi
 }
 
-func roomsStated(p entity.SearchParams) bool {
-	return p.RoomsMin != nil || p.RoomsMax != nil
+func sharedValues(mine, theirs []string) []string {
+	var out []string
+	for _, v := range mine {
+		if slices.Contains(theirs, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func roomKeys(rooms []int) []string {
+	out := make([]string, 0, len(rooms))
+	for _, n := range rooms {
+		out = append(out, strconv.Itoa(n))
+	}
+	return out
+}
+
+func monthKeys(months []time.Time) []string {
+	out := make([]string, 0, len(months))
+	for _, m := range months {
+		out = append(out, m.Format(monthLayout))
+	}
+	return out
+}
+
+func termKeys(terms []entity.Term) []string {
+	out := make([]string, 0, len(terms))
+	for _, t := range terms {
+		out = append(out, string(t))
+	}
+	return out
 }
 
 func or(v *int, unstated int) int {

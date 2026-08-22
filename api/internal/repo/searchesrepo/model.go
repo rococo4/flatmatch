@@ -9,12 +9,12 @@ import (
 	"flatmatch/api/internal/entity"
 )
 
-const searchColumns = `id, user_id, zone_id, price_min, price_max, rooms_min,
-	rooms_max, move_in, term, has_stuff, status, close_reason, pool_seen_at,
+const searchColumns = `id, user_id, zone_id, price_min, price_max, rooms, terms,
+	move_in_months, has_stuff, status, close_reason, pool_seen_at,
 	last_active_at, ttl_asked_at, created_at, updated_at`
 
 const candidateColumns = `s.id, s.user_id, s.zone_id, s.price_min, s.price_max,
-	s.rooms_min, s.rooms_max, s.move_in, s.term, s.has_stuff, s.status,
+	s.rooms, s.terms, s.move_in_months, s.has_stuff, s.status,
 	s.close_reason, s.pool_seen_at, s.last_active_at, s.ttl_asked_at,
 	s.created_at, s.updated_at,
 	u.id AS u_id, u.name AS u_name, u.age AS u_age, u.gender AS u_gender,
@@ -30,23 +30,22 @@ type ZoneUsers struct {
 }
 
 type searchRow struct {
-	ID           uuid.UUID  `db:"id"`
-	UserID       uuid.UUID  `db:"user_id"`
-	ZoneID       string     `db:"zone_id"`
-	PriceMin     *int       `db:"price_min"`
-	PriceMax     int        `db:"price_max"`
-	RoomsMin     *int       `db:"rooms_min"`
-	RoomsMax     *int       `db:"rooms_max"`
-	MoveIn       *time.Time `db:"move_in"`
-	Term         *string    `db:"term"`
-	HasStuff     []string   `db:"has_stuff"`
-	Status       string     `db:"status"`
-	CloseReason  *string    `db:"close_reason"`
-	PoolSeenAt   time.Time  `db:"pool_seen_at"`
-	LastActiveAt time.Time  `db:"last_active_at"`
-	TTLAskedAt   *time.Time `db:"ttl_asked_at"`
-	CreatedAt    time.Time  `db:"created_at"`
-	UpdatedAt    time.Time  `db:"updated_at"`
+	ID           uuid.UUID   `db:"id"`
+	UserID       uuid.UUID   `db:"user_id"`
+	ZoneID       string      `db:"zone_id"`
+	PriceMin     *int        `db:"price_min"`
+	PriceMax     int         `db:"price_max"`
+	Rooms        []int32     `db:"rooms"`
+	Terms        []string    `db:"terms"`
+	MoveInMonths []time.Time `db:"move_in_months"`
+	HasStuff     []string    `db:"has_stuff"`
+	Status       string      `db:"status"`
+	CloseReason  *string     `db:"close_reason"`
+	PoolSeenAt   time.Time   `db:"pool_seen_at"`
+	LastActiveAt time.Time   `db:"last_active_at"`
+	TTLAskedAt   *time.Time  `db:"ttl_asked_at"`
+	CreatedAt    time.Time   `db:"created_at"`
+	UpdatedAt    time.Time   `db:"updated_at"`
 }
 
 type candidateRow struct {
@@ -80,12 +79,11 @@ func (r searchRow) toEntity() entity.Search {
 		ID:     r.ID,
 		UserID: r.UserID,
 		SearchParams: entity.SearchParams{
-			ZoneID:   r.ZoneID,
-			PriceMin: r.PriceMin,
-			PriceMax: r.PriceMax,
-			RoomsMin: r.RoomsMin,
-			RoomsMax: r.RoomsMax,
-			MoveIn:   r.MoveIn,
+			ZoneID:       r.ZoneID,
+			PriceMin:     r.PriceMin,
+			PriceMax:     r.PriceMax,
+			Rooms:        roomsEntity(r.Rooms),
+			MoveInMonths: r.MoveInMonths,
 		},
 		Status:       entity.ParseSearchStatus(r.Status),
 		PoolSeenAt:   r.PoolSeenAt,
@@ -94,9 +92,8 @@ func (r searchRow) toEntity() entity.Search {
 		CreatedAt:    r.CreatedAt,
 		UpdatedAt:    r.UpdatedAt,
 	}
-	if r.Term != nil {
-		term := entity.ParseTerm(*r.Term)
-		s.Term = &term
+	for _, t := range r.Terms {
+		s.Terms = append(s.Terms, entity.ParseTerm(t))
 	}
 	for _, c := range r.HasStuff {
 		s.HasStuff = append(s.HasStuff, entity.ParseStuffChip(c))
@@ -133,4 +130,15 @@ func (r candidateRow) toEntity() entity.PoolCandidate {
 		},
 		Search: r.searchRow.toEntity(),
 	}
+}
+
+func roomsEntity(raw []int32) []int {
+	if raw == nil {
+		return nil
+	}
+	out := make([]int, 0, len(raw))
+	for _, n := range raw {
+		out = append(out, int(n))
+	}
+	return out
 }

@@ -132,19 +132,51 @@ func TestCreateEmptyZoneReportsOnce(t *testing.T) {
 	}
 }
 
-func TestCreateNormalisesMoveInToMonthStart(t *testing.T) {
+func TestCreateRejectsAMidMonthMoveIn(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, testDir(t), nil)
 
 	mid := time.Date(2026, 9, 17, 13, 45, 0, 0, time.UTC)
-	_, err := svc.Create(t.Context(), uuid.New(),
-		entity.SearchParams{ZoneID: "d-khamovniki", PriceMax: 40000, MoveIn: &mid})
+	_, err := svc.Create(t.Context(), uuid.New(), entity.SearchParams{
+		ZoneID: "d-khamovniki", PriceMax: 40000, MoveInMonths: []time.Time{mid}})
+
+	var fields *entity.FieldsError
+	if !errors.As(err, &fields) || len(fields.Fields) != 1 || fields.Fields[0] != "move_in" {
+		t.Fatalf("Create() = %v, want invalid move_in", err)
+	}
+	if repo.created != nil {
+		t.Error("a mid-month move-in reached the repo")
+	}
+}
+
+func TestCreateNormalisesSetsBeforeTheRepo(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := New(repo, testDir(t), nil)
+
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	_, err := svc.Create(t.Context(), uuid.New(), entity.SearchParams{
+		ZoneID:       "d-khamovniki",
+		PriceMax:     40000,
+		Rooms:        []int{3, 2, 3},
+		Terms:        []entity.Term{entity.TermYear, entity.TermYear},
+		MoveInMonths: []time.Time{oct, sept},
+	})
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
-	want := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	if repo.created.MoveIn == nil || !repo.created.MoveIn.Equal(want) {
-		t.Errorf("MoveIn = %v, want %v", repo.created.MoveIn, want)
+	if repo.created == nil {
+		t.Fatal("create did not reach the repo")
+	}
+	if !slices.Equal(repo.created.Rooms, []int{2, 3}) {
+		t.Errorf("Rooms = %v, want [2 3]", repo.created.Rooms)
+	}
+	if !slices.Equal(repo.created.Terms, []entity.Term{entity.TermYear}) {
+		t.Errorf("Terms = %v, want [year]", repo.created.Terms)
+	}
+	if len(repo.created.MoveInMonths) != 2 ||
+		!repo.created.MoveInMonths[0].Equal(sept) || !repo.created.MoveInMonths[1].Equal(oct) {
+		t.Errorf("MoveInMonths = %v, want [sept oct]", repo.created.MoveInMonths)
 	}
 }
 
@@ -220,18 +252,26 @@ func TestUpdateNormalisesAndPassesThrough(t *testing.T) {
 	}}
 	svc := New(repo, testDir(t), nil)
 
-	mid := time.Date(2026, 9, 17, 13, 45, 0, 0, time.UTC)
-	_, err := svc.Update(t.Context(), uuid.New(), uuid.New(),
-		entity.SearchParams{ZoneID: "line-1", PriceMax: 40000, MoveIn: &mid})
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	_, err := svc.Update(t.Context(), uuid.New(), uuid.New(), entity.SearchParams{
+		ZoneID:       "line-1",
+		PriceMax:     40000,
+		Rooms:        []int{3, 2},
+		MoveInMonths: []time.Time{oct, sept},
+	})
 	if err != nil {
 		t.Fatalf("Update() failed: %v", err)
 	}
-	want := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	if repo.updated == nil {
 		t.Fatal("update did not reach the repo")
 	}
-	if repo.updated.MoveIn == nil || !repo.updated.MoveIn.Equal(want) {
-		t.Errorf("MoveIn = %v, want %v", repo.updated.MoveIn, want)
+	if !slices.Equal(repo.updated.Rooms, []int{2, 3}) {
+		t.Errorf("Rooms = %v, want [2 3]", repo.updated.Rooms)
+	}
+	if len(repo.updated.MoveInMonths) != 2 ||
+		!repo.updated.MoveInMonths[0].Equal(sept) || !repo.updated.MoveInMonths[1].Equal(oct) {
+		t.Errorf("MoveInMonths = %v, want [sept oct]", repo.updated.MoveInMonths)
 	}
 }
 

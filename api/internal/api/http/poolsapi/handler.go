@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/AlekSi/pointer"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
@@ -132,21 +132,26 @@ func parseParams(q url.Values) (entity.SearchParams, []string) {
 	if v := optInt(q, "price_max", &bad); v != nil {
 		p.PriceMax = *v
 	}
-	p.RoomsMin = optInt(q, "rooms_min", &bad)
-	p.RoomsMax = optInt(q, "rooms_max", &bad)
-
-	if raw := q.Get("move_in"); raw != "" {
+	for _, raw := range queryList(q, "rooms") {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			bad = append(bad, "rooms")
+			continue
+		}
+		p.Rooms = append(p.Rooms, n)
+	}
+	for _, raw := range queryList(q, "terms") {
+		p.Terms = append(p.Terms, entity.ParseTerm(raw))
+	}
+	for _, raw := range queryList(q, "move_in") {
 		month, err := time.Parse(moveInMonth, raw)
 		if err != nil {
 			bad = append(bad, "move_in")
-		} else {
-			p.MoveIn = &month
+			continue
 		}
+		p.MoveInMonths = append(p.MoveInMonths, month)
 	}
-	if raw := q.Get("term"); raw != "" {
-		p.Term = pointer.To(entity.ParseTerm(raw))
-	}
-	return p, bad
+	return p.Normalized(), bad
 }
 
 func slots(mine []entity.Search, zoneID string) (used int, mySearchID *uuid.UUID) {
@@ -173,6 +178,18 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		httpx.Internal(w, r, err)
 	}
+}
+
+func queryList(q url.Values, name string) []string {
+	var out []string
+	for _, raw := range q[name] {
+		for _, part := range strings.Split(raw, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
 }
 
 func optInt(q url.Values, name string, bad *[]string) *int {

@@ -48,6 +48,37 @@ func fullCard() pointsrepo.FeedPoint {
 	}
 }
 
+func TestMemberParamsAreAlwaysArrays(t *testing.T) {
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	tests := map[string]struct {
+		params entity.SearchParams
+		want   []string
+	}{
+		"empty sets": {
+			params: entity.SearchParams{PriceMax: 45000},
+			want:   []string{`"rooms":[]`, `"terms":[]`, `"move_in":[]`},
+		},
+		"filled sets": {
+			params: entity.SearchParams{PriceMax: 45000, Rooms: []int{2, 3},
+				Terms: []entity.Term{entity.TermYear}, MoveInMonths: []time.Time{sept}},
+			want: []string{`"rooms":[2,3]`, `"terms":["year"]`, `"move_in":["2026-09"]`},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			raw, err := json.Marshal(toParamsDTO(tt.params))
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(string(raw), want) {
+					t.Errorf("params %s does not contain %s", raw, want)
+				}
+			}
+		})
+	}
+}
+
 func TestCardCarriesNoCreator(t *testing.T) {
 	card := fullCard()
 

@@ -15,6 +15,8 @@ import (
 
 const moveInDate = "2006-01-02"
 
+const moveInMonthLayout = "2006-01"
+
 type zoneDTO struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -99,10 +101,9 @@ type chipDTO struct {
 type paramsDTO struct {
 	PriceMin *int     `json:"price_min,omitempty"`
 	PriceMax int      `json:"price_max"`
-	RoomsMin *int     `json:"rooms_min,omitempty"`
-	RoomsMax *int     `json:"rooms_max,omitempty"`
-	MoveIn   *string  `json:"move_in,omitempty"`
-	Term     *string  `json:"term,omitempty"`
+	Rooms    []int    `json:"rooms"`
+	Terms    []string `json:"terms"`
+	MoveIn   []string `json:"move_in"`
 	HasStuff []string `json:"has_stuff,omitempty"`
 }
 
@@ -304,14 +305,15 @@ func toParamsDTO(p entity.SearchParams) paramsDTO {
 	out := paramsDTO{
 		PriceMin: p.PriceMin,
 		PriceMax: p.PriceMax,
-		RoomsMin: p.RoomsMin,
-		RoomsMax: p.RoomsMax,
+		Rooms:    append(make([]int, 0, len(p.Rooms)), p.Rooms...),
+		Terms:    make([]string, 0, len(p.Terms)),
+		MoveIn:   make([]string, 0, len(p.MoveInMonths)),
 	}
-	if p.MoveIn != nil {
-		out.MoveIn = pointer.To(p.MoveIn.Format("2006-01"))
+	for _, term := range p.Terms {
+		out.Terms = append(out.Terms, string(term))
 	}
-	if p.Term != nil {
-		out.Term = pointer.To(string(*p.Term))
+	for _, month := range p.MoveInMonths {
+		out.MoveIn = append(out.MoveIn, month.Format(moveInMonthLayout))
 	}
 	for _, chip := range p.HasStuff {
 		out.HasStuff = append(out.HasStuff, string(chip))

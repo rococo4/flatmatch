@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"cmp"
 	"slices"
 	"time"
 
@@ -12,6 +13,8 @@ const MaxActiveSearches = 3
 const PriceMaxCap = 1_000_000
 
 const RoomsCap = 20
+
+const RoomsSetCap = 4
 
 type Term string
 
@@ -53,14 +56,13 @@ const (
 )
 
 type SearchParams struct {
-	ZoneID   string
-	PriceMin *int
-	PriceMax int
-	RoomsMin *int
-	RoomsMax *int
-	MoveIn   *time.Time
-	Term     *Term
-	HasStuff []StuffChip
+	ZoneID       string
+	PriceMin     *int
+	PriceMax     int
+	Rooms        []int
+	Terms        []Term
+	MoveInMonths []time.Time
+	HasStuff     []StuffChip
 }
 
 type Search struct {
@@ -105,11 +107,15 @@ func (p SearchParams) InvalidFields() []string {
 		{"zone_id", p.ZoneID == ""},
 		{"price_max", p.PriceMax <= 0 || p.PriceMax > PriceMaxCap},
 		{"price_min", p.PriceMin != nil && (*p.PriceMin < 0 || *p.PriceMin > p.PriceMax)},
-		{"rooms_min", p.RoomsMin != nil &&
-			(*p.RoomsMin < 1 || *p.RoomsMin > RoomsCap ||
-				(p.RoomsMax != nil && *p.RoomsMin > *p.RoomsMax))},
-		{"rooms_max", p.RoomsMax != nil && (*p.RoomsMax < 1 || *p.RoomsMax > RoomsCap)},
-		{"term", p.Term != nil && *p.Term == TermUnknown},
+		{"rooms", slices.ContainsFunc(p.Rooms, func(n int) bool {
+			return n < 1 || n > RoomsSetCap
+		})},
+		{"terms", slices.ContainsFunc(p.Terms, func(t Term) bool {
+			return t == "" || t == TermUnknown || ParseTerm(string(t)) != t
+		})},
+		{"move_in", slices.ContainsFunc(p.MoveInMonths, func(m time.Time) bool {
+			return m.Day() != 1
+		})},
 		{"has_stuff", slices.ContainsFunc(p.HasStuff, func(c StuffChip) bool {
 			return c == "" || c == StuffChipUnknown || ParseStuffChip(string(c)) != c
 		})},
@@ -122,4 +128,30 @@ func (p SearchParams) InvalidFields() []string {
 		}
 	}
 	return bad
+}
+
+func (p SearchParams) Normalized() SearchParams {
+	out := p
+	out.Rooms = sortedSet(p.Rooms)
+	out.Terms = sortedSet(p.Terms)
+	out.MoveInMonths = sortedMonths(p.MoveInMonths)
+	return out
+}
+
+func sortedSet[T cmp.Ordered](in []T) []T {
+	if len(in) == 0 {
+		return in
+	}
+	out := slices.Clone(in)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+func sortedMonths(in []time.Time) []time.Time {
+	if len(in) == 0 {
+		return in
+	}
+	out := slices.Clone(in)
+	slices.SortFunc(out, func(a, b time.Time) int { return cmp.Compare(a.Unix(), b.Unix()) })
+	return slices.CompactFunc(out, func(a, b time.Time) bool { return a.Equal(b) })
 }

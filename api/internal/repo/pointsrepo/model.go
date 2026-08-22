@@ -34,8 +34,8 @@ const memberColumns = `lp.created_at AS entered_at,
 	        WHERE m.a_id = least($1::uuid, lp.user_id)
 	          AND m.b_id = greatest($1::uuid, lp.user_id)) AS matched, ` + personColumns + `,
 	s.id AS s_id, s.zone_id AS s_zone_id, s.price_min AS s_price_min,
-	s.price_max AS s_price_max, s.rooms_min AS s_rooms_min,
-	s.rooms_max AS s_rooms_max, s.move_in AS s_move_in, s.term AS s_term,
+	s.price_max AS s_price_max, s.rooms AS s_rooms, s.terms AS s_terms,
+	s.move_in_months AS s_move_in_months,
 	s.has_stuff AS s_has_stuff, s.status AS s_status,
 	s.pool_seen_at AS s_pool_seen_at, s.created_at AS s_created_at,
 	s.updated_at AS s_updated_at`
@@ -135,19 +135,18 @@ type memberRow struct {
 	EnteredAt time.Time `db:"entered_at"`
 	Matched   bool      `db:"matched"`
 
-	SID         *uuid.UUID `db:"s_id"`
-	SZoneID     *string    `db:"s_zone_id"`
-	SPriceMin   *int       `db:"s_price_min"`
-	SPriceMax   *int       `db:"s_price_max"`
-	SRoomsMin   *int       `db:"s_rooms_min"`
-	SRoomsMax   *int       `db:"s_rooms_max"`
-	SMoveIn     *time.Time `db:"s_move_in"`
-	STerm       *string    `db:"s_term"`
-	SHasStuff   []string   `db:"s_has_stuff"`
-	SStatus     *string    `db:"s_status"`
-	SPoolSeenAt *time.Time `db:"s_pool_seen_at"`
-	SCreatedAt  *time.Time `db:"s_created_at"`
-	SUpdatedAt  *time.Time `db:"s_updated_at"`
+	SID           *uuid.UUID  `db:"s_id"`
+	SZoneID       *string     `db:"s_zone_id"`
+	SPriceMin     *int        `db:"s_price_min"`
+	SPriceMax     *int        `db:"s_price_max"`
+	SRooms        []int32     `db:"s_rooms"`
+	STerms        []string    `db:"s_terms"`
+	SMoveInMonths []time.Time `db:"s_move_in_months"`
+	SHasStuff     []string    `db:"s_has_stuff"`
+	SStatus       *string     `db:"s_status"`
+	SPoolSeenAt   *time.Time  `db:"s_pool_seen_at"`
+	SCreatedAt    *time.Time  `db:"s_created_at"`
+	SUpdatedAt    *time.Time  `db:"s_updated_at"`
 }
 
 func (r pointRow) toEntity() entity.Point {
@@ -245,20 +244,19 @@ func (r memberRow) toSearch(userID uuid.UUID) *entity.Search {
 		ID:     *r.SID,
 		UserID: userID,
 		SearchParams: entity.SearchParams{
-			ZoneID:   pointer.Get(r.SZoneID),
-			PriceMin: r.SPriceMin,
-			PriceMax: pointer.Get(r.SPriceMax),
-			RoomsMin: r.SRoomsMin,
-			RoomsMax: r.SRoomsMax,
-			MoveIn:   r.SMoveIn,
+			ZoneID:       pointer.Get(r.SZoneID),
+			PriceMin:     r.SPriceMin,
+			PriceMax:     pointer.Get(r.SPriceMax),
+			Rooms:        roomsEntity(r.SRooms),
+			MoveInMonths: r.SMoveInMonths,
 		},
 		Status:     entity.ParseSearchStatus(pointer.Get(r.SStatus)),
 		PoolSeenAt: pointer.Get(r.SPoolSeenAt),
 		CreatedAt:  pointer.Get(r.SCreatedAt),
 		UpdatedAt:  pointer.Get(r.SUpdatedAt),
 	}
-	if r.STerm != nil {
-		s.Term = pointer.To(entity.ParseTerm(*r.STerm))
+	for _, t := range r.STerms {
+		s.Terms = append(s.Terms, entity.ParseTerm(t))
 	}
 	for _, c := range r.SHasStuff {
 		s.HasStuff = append(s.HasStuff, entity.ParseStuffChip(c))
@@ -277,6 +275,17 @@ func restrictionsArg(codes []entity.Restriction) []string {
 	out := make([]string, 0, len(codes))
 	for _, c := range codes {
 		out = append(out, string(c))
+	}
+	return out
+}
+
+func roomsEntity(raw []int32) []int {
+	if raw == nil {
+		return nil
+	}
+	out := make([]int, 0, len(raw))
+	for _, n := range raw {
+		out = append(out, int(n))
 	}
 	return out
 }

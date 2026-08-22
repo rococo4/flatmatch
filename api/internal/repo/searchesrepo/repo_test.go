@@ -18,17 +18,17 @@ import (
 )
 
 func testParams(zone string) entity.SearchParams {
-	move := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	return entity.SearchParams{
 		ZoneID:   zone,
 		PriceMin: pointer.To(35000),
 		PriceMax: 45000,
 
-		RoomsMin: pointer.To(2),
-		RoomsMax: pointer.To(3),
-		MoveIn:   &move,
-		Term:     pointer.To(entity.TermYear),
-		HasStuff: []entity.StuffChip{entity.StuffFurniture},
+		Rooms:        []int{3, 2},
+		MoveInMonths: []time.Time{sept, oct},
+		Terms:        []entity.Term{entity.TermYear},
+		HasStuff:     []entity.StuffChip{entity.StuffFurniture},
 	}
 }
 
@@ -65,15 +65,21 @@ func TestCreateAndListRoundtrip(t *testing.T) {
 	}
 
 	got := list[0]
-	if got.PriceMin == nil || *got.PriceMin != 35000 || got.Term == nil ||
-		*got.Term != entity.TermYear || got.MoveIn == nil ||
-		!got.MoveIn.Equal(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) ||
-		len(got.HasStuff) != 1 {
+	if got.PriceMin == nil || *got.PriceMin != 35000 || len(got.HasStuff) != 1 {
 		t.Errorf("fields lost in round-trip: %+v", got)
 	}
 
-	if got.RoomsMin == nil || *got.RoomsMin != 2 || got.RoomsMax == nil || *got.RoomsMax != 3 {
-		t.Errorf("rooms lost or swapped in round-trip: %+v", got)
+	if !slices.Equal(got.Rooms, []int{2, 3}) {
+		t.Errorf("rooms = %v, want sorted [2 3]", got.Rooms)
+	}
+	if !slices.Equal(got.Terms, []entity.Term{entity.TermYear}) {
+		t.Errorf("terms = %v, want [year]", got.Terms)
+	}
+	sept := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	if len(got.MoveInMonths) != 2 ||
+		!got.MoveInMonths[0].Equal(sept) || !got.MoveInMonths[1].Equal(oct) {
+		t.Errorf("move-in months = %v, want [sept oct]", got.MoveInMonths)
 	}
 }
 
@@ -251,9 +257,9 @@ func TestUpdateParamsOverwritesEverything(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateParams() failed: %v", err)
 	}
-	if updated.ZoneID != "line-1" || updated.PriceMin != nil || updated.MoveIn != nil ||
-		updated.Term != nil || len(updated.HasStuff) != 0 ||
-		updated.RoomsMin != nil || updated.RoomsMax != nil {
+	if updated.ZoneID != "line-1" || updated.PriceMin != nil ||
+		len(updated.MoveInMonths) != 0 || len(updated.Terms) != 0 ||
+		len(updated.HasStuff) != 0 || len(updated.Rooms) != 0 {
 		t.Errorf("old params leaked through: %+v", updated)
 	}
 }

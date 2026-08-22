@@ -18,15 +18,15 @@ func candidate(created time.Time, p entity.SearchParams) entity.PoolCandidate {
 }
 
 func TestRankedSectionsCapOnlyCutsTheNoneTail(t *testing.T) {
-	mine := entity.SearchParams{PriceMin: pointer.To(35000), PriceMax: 45000, MoveIn: &moveSept}
+	mine := entity.SearchParams{PriceMin: pointer.To(35000), PriceMax: 45000, MoveInMonths: []time.Time{moveSept}}
 	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
 	var cands []entity.PoolCandidate
 	for i := range noneSectionCap + 1 {
 		at := base.Add(time.Duration(i) * time.Minute)
 		cands = append(cands,
-			candidate(at, entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000, MoveIn: &moveSept}),
-			candidate(at, entity.SearchParams{PriceMin: pointer.To(90000), PriceMax: 120000, MoveIn: &moveDec}))
+			candidate(at, entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000, MoveInMonths: []time.Time{moveSept}}),
+			candidate(at, entity.SearchParams{PriceMin: pointer.To(90000), PriceMax: 120000, MoveInMonths: []time.Time{moveDec}}))
 	}
 
 	sections := rankedSections(testDir(t), staticPhotos{}, entity.User{}, mine, cands)
@@ -40,8 +40,8 @@ func TestRankedSectionsCapOnlyCutsTheNoneTail(t *testing.T) {
 }
 
 func TestRankedSectionsSortFreshestFirst(t *testing.T) {
-	mine := entity.SearchParams{PriceMin: pointer.To(35000), PriceMax: 45000, MoveIn: &moveSept}
-	theirs := entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000, MoveIn: &moveSept}
+	mine := entity.SearchParams{PriceMin: pointer.To(35000), PriceMax: 45000, MoveInMonths: []time.Time{moveSept}}
+	theirs := entity.SearchParams{PriceMin: pointer.To(40000), PriceMax: 55000, MoveInMonths: []time.Time{moveSept}}
 	base := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
 	oldest := candidate(base, theirs)

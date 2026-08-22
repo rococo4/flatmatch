@@ -71,6 +71,21 @@ func TestDeleteAnswersTheServiceVerdicts(t *testing.T) {
 	}
 }
 
+func TestDeleteWithoutAuthorizationIs401(t *testing.T) {
+	service := &fakeMatches{}
+
+	req := httptest.NewRequest(http.MethodDelete, "/matches/"+uuid.NewString(), nil)
+	rec := httptest.NewRecorder()
+	newRouter(service, uuid.New()).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusUnauthorized, rec.Body)
+	}
+	if service.calls != 0 {
+		t.Errorf("an anonymous request reached the service %d time(s)", service.calls)
+	}
+}
+
 func remove(router chi.Router, path string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodDelete, path, nil)
 	req.Header.Set("Authorization", "tma stub")

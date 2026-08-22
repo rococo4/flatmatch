@@ -89,8 +89,22 @@ func (r *Repo) Delete(ctx context.Context, userID, id uuid.UUID) (bool, error) {
 		var aID, bID uuid.UUID
 		err := tx.QueryRow(ctx, `
 			SELECT a_id, b_id FROM matches
-			WHERE id = $1 AND $2::uuid IN (a_id, b_id)
-			FOR UPDATE`, id, userID).Scan(&aID, &bID)
+			WHERE id = $1 AND $2::uuid IN (a_id, b_id)`, id, userID).Scan(&aID, &bID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(ctx, `
+			SELECT id FROM users WHERE id IN ($1::uuid, $2::uuid)
+			ORDER BY id FOR NO KEY UPDATE`, aID, bID); err != nil {
+			return err
+		}
+
+		var still uuid.UUID
+		err = tx.QueryRow(ctx, `SELECT id FROM matches WHERE id = $1 FOR UPDATE`, id).Scan(&still)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

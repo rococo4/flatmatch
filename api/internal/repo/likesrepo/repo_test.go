@@ -16,6 +16,7 @@ import (
 	"flatmatch/api/internal/postgres/pgtest"
 	"flatmatch/api/internal/repo/matchesrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
+	"flatmatch/api/internal/repo/usersrepo"
 )
 
 const testTGBase int64 = -996000000
@@ -29,6 +30,7 @@ func cleanTestUsers(t *testing.T, pool *pgxpool.Pool) {
 		for _, q := range []string{
 			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM likes_users WHERE from_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
+			`DELETE FROM like_spends WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM likes_points WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM likes_points WHERE point_id IN (SELECT id FROM points WHERE created_by IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000))`,
 			`DELETE FROM points WHERE created_by IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
@@ -450,6 +452,12 @@ func TestBudgetWindowSlides(t *testing.T) {
 		WHERE from_id = $1 AND to_id = $2`, liker, targets[0]); err != nil {
 		t.Fatalf("age the oldest like: %v", err)
 	}
+	if _, err := pool.Exec(t.Context(), `
+		UPDATE like_spends SET created_at = now() - interval '25 hours'
+		WHERE id = (SELECT id FROM like_spends WHERE user_id = $1
+		            ORDER BY created_at, id LIMIT 1)`, liker); err != nil {
+		t.Fatalf("age the oldest spend: %v", err)
+	}
 
 	budget, err = repo.Budget(t.Context(), liker)
 	if err != nil {
@@ -629,6 +637,20 @@ func inPoolOf(t *testing.T, repo *searchesrepo.Repo, viewer, target uuid.UUID) b
 	return slices.ContainsFunc(list, func(c entity.PoolCandidate) bool { return c.User.ID == target })
 }
 
+func inZonesOf(t *testing.T, repo *searchesrepo.Repo, viewer, target uuid.UUID) bool {
+	t.Helper()
+	rows, err := repo.ActiveZonesVisible(t.Context(), viewer)
+	if err != nil {
+		t.Fatalf("ActiveZonesVisible() failed: %v", err)
+	}
+	for _, row := range rows {
+		if row.ZoneID == testZone && slices.Contains(row.UserIDs, target) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestLikeAfterTheMatchIsDeletedSpendsAgain(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)
@@ -663,6 +685,9 @@ func TestLikeAfterTheMatchIsDeletedSpendsAgain(t *testing.T) {
 	if !inPoolOf(t, searchRepo, me, peer) {
 		t.Error("the peer did not come back to the zone pool after the delete")
 	}
+	if !inZonesOf(t, searchRepo, me, peer) {
+		t.Error("the peer did not come back to the visible zones after the delete")
+	}
 
 	again, err := repo.Create(t.Context(), me, peer, zoneCtx(testZone))
 	if err != nil {
@@ -673,5 +698,117 @@ func TestLikeAfterTheMatchIsDeletedSpendsAgain(t *testing.T) {
 	}
 	if again.Match != nil || again.Already {
 		t.Errorf("the like after the delete = %+v, want a fresh one-sided like", again)
+	}
+}
+
+func TestDeletedMatchDoesNotRefundTheSlot(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	matchRepo := matchesrepo.New(pool)
+
+	me := seedUser(t, pool, 1, "active", "male", "any")
+	peer := seedUser(t, pool, 2, "active", "male", "any")
+	seedSearch(t, pool, me, "active")
+	seedSearch(t, pool, peer, "active")
+
+	if _, err := repo.Create(t.Context(), me, peer, zoneCtx(testZone)); err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	res, err := repo.Create(t.Context(), peer, me, zoneCtx(testZone))
+	if err != nil || res.Match == nil {
+		t.Fatalf("the reply Create() = %+v, %v; want a match", res, err)
+	}
+
+	if ok, err := matchRepo.Delete(t.Context(), me, res.Match.ID); err != nil || !ok {
+		t.Fatalf("Delete() = %v, %v; want true, nil", ok, err)
+	}
+
+	budget, err := repo.Budget(t.Context(), me)
+	if err != nil {
+		t.Fatalf("Budget() failed: %v", err)
+	}
+	if budget.Remaining != entity.MaxDailyLikes-1 {
+		t.Errorf("remaining after the delete = %d, want %d — the slot must not come back",
+			budget.Remaining, entity.MaxDailyLikes-1)
+	}
+
+	for i := range entity.MaxDailyLikes - 1 {
+		target := seedUser(t, pool, int64(10+i), "active", "male", "any")
+		if _, err := repo.Create(t.Context(), me, target, zoneCtx(testZone)); err != nil {
+			t.Fatalf("Create() #%d after the delete failed: %v", i+1, err)
+		}
+	}
+	over := seedUser(t, pool, 20, "active", "male", "any")
+	if _, err := repo.Create(t.Context(), me, over, zoneCtx(testZone)); !errors.Is(err, entity.ErrLikeLimit) {
+		t.Errorf("Create() over the limit = %v, want ErrLikeLimit", err)
+	}
+}
+
+func TestBlockDoesNotRefundTheSlot(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	users := usersrepo.New(pool)
+
+	me := seedUser(t, pool, 1, "active", "male", "any")
+	peer := seedUser(t, pool, 2, "active", "male", "any")
+	seedSearch(t, pool, me, "active")
+
+	if _, err := repo.Create(t.Context(), me, peer, zoneCtx(testZone)); err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	if err := users.Block(t.Context(), me, peer); err != nil {
+		t.Fatalf("Block() failed: %v", err)
+	}
+
+	budget, err := repo.Budget(t.Context(), me)
+	if err != nil {
+		t.Fatalf("Budget() failed: %v", err)
+	}
+	if budget.Remaining != entity.MaxDailyLikes-1 {
+		t.Errorf("remaining after the block = %d, want %d — the slot must not come back",
+			budget.Remaining, entity.MaxDailyLikes-1)
+	}
+}
+
+func TestBudgetCountsTheSpendLog(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+
+	liker := seedUser(t, pool, 1, "active", "male", "any")
+	target := seedUser(t, pool, 2, "active", "male", "any")
+	if _, err := pool.Exec(t.Context(), `
+		INSERT INTO likes_users (from_id, to_id, zone_id, spent, created_at)
+		VALUES ($1, $2, $3, true, now() - interval '2 hours')`, liker, target, testZone); err != nil {
+		t.Fatalf("seed a like of the pre-migration world: %v", err)
+	}
+
+	budget, err := repo.Budget(t.Context(), liker)
+	if err != nil {
+		t.Fatalf("Budget() failed: %v", err)
+	}
+	if budget.Remaining != entity.MaxDailyLikes {
+		t.Errorf("remaining before the backfill = %d, want %d — the log is what counts",
+			budget.Remaining, entity.MaxDailyLikes)
+	}
+
+	if _, err := pool.Exec(t.Context(), `
+		INSERT INTO like_spends (user_id, created_at)
+		SELECT from_id, created_at FROM likes_users WHERE spent AND from_id = $1`, liker); err != nil {
+		t.Fatalf("backfill the spend log: %v", err)
+	}
+
+	budget, err = repo.Budget(t.Context(), liker)
+	if err != nil {
+		t.Fatalf("Budget() failed: %v", err)
+	}
+	if budget.Remaining != entity.MaxDailyLikes-1 {
+		t.Errorf("remaining after the backfill = %d, want %d", budget.Remaining, entity.MaxDailyLikes-1)
+	}
+	want := likeCreatedAt(t, pool, liker, target).Add(entity.LikeWindow)
+	if budget.NextFreeAt == nil || !budget.NextFreeAt.Equal(want) {
+		t.Errorf("next_free_at = %v, want %v", budget.NextFreeAt, want)
 	}
 }

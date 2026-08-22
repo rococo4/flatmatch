@@ -70,6 +70,13 @@ func (r *Repo) Create(ctx context.Context, fromID, toID uuid.UUID, lc LikeContex
 
 		out.Already = tag.RowsAffected() == 0
 
+		if !out.Already && !reply {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO like_spends (user_id, created_at) VALUES ($1, now())`, fromID); err != nil {
+				return err
+			}
+		}
+
 		if reply {
 			if err := ensureMatch(ctx, tx, fromID, toID); err != nil {
 				return err
@@ -105,7 +112,7 @@ func (r *Repo) Budget(ctx context.Context, userID uuid.UUID) (entity.LikeBudget,
 	var spent int
 	var oldest *time.Time
 	err := r.pool.QueryRow(ctx, `
-		SELECT count(*), min(created_at) FROM likes_users
+		SELECT count(*), min(created_at) FROM like_spends
 		WHERE `+spentInWindowFilter, userID, windowSeconds).Scan(&spent, &oldest)
 	if err != nil {
 		return entity.LikeBudget{}, fmt.Errorf("like budget of %s: %w", userID, err)
@@ -286,7 +293,7 @@ func readMatch(ctx context.Context, tx pgx.Tx, fromID, toID uuid.UUID) (*entity.
 func spentInWindow(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (int, error) {
 	var spent int
 	err := tx.QueryRow(ctx,
-		`SELECT count(*) FROM likes_users WHERE `+spentInWindowFilter, userID, windowSeconds).Scan(&spent)
+		`SELECT count(*) FROM like_spends WHERE `+spentInWindowFilter, userID, windowSeconds).Scan(&spent)
 	return spent, err
 }
 

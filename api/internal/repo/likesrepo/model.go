@@ -22,7 +22,7 @@ const incomingColumns = `l.zone_id, l.point_id, l.created_at,
 	u.guests AS u_guests, u.cleaning AS u_cleaning, u.alcohol AS u_alcohol,
 	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
-const spentInWindowFilter = `from_id = $1 AND spent AND created_at > now() - make_interval(secs => $2)`
+const spentInWindowFilter = `user_id = $1 AND created_at > now() - make_interval(secs => $2)`
 
 var windowSeconds = entity.LikeWindow.Seconds()
 

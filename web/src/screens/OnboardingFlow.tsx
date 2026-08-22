@@ -1,6 +1,8 @@
 /* Прохождение анкеты: 12 экранов §4, draft → отправка → pending.
    Экраны живут в OnboardingScreens.tsx и ничего не знают про сеть — здесь
-   состояние, порядок и разговор с API. */
+   состояние, порядок и разговор с API.
+   Только первое заполнение: правка одобренной анкеты живёт списком в
+   ProfileEditScreen, шагами её больше не проходят (§6). */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   backButton,
@@ -37,12 +39,6 @@ const SCREENS = [
   'photo',
 ] as const;
 
-/* Шаги правки: сюда ведут строка реджекта в профиле и кнопки пушей «Поправить»
-   и «Загрузить» (§5). Индексы считаются из порядка экранов, а не пишутся
-   числами: вставленный вопрос сдвинул бы их молча. */
-export const ABOUT_STEP = SCREENS.indexOf('about');
-export const PHOTO_STEP = SCREENS.indexOf('photo');
-
 const GENDERS = { f: 'female', m: 'male' } as const;
 
 /** Обратное направление — чтобы вернувшийся увидел свои ответы, а не пустые экраны. */
@@ -56,18 +52,11 @@ function basicsFrom(profile: Profile): Basics {
 
 export function OnboardingFlow({
   profile,
-  initialStep,
   onProfile,
   onSubmitted,
   onFinished,
 }: {
   profile: Profile;
-  /**
-   * С какого экрана начать. Пусто — с брошенного (закладка в базе, §11).
-   * Задаётся правкой: вердикт модератора зовёт чинить конкретное — фото или
-   * «о себе», — а не проходить анкету заново.
-   */
-  initialStep?: number;
   /** Сервер отвечает профилем целиком на каждый вызов — он и есть истина. */
   onProfile: (next: Profile) => void;
   /**
@@ -79,7 +68,7 @@ export function OnboardingFlow({
   onFinished: () => void;
 }) {
   const [step, setStep] = useState(() =>
-    Math.min(Math.max(initialStep ?? profile.onboarding_step, 0), SCREENS.length - 1),
+    Math.min(Math.max(profile.onboarding_step, 0), SCREENS.length - 1),
   );
   const [basics, setBasics] = useState<Basics>(() => basicsFrom(profile));
   const [busy, setBusy] = useState(false);

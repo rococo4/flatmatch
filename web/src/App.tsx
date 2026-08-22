@@ -65,7 +65,7 @@ import {
 import { launchedByTelegram } from './telegram/mockEnv';
 import { TabBar, type Tab } from './ui/TabBar';
 import type { PromoState } from './ui/PoolPromoBlock';
-import { ABOUT_STEP, OnboardingFlow, PHOTO_STEP } from './screens/OnboardingFlow';
+import { OnboardingFlow } from './screens/OnboardingFlow';
 import { FeedScreen } from './screens/FeedScreen';
 import { FeedEntryScreen } from './screens/FeedEntryScreen';
 import {
@@ -84,6 +84,7 @@ import { HomePointView } from './screens/HomePointView';
 import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
 import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
 import { MyProfileScreen, type FixTarget, type MyMatch } from './screens/MyProfileScreen';
+import { ProfileEditScreen } from './screens/ProfileEditScreen';
 import { FlatLinkFormScreen, HomePointFormScreen } from './screens/PointFormScreens';
 import { PointCreatedScreen } from './screens/PointCreatedScreen';
 import { CloseSearchSheet } from './screens/EdgeStates';
@@ -187,12 +188,12 @@ export function App() {
   // моменту уже не draft, и без флага оболочка увела бы в ленту сразу.
   const [finishing, setFinishing] = useState(false);
   /**
-   * С какого шага открыть анкету. Пусто — с брошенного.
+   * Что открыть на экране анкеты сразу. Пусто — просто список.
    *
    * Правку зовут точечно: вердикт модератора отклоняет фото или «о себе», и
    * человека надо привести ровно туда, а не прогонять анкету заново (§5).
    */
-  const [editStep, setEditStep] = useState<number | null>(null);
+  const [editTarget, setEditTarget] = useState<'photo' | 'about' | null>(null);
   /**
    * Диплинк запуска: кнопка пуша или ссылка шеринга (§5 дизайна пушей).
    *
@@ -485,7 +486,7 @@ export function App() {
     // непроверенного в draft, а у одобренного статус не меняется (§5) —
     // экран правки один и тот же.
     if (startTarget.kind === 'photo' || startTarget.kind === 'about') {
-      setEditStep(startTarget.kind === 'photo' ? PHOTO_STEP : ABOUT_STEP);
+      setEditTarget(startTarget.kind);
       setView('editProfile');
       setStartTarget(null);
       return;
@@ -588,17 +589,18 @@ export function App() {
   // Исключение — вернувшийся в draft реджектом: анкета у него заполнена, ему
   // нужна одна правка, и держать его в онбординге значило бы прятать строку
   // «что не так» вместе со всем продуктом (§5, две ветки реджекта).
+  // Открытый экран анкеты главнее: у чинящего фото реджект снимается самой
+  // загрузкой нового, и без этой оговорки человека уносило бы в двенадцать
+  // шагов ровно в тот момент, когда осталось нажать «Отправить на проверку».
   const rejected = profile.photo_status === 'rejected' || profile.about_status === 'rejected';
-  if ((profile.status === 'draft' && !rejected) || view === 'editProfile' || finishing) {
+  if (view !== 'editProfile' && ((profile.status === 'draft' && !rejected) || finishing)) {
     return (
       <OnboardingFlow
         profile={profile}
-        initialStep={editStep ?? undefined}
         onProfile={setProfile}
         onSubmitted={() => setFinishing(true)}
         onFinished={() => {
           setFinishing(false);
-          setEditStep(null);
           setView('tab');
           setTab('feed');
         }}
@@ -822,17 +824,17 @@ export function App() {
   };
 
   /**
-   * Редактор анкеты. Шаг задаётся, когда ведут в конкретную правку: реджект
+   * Экран анкеты. Цель задаётся, когда ведут в конкретную правку: реджект
    * зовёт чинить фото или «о себе», а не проходить анкету заново (§5).
    */
-  const openEditor = (step?: number) => {
-    setEditStep(step ?? null);
+  const openEditor = (target?: 'photo' | 'about') => {
+    setEditTarget(target ?? null);
     setView('editProfile');
   };
 
-  /** Куда ведёт тап в строку статуса профиля. */
+  /** Куда ведёт тап в строку статуса профиля. «Заполни анкету» — в общий список. */
   const fixProfile = (target: FixTarget) =>
-    openEditor(target === 'photo' ? PHOTO_STEP : target === 'about' ? ABOUT_STEP : undefined);
+    openEditor(target === 'draft' ? undefined : target);
 
   const openIncoming = () => {
     // Отказ прошлого ответа не должен встречать на входе: он уже рассказан.
@@ -1293,6 +1295,21 @@ export function App() {
             onCreated={() => {
               reloadPoints();
               toTab('searches');
+            }}
+          />
+        );
+      case 'editProfile':
+        return (
+          <ProfileEditScreen
+            profile={profile}
+            autoOpen={editTarget ?? undefined}
+            onProfile={setProfile}
+            // Назад — на таб «Профиль», а не «в никуда»: сюда приходят и по
+            // диплинку пуша, с любого таба. Перечитываем себя: строка статуса
+            // на профиле обязана знать про только что отправленное фото.
+            onBack={() => {
+              setEditTarget(null);
+              toTab('profile');
             }}
           />
         );

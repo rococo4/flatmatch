@@ -1,6 +1,7 @@
 /* Профиль свой — §6. Статус анкеты, вход в «Тебя лайкнули», верификация, мэтчи. */
 import type { CSSProperties } from 'react';
 import type { ModerationStatus, Profile } from '../api/client';
+import { ABOUT_REJECTED, PHOTO_REJECTED } from '../api/format';
 import { Avatar, S } from '../ui/primitives';
 
 /**
@@ -26,11 +27,6 @@ export type FixTarget = 'photo' | 'about' | 'draft';
 
 /** Строка статуса анкеты: что не так и куда это чинить. Пусто — всё в порядке. */
 type Notice = { title: string; aside?: string; fix?: FixTarget };
-
-/* Тексты вердиктов — те же, что в пушах (§2 дизайна пушей): человек читает
-   одно и то же в боте и на экране, иначе это выглядит как разные новости. */
-const PHOTO_REJECTED = 'Фото не подошло — загрузи другое, где видно лицо';
-const ABOUT_REJECTED = 'Текст „о себе" не подошёл — поправь его';
 
 const L = {
   screen: {

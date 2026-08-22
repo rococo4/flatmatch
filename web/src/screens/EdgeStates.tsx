@@ -3,11 +3,13 @@
    2) шторки блокировки, удаления мэтча и жалобы (§5, §2.3)
    3) шторка закрытия поиска с причиной
    4) свежесть точки (спит до шага 7)
-   5) гейт второго «живу» в форме «к себе» */
+   5) гейт второго «живу» в форме «к себе»
+   6) шторки правки анкеты: ответ вопроса, «о себе», возраст (§6, экран «Анкета») */
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { CloseReason, ReportReason } from '../api/client';
 import { reportReasonOptions } from '../api/format';
+import type { Choice } from './OnboardingScreens';
 import { S } from '../ui/primitives';
 
 const E = {
@@ -94,6 +96,48 @@ const E = {
     color: picked ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
     cursor: 'pointer',
   }),
+  /** Вариант ответа — тот же ряд, что в ChoiceStep онбординга: вопрос один,
+      и выглядеть в шторке иначе, чем на шаге, он не должен. */
+  choiceRow: (active: boolean): CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '17px 14px',
+    borderRadius: 12,
+    background: active
+      ? 'color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent)'
+      : 'var(--app-bg)',
+    border: active ? '1.5px solid var(--tg-theme-button-color)' : '1.5px solid transparent',
+    fontSize: 16,
+    fontWeight: active ? 590 : 400,
+    color: active ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
+    cursor: 'pointer',
+  }),
+  field: {
+    width: '100%',
+    padding: '12px 13px',
+    borderRadius: 11,
+    border: 'none',
+    background: 'var(--app-bg)',
+    font: 'inherit',
+    fontSize: 16,
+    fontWeight: 590,
+    color: 'var(--tg-theme-text-color)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  } as CSSProperties,
+  sheetTitle: {
+    fontSize: 19,
+    fontWeight: 640,
+    letterSpacing: '-0.4px',
+    textWrap: 'pretty',
+  } as CSSProperties,
+  sheetWhy: {
+    fontSize: 13,
+    color: 'var(--tg-theme-subtitle-text-color)',
+    textWrap: 'pretty',
+  } as CSSProperties,
+  error: { fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' } as CSSProperties,
   send: (disabled: boolean): CSSProperties => ({
     flex: '1 1 0',
     padding: 13,
@@ -400,6 +444,193 @@ export function CloseSearchSheet({
       <button type="button" style={E.stay} onClick={onCancel}>
         Отмена
       </button>
+    </SheetShell>
+  );
+}
+
+/**
+ * Ответ на вопрос анкеты из экрана правки (§6).
+ *
+ * Варианты — те же строки, что в онбординге: вопрос один, и переписывать его
+ * для правки нельзя. Тап сохраняет сразу, поэтому кнопки «Сохранить» здесь нет,
+ * а закрывает шторку ответ сервера, а не сам тап: иначе список показывал бы
+ * выбор, которого в базе нет.
+ */
+export function ChoiceSheet({
+  title,
+  why,
+  choices,
+  value,
+  pending,
+  error,
+  onPick,
+  onCancel,
+}: {
+  title: string;
+  /** Зачем спрашиваем — подпись вопроса из §4. Пусто у «Пола»: там объяснять нечего. */
+  why?: string;
+  choices: Choice[];
+  /** Ответ с сервера. null — на вопрос ещё не отвечали. */
+  value: string | null;
+  /** Что улетело: галочка стоит на нём, пока сервер молчит. */
+  pending?: string | null;
+  error?: string | null;
+  onPick?: (id: string) => void;
+  onCancel?: () => void;
+}) {
+  const busy = Boolean(pending);
+  const picked = pending ?? value;
+
+  return (
+    <SheetShell onDismiss={busy ? undefined : onCancel}>
+      <span style={E.grabber} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <span style={E.sheetTitle}>{title}</span>
+        {why && <span style={E.sheetWhy}>{why}</span>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, opacity: busy ? 0.6 : 1 }}>
+        {choices.map((c) => (
+          <div
+            key={c.id}
+            style={E.choiceRow(picked === c.id)}
+            onClick={busy ? undefined : () => onPick?.(c.id)}
+          >
+            {c.label}
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 15,
+                fontWeight: 700,
+                opacity: picked === c.id ? 1 : 0,
+              }}
+            >
+              ✓
+            </span>
+          </div>
+        ))}
+      </div>
+      {error && <span style={E.error}>{error}</span>}
+      <button type="button" style={E.stay} disabled={busy} onClick={onCancel}>
+        Отмена
+      </button>
+    </SheetShell>
+  );
+}
+
+/**
+ * «О себе» — единственный свободный текст продукта (§4), ≤200 знаков.
+ *
+ * Кнопка «Сохранить», а не сохранение по букве: текст уходит на перепроверку
+ * модератору (§5), и отправлять туда каждую правку по одному символу нельзя.
+ */
+export function AboutSheet({
+  text,
+  max = 200,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  text: string;
+  max?: number;
+  busy?: boolean;
+  error?: string | null;
+  onSave?: (next: string) => void;
+  onCancel?: () => void;
+}) {
+  const [draft, setDraft] = useState(text);
+  const empty = draft.trim().length === 0;
+
+  return (
+    <SheetShell onDismiss={busy ? undefined : onCancel}>
+      <span style={E.grabber} />
+      <span style={E.sheetTitle}>О себе</span>
+      <textarea
+        value={draft}
+        maxLength={max}
+        disabled={busy}
+        onChange={(e) => setDraft(e.target.value)}
+        style={{ ...E.field, minHeight: 104, fontWeight: 400, lineHeight: 1.45, resize: 'none' }}
+      />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <span style={{ ...E.sheetWhy, flex: '1 1 auto', minWidth: 0 }}>
+          Диета, религия, температура в комнате — если важно, напиши здесь. Пройдёт проверку вместе
+          с фото
+        </span>
+        <span
+          style={{
+            flex: '0 0 auto',
+            fontSize: 12,
+            color: 'var(--tg-theme-hint-color)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {draft.length}/{max}
+        </span>
+      </div>
+      {error && <span style={E.error}>{error}</span>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" style={E.stay} disabled={busy} onClick={onCancel}>
+          Отмена
+        </button>
+        <button
+          type="button"
+          style={E.send(empty || Boolean(busy))}
+          disabled={empty || busy}
+          onClick={() => onSave?.(draft.trim())}
+        >
+          Сохранить
+        </button>
+      </div>
+    </SheetShell>
+  );
+}
+
+/** Возраст: то же поле, что на первом шаге анкеты, те же границы 16–100. */
+export function AgeSheet({
+  age,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  /** Пусто — возраст ещё не называли. */
+  age?: number;
+  busy?: boolean;
+  error?: string | null;
+  onSave?: (next: number) => void;
+  onCancel?: () => void;
+}) {
+  const [draft, setDraft] = useState(age ? String(age) : '');
+  const value = Number(draft);
+  const ok = draft !== '' && value >= 16 && value <= 100;
+
+  return (
+    <SheetShell onDismiss={busy ? undefined : onCancel}>
+      <span style={E.grabber} />
+      <span style={E.sheetTitle}>Возраст</span>
+      <input
+        style={E.field}
+        inputMode="numeric"
+        placeholder="23"
+        disabled={busy}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/\D/g, '').slice(0, 3))}
+      />
+      {error && <span style={E.error}>{error}</span>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" style={E.stay} disabled={busy} onClick={onCancel}>
+          Отмена
+        </button>
+        <button
+          type="button"
+          style={E.send(!ok || Boolean(busy))}
+          disabled={!ok || busy}
+          onClick={() => ok && onSave?.(value)}
+        >
+          Сохранить
+        </button>
+      </div>
     </SheetShell>
   );
 }

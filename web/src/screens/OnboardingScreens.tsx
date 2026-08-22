@@ -209,12 +209,16 @@ export function BasicsStep({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         <span style={{ fontSize: 15, fontWeight: 590 }}>С кем готов жить?</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <RadioRow label="С любым полом" active={pref === 'any'} onClick={() => setPref('any')} />
-          <RadioRow label="Только свой пол" active={pref === 'same'} onClick={() => setPref('same')} />
+          {GENDER_PREF_CHOICES.map((c) => (
+            <RadioRow
+              key={c.id}
+              label={c.label}
+              active={pref === c.id}
+              onClick={() => setPref(c.id as 'any' | 'same')}
+            />
+          ))}
         </div>
-        <span style={O.hint}>
-          Это взаимно: если ты «только свой пол», другой пол тебя не увидит нигде
-        </span>
+        <span style={O.hint}>{GENDER_PREF_HINT}</span>
       </div>
 
       <button
@@ -367,7 +371,7 @@ export function PetsStep({
       <StepHeader step={5} total={TOTAL_STEPS} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <span style={O.h1}>Животные</span>
-        <span style={O.why}>Аллергия выясняется на переезде — лучше сейчас</span>
+        <span style={O.why}>{PETS_WHY}</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -657,18 +661,37 @@ export function OnboardingDone({
   );
 }
 
-const OWN_PETS: Choice[] = [
+export const OWN_PETS: Choice[] = [
   { id: 'none', label: 'Нет' },
   { id: 'cat', label: 'Кот' },
   { id: 'dog', label: 'Собака' },
   { id: 'other', label: 'Другое' },
 ];
 
-const OTHER_PETS: Choice[] = [
+export const OTHER_PETS: Choice[] = [
   { id: 'ok', label: 'Ок' },
   { id: 'allergy', label: 'Аллергия' },
   { id: 'against', label: 'Против' },
 ];
+
+/** Зачем спрашиваем про животных — подпись экрана: подвопроса два, причина одна. */
+export const PETS_WHY = 'Аллергия выясняется на переезде — лучше сейчас';
+
+/* Шаг 0 отдельными константами: тем же вопросам нужен второй дом — список
+   правки анкеты (§6). Лейблы полные, «Ж»/«М» на чипах формы — сокращение
+   ради двух колонок, словами их читают в шторке. Значения — как в API. */
+export const GENDER_CHOICES: Choice[] = [
+  { id: 'female', label: 'Женский' },
+  { id: 'male', label: 'Мужской' },
+];
+
+export const GENDER_PREF_CHOICES: Choice[] = [
+  { id: 'any', label: 'С любым полом' },
+  { id: 'same', label: 'Только свой пол' },
+];
+
+export const GENDER_PREF_HINT =
+  'Это взаимно: если ты «только свой пол», другой пол тебя не увидит нигде';
 
 /** Вопросы-тапы. Шаг 1 — BasicsStep, 5 — PetsStep, 11 — AboutStep, 12 — PhotoStep. */
 /** Поле анкеты, в которое пишет экран-вопрос. Совпадает с ключом в API. */

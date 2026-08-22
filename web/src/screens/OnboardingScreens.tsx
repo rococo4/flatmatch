@@ -278,27 +278,7 @@ export function ChoiceStep({
         {choices.map((c) => {
           const active = picked === c.id;
           return (
-            <div
-              key={c.id}
-              onClick={() => pick(c.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '17px 14px',
-                borderRadius: 12,
-                background: active
-                  ? 'color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent)'
-                  : 'var(--app-bg)',
-                border: active ? '1.5px solid var(--tg-theme-button-color)' : '1.5px solid transparent',
-                fontSize: 16,
-                fontWeight: active ? 590 : 400,
-                color: active ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
-                cursor: 'pointer',
-                transition: 'background 140ms ease, border-color 140ms ease, transform 140ms ease',
-                transform: active ? 'scale(1.015)' : 'none',
-              }}
-            >
+            <div key={c.id} onClick={() => pick(c.id)} style={choiceRowStyle(active)}>
               {c.label}
               <span
                 style={{
@@ -438,8 +418,7 @@ export function AboutStep({
         />
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <span style={{ ...O.hint, flex: '1 1 auto', textWrap: 'pretty', minWidth: 0 }}>
-            Диета, религия, температура в комнате — если важно, напиши здесь. Пройдёт проверку вместе
-            с фото
+            {ABOUT_HINT}
           </span>
           <span
             style={{
@@ -676,6 +655,31 @@ export const OTHER_PETS: Choice[] = [
 
 /** Зачем спрашиваем про животных — подпись экрана: подвопроса два, причина одна. */
 export const PETS_WHY = 'Аллергия выясняется на переезде — лучше сейчас';
+
+/** Подпись «о себе» (§4): один текст на шаг онбординга и шторку правки. */
+export const ABOUT_HINT =
+  'Диета, религия, температура в комнате — если важно, напиши здесь. Пройдёт проверку вместе с фото';
+
+/** Ряд варианта ответа: один и тот же на шаге анкеты и в шторке правки (§6). */
+export function choiceRowStyle(active: boolean): CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '17px 14px',
+    borderRadius: 12,
+    background: active
+      ? 'color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent)'
+      : 'var(--app-bg)',
+    border: active ? '1.5px solid var(--tg-theme-button-color)' : '1.5px solid transparent',
+    fontSize: 16,
+    fontWeight: active ? 590 : 400,
+    color: active ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
+    cursor: 'pointer',
+    transition: 'background 140ms ease, border-color 140ms ease, transform 140ms ease',
+    transform: active ? 'scale(1.015)' : 'none',
+  };
+}
 
 /* Шаг 0 отдельными константами: тем же вопросам нужен второй дом — список
    правки анкеты (§6). Лейблы полные, «Ж»/«М» на чипах формы — сокращение

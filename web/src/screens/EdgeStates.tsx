@@ -9,7 +9,7 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { CloseReason, ReportReason } from '../api/client';
 import { reportReasonOptions } from '../api/format';
-import type { Choice } from './OnboardingScreens';
+import { ABOUT_HINT, choiceRowStyle, type Choice } from './OnboardingScreens';
 import { S } from '../ui/primitives';
 
 const E = {
@@ -94,23 +94,6 @@ const E = {
     fontSize: 14,
     fontWeight: 510,
     color: picked ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
-    cursor: 'pointer',
-  }),
-  /** Вариант ответа — тот же ряд, что в ChoiceStep онбординга: вопрос один,
-      и выглядеть в шторке иначе, чем на шаге, он не должен. */
-  choiceRow: (active: boolean): CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '17px 14px',
-    borderRadius: 12,
-    background: active
-      ? 'color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent)'
-      : 'var(--app-bg)',
-    border: active ? '1.5px solid var(--tg-theme-button-color)' : '1.5px solid transparent',
-    fontSize: 16,
-    fontWeight: active ? 590 : 400,
-    color: active ? 'var(--tg-theme-accent-text-color)' : 'var(--tg-theme-text-color)',
     cursor: 'pointer',
   }),
   field: {
@@ -492,7 +475,7 @@ export function ChoiceSheet({
         {choices.map((c) => (
           <div
             key={c.id}
-            style={E.choiceRow(picked === c.id)}
+            style={choiceRowStyle(picked === c.id)}
             onClick={busy ? undefined : () => onPick?.(c.id)}
           >
             {c.label}
@@ -553,10 +536,7 @@ export function AboutSheet({
         style={{ ...E.field, minHeight: 104, fontWeight: 400, lineHeight: 1.45, resize: 'none' }}
       />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <span style={{ ...E.sheetWhy, flex: '1 1 auto', minWidth: 0 }}>
-          Диета, религия, температура в комнате — если важно, напиши здесь. Пройдёт проверку вместе
-          с фото
-        </span>
+        <span style={{ ...E.sheetWhy, flex: '1 1 auto', minWidth: 0 }}>{ABOUT_HINT}</span>
         <span
           style={{
             flex: '0 0 auto',

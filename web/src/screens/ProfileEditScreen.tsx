@@ -32,15 +32,11 @@ import {
   type QuestionField,
 } from './OnboardingScreens';
 
-/** Строка списка: слева короткий лейбл, справа выбранный ответ. */
-export type EditRow = {
-  key: 'age' | 'gender' | 'gender_pref' | 'pets_own' | 'pets_ok' | QuestionField;
-  label: string;
-  value: string;
-};
+/** Строка списка. Ключ — он же имя поля анкеты в API: патч собирается из него. */
+type RowKey = 'age' | 'gender' | 'gender_pref' | 'pets_own' | 'pets_ok' | QuestionField;
 
 /** Что открыто поверх экрана. Ключ строки — её же шторка; «о себе» стоит особняком. */
-type SheetKey = EditRow['key'] | 'about';
+type SheetKey = RowKey | 'about';
 
 /** Куда ходит запрос: у отказа должно быть место на экране, а не одно на всех. */
 type Where = 'photo' | 'sheet' | 'submit';
@@ -64,7 +60,7 @@ const SHORT_LABEL: Record<QuestionField, string> = {
 };
 
 type Field = {
-  key: EditRow['key'];
+  key: RowKey;
   label: string;
   title: string;
   why?: string;
@@ -193,6 +189,14 @@ export function ProfileEditScreen({
    * отправить второй раз — модератору ушла бы вторая карточка на то же фото.
    */
   const [sent, setSent] = useState(false);
+  /**
+   * Метка перезалитого фото.
+   *
+   * Ключ в хранилище один на человека (`photos/{id}`), поэтому после замены
+   * адрес байт в байт прежний, и браузер показал бы прежний кадр из кэша.
+   * Метка обманывает кэш, не трогая ни хранилище, ни ответ сервера.
+   */
+  const [photoStamp, setPhotoStamp] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Свежий onBack в ref: оболочка передаёт inline-стрелку, и подписка иначе
@@ -203,17 +207,34 @@ export function ProfileEditScreen({
   }, [onBack]);
 
   // Родная кнопка «назад» Telegram: экран открывают из профиля и из пуша, и
-  // уводить с него должна та же стрелка, что и отовсюду. Гасим при уходе —
-  // иначе она осталась бы висеть на табах мёртвой кнопкой.
+  // уводить с него должна та же стрелка, что и отовсюду. При открытой шторке
+  // она сначала закрывает её — иначе тап по системной стрелке уносил бы с
+  // экрана вместе с недописанным «о себе»; пока запрос в пути, не делает
+  // ничего: шторка не должна уезжать из-под улетевшего ответа.
   useEffect(() => {
     if (!backButton.isMounted() || !showBackButton.isAvailable()) return undefined;
     showBackButton();
-    const off = onBackButtonClick(() => onBackRef.current());
-    return () => {
-      off();
+    return onBackButtonClick(() => {
+      if (busy) return;
+      if (sheet) {
+        setFail(null);
+        setPending(null);
+        setSheet(null);
+        return;
+      }
+      onBackRef.current();
+    });
+  }, [sheet, busy]);
+
+  // Гасим стрелку при уходе с экрана — отдельным эффектом на монтирование, а
+  // не в cleanup подписки выше: та пересобирается на каждое открытие шторки,
+  // и стрелка мигала бы.
+  useEffect(
+    () => () => {
       if (hideBackButton.isAvailable()) hideBackButton();
-    };
-  }, []);
+    },
+    [],
+  );
 
   // Пуш «Фото не подошло» ведёт сразу к выбору файла: экран открыт ради него.
   // У запуска по диплинку жеста ещё не было, и такой клик браузер молча
@@ -233,6 +254,8 @@ export function ProfileEditScreen({
   // «Уйдёт» — пока карточка не в очереди; у отправленной анкеты она уже там,
   // и обещать будущее время нельзя.
   const reviewChip = profile.status === 'pending' || sent ? 'на проверке' : 'уйдёт на проверку';
+  const photoSrc =
+    profile.photo_url && photoStamp ? `${profile.photo_url}?v=${photoStamp}` : profile.photo_url;
 
   return (
     <div style={L.screen}>
@@ -256,7 +279,7 @@ export function ProfileEditScreen({
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             {/* Своё фото видно всегда, даже до проверки: иначе не решить, менять
                 его или нет (§5). Заглушка тут только у того, кто не грузил. */}
-            <Avatar name={profile.name} size={72} src={profile.photo_url} />
+            <Avatar name={profile.name} size={72} src={photoSrc} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
               <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
                 {profile.name}
@@ -388,7 +411,7 @@ export function ProfileEditScreen({
           age={profile.age}
           busy={busy === 'sheet'}
           error={sheetError}
-          onSave={(age) => void save({ age })}
+          onSave={(age) => (age === profile.age ? close() : void save({ age }))}
           onCancel={close}
         />
       )}
@@ -398,10 +421,16 @@ export function ProfileEditScreen({
           title={field.title}
           why={field.why}
           choices={field.choices}
-          value={(profile[field.key] as string | undefined) ?? null}
+          value={answerOf(profile, field.key)}
           pending={pending}
           error={sheetError}
           onPick={(id) => {
+            // Тот же ответ — не запрос: сервер записал бы то же самое, а шторку
+            // и без него закрывает выбор.
+            if (id === answerOf(profile, field.key)) {
+              close();
+              return;
+            }
             setPending(id);
             void save({ [field.key]: id } as Questionnaire);
           }}
@@ -439,6 +468,13 @@ export function ProfileEditScreen({
 
   /** Ответ уходит на сервер сразу; шторку закрывает он, а не тап (§6). */
   async function save(patch: Questionnaire) {
+    // Прежний текст «о себе» на сервер не отправляем: about_status он сбрасывает
+    // по одному наличию поля, и блок пропал бы у всех до нового вердикта (§5) —
+    // за то, что человек открыл шторку и передумал.
+    if ('about' in patch && patch.about === about) {
+      setSheet(null);
+      return;
+    }
     if (!(await call('sheet', () => patchProfile(patch)))) return;
     // Переписанный текст ушёл только в базу: модератору его отправляет кнопка.
     if ('about' in patch) setSent(false);
@@ -446,7 +482,9 @@ export function ProfileEditScreen({
   }
 
   async function upload(file: File) {
-    if (await call('photo', () => uploadPhoto(file))) setSent(false);
+    if (!(await call('photo', () => uploadPhoto(file)))) return;
+    setPhotoStamp(Date.now());
+    setSent(false);
   }
 
   async function send() {
@@ -454,10 +492,15 @@ export function ProfileEditScreen({
   }
 }
 
+/** Ответ анкеты как его хранит сервер. null — на вопрос ещё не отвечали. */
+function answerOf(profile: Profile, key: RowKey): string | null {
+  return (profile[key] as string | undefined) ?? null;
+}
+
 /** Ответ строки: лейбл выбранного варианта, иначе честное «Не указано». */
 function valueOf(profile: Profile, f: Field): string {
   if (f.key === 'age') return profile.age ? String(profile.age) : NOT_SET;
-  const answer = profile[f.key] as string | undefined;
+  const answer = answerOf(profile, f.key);
   return f.choices?.find((c) => c.id === answer)?.label ?? NOT_SET;
 }
 

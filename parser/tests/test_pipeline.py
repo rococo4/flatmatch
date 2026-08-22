@@ -245,6 +245,63 @@ def test_twin_point_marks_possible_dup(conn, cfg):
     assert _post_row(conn, 12)["possible_dup"] is False
 
 
+LONG = (
+    "Сдаётся просторная светлая двушка у метро Сокол, 54 метра, потолки 2,8, "
+    "качественный ремонт, вся техника: стиральная машина, холодильник, "
+    "посудомоечная машина, кондиционер. Адрес: Ленинградский проспект 70. "
+    "Цена 85 000 плюс счётчики, залог месяц. Звонить +7-900-000-00-00"
+)
+REPOST = (
+    "2-к квартира🏙️ м.Сокол\n📌Сдаётся просторная светлая двушка у метро Сокол, "
+    "54 метра, потолки 2,8, качественный ремонт, вся техника: 🔹стиральная машина, "
+    "🔹холодильник, 🔹посудомоечная машина, 🔹кондиционер. 📍Адрес: Ленинградский "
+    "проспект 70. 💳Цена 85 000 плюс счётчики, залог месяц. 💌+7-900-000-00-00 @agent"
+)
+
+
+def test_repost_with_similar_text_is_a_dup(conn, cfg):
+    _post(conn, 20, LONG)
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+    original = _post_row(conn, 20)["point_id"]
+    _post(conn, 21, REPOST)
+
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+
+    row = _post_row(conn, 21)
+    assert row["status"] == "skipped"
+    assert row["skip_reason"] == "dup"
+    assert row["point_id"] == original
+    assert _points_with(conn, f"https://t.me/{CHANNEL}/21") == 0
+
+
+def test_repost_after_the_original_closed_is_a_new_point(conn, cfg):
+    _post(conn, 22, LONG)
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+    original = _post_row(conn, 22)["point_id"]
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE points SET status = 'closed', close_reason = 'gone' WHERE id = %s",
+            (original,),
+        )
+    _post(conn, 23, REPOST)
+
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+
+    row = _post_row(conn, 23)
+    assert row["status"] == "point_created"
+    assert row["point_id"] != original
+
+
+def test_twin_with_other_text_and_price_is_not_a_dup(conn, cfg):
+    _post(conn, 24, LONG)
+    pipeline.process_new(conn, FakeClient(json.dumps(FLAT)), cfg)
+    _post(conn, 25, REPOST)
+
+    pipeline.process_new(conn, FakeClient(json.dumps(dict(FLAT, price_month_total=90000))), cfg)
+
+    assert _post_row(conn, 25)["status"] == "point_created"
+
+
 def test_all_new_posts_are_taken_in_one_pass(conn, cfg):
     _post(conn, 14, "Сдаётся двушка у метро Сокол")
     _post(conn, 15, "Ищу квартиру у Сокола")

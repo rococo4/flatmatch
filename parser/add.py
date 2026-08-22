@@ -132,7 +132,7 @@ def add(conn, llm, cfg, draft: Draft) -> Added:
     except extract.ExtractError as err:
         raise Refusal(f"разбор не удался: {err}") from err
 
-    ready = pipeline.verdict(conn, cfg, got, draft.url)
+    ready = pipeline.verdict(conn, cfg, got, draft.url, text)
     if ready.reason is not None:
         raise Refusal(_reason(ready))
 

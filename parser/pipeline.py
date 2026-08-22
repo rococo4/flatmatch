@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import psycopg
 from psycopg.types.json import Jsonb
 
+import dedup
 import extract
 import fetch
 import photos
@@ -58,6 +59,17 @@ WHERE channel = %s AND message_id = %s
 """
 
 _LIVE_BY_URL = "SELECT id FROM points WHERE url_norm = %s AND status <> 'closed' LIMIT 1"
+
+_SIMILAR = f"""
+SELECT p.id, cp.text
+FROM points p
+JOIN channel_posts cp ON cp.point_id = p.id
+WHERE p.status <> 'closed'
+  AND p.zone_id = %s
+  AND p.price_total = %s
+  AND p.created_at >= now() - interval '{TWIN_DAYS} days'
+ORDER BY p.created_at
+"""
 
 _TWIN = f"""
 SELECT EXISTS (
@@ -125,6 +137,7 @@ def process_post(conn, llm, cfg, post, photo_client) -> str:
         cfg,
         got,
         POST_URL.format(channel=post["channel"], message_id=post["message_id"]),
+        post["text"],
     )
     if ready.reason is not None:
         return _finish(conn, post, STATUS_SKIPPED, ready.reason, raw, point_id=ready.point_id)
@@ -139,11 +152,12 @@ def process_post(conn, llm, cfg, post, photo_client) -> str:
         return _finish(conn, post, STATUS_SKIPPED, SKIP_DUP, raw, point_id=live)
 
 
-def verdict(conn, cfg, got, fallback_url: str | None) -> Verdict:
+def verdict(conn, cfg, got, fallback_url: str | None, text: str | None = None) -> Verdict:
     """Правила §3 дизайна, шаги 4–6: годится ли разбор в точку.
 
     Общие для ленты и досыпки (add.py) — расхождение здесь означало бы, что
-    руками можно завести точку, которую парсер бы не завёл.
+    руками можно завести точку, которую парсер бы не завёл. Текст нужен для
+    ловли репостов: та же станция и цена за неделю плюс похожие слова.
     """
     if got.kind in SKIP_BY_KIND:
         return Verdict(reason=SKIP_BY_KIND[got.kind])
@@ -161,6 +175,10 @@ def verdict(conn, cfg, got, fallback_url: str | None) -> Verdict:
         live = live_point(conn, url_norm)
         if live is not None:
             return Verdict(reason=SKIP_DUP, point_id=live, url_norm=url_norm)
+    if text:
+        repost = _reposted(conn, zone_id, got.price_month_total, text)
+        if repost is not None:
+            return Verdict(reason=SKIP_DUP, point_id=repost, url_norm=url_norm)
     return Verdict(zone_id=zone_id, url_norm=url_norm)
 
 
@@ -259,6 +277,16 @@ def _fields_ok(got) -> bool:
     if got.deposit is not None and not 0 <= got.deposit <= DEPOSIT_CAP:
         return False
     return all(code in RESTRICTIONS for code in got.restrictions)
+
+
+def _reposted(conn, zone_id: str, price: int, text: str):
+    words = dedup.tokens(text)
+    with conn.cursor() as cur:
+        cur.execute(_SIMILAR, (zone_id, price))
+        for point_id, other in cur.fetchall():
+            if dedup.same_listing(words, dedup.tokens(other)):
+                return point_id
+    return None
 
 
 def _twin(conn, zone_id: str, price: int, rooms: int | None) -> bool:

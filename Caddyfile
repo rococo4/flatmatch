@@ -18,6 +18,12 @@
 	handle /healthz {
 		reverse_proxy api:8080
 	}
+	# Photos live on the api's volume and are served by it under /media; without
+	# this route they would fall through to the SPA handler below and come back
+	# as index.html.
+	handle /media/* {
+		reverse_proxy api:8080
+	}
 
 	handle {
 		root * /srv

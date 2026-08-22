@@ -168,10 +168,9 @@ docker compose exec postgres psql -U flatmatch -d flatmatch \
 ## Прод
 
 Всё выше — про локальный стенд. Боевой стоит на VPS по адресу
-`https://flatmatch.ru`: docker compose, Caddy, деплой `scripts/deploy.sh`,
-логи `ssh flatmatch 'cd /opt/flatmatch && docker compose logs -f api'`.
-Подробности — раздел «Деплой» в [`README.md`](../../../README.md). Секретов
-здесь нет и не будет: боевой `.env` живёт только на сервере.
+`https://flatmatch.ru`; выкатка, логи, база, бэкапы и разбор поломок на
+проде — отдельный скилл `operating-prod`. Секретов здесь нет и не будет:
+боевой `.env` живёт только на сервере.
 
 Локальный стенд с боевым не смешивать. Токен у прод-бота свой; поднимешь
 локально api с тем же токеном — Telegram ответит `409 Conflict` одному из

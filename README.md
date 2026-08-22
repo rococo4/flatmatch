@@ -307,9 +307,13 @@ Host flatmatch
     IdentityFile ~/.ssh/flatmatch
 ```
 
-Репозиторий на сервере — `/opt/flatmatch`, там же поднят стек: `postgres`,
-`api`, `parser`, `caddy` (Caddy отдаёт собранный фронт и проксирует `/api`).
-В BotFather у бота прописан `https://flatmatch.ru`.
+Код живёт в приватном GitHub-репозитории `rococo4/flatmatch` (`origin`,
+с Мака по HTTPS). `/opt/flatmatch` на сервере — его клон: читает GitHub по
+deploy-ключу `/root/.ssh/flatmatch_deploy` (только чтение, зарегистрирован в
+Settings → Deploy keys репозитория; на сервере в `/root/.ssh/config` блок
+`Host github.com` с этим `IdentityFile`). Там же поднят стек: `postgres`,
+`api`, `parser`, `caddy` (Caddy отдаёт собранный фронт, проксирует `/api` и
+`/media`). В BotFather у бота прописан `https://flatmatch.ru`.
 
 ### Выкатка
 
@@ -318,15 +322,19 @@ scripts/deploy.sh          # хост flatmatch по умолчанию
 scripts/deploy.sh <host>   # другой алиас, если машин станет две
 ```
 
-Скрипт делает `rsync -az --delete` репозитория в `/opt/flatmatch` (мимо
-`.git`, `node_modules`, `.venv`, `web/dist`, `.env` и прочего локального),
-затем по ssh — `docker compose up -d --build`, `docker image prune -f` и
-печатает `docker compose ps`. Миграции применит сам api при старте, отдельного
-шага нет. Фронт собирается в образе Caddy, локальный `web/dist` не едет.
+Выкатывается то, что лежит в `origin/main`, а не локальное дерево. Скрипт
+сначала проверяет, что ты на `main`, без незакоммиченных изменений и что
+`HEAD` совпадает с `origin/main` (иначе падает с подсказкой `git push`), потом
+по ssh делает на сервере `git fetch` + `git reset --hard origin/main`,
+`docker compose up -d --build`, `docker image prune -f` и печатает `docker
+compose ps`. Миграции применит сам api при старте, отдельного шага нет. Фронт
+собирается в образе Caddy. Порядок всегда один: коммит → `git push` →
+`scripts/deploy.sh`.
 
-**`.env` живёт только на сервере** — `/opt/flatmatch/.env`, `chmod 600`, в git
-его нет и rsync его не трогает (иначе локальный файл с туннельным `APP_URL`
-затирал бы прод). Меняются переменные руками на месте:
+**`.env` живёт только на сервере** — `/opt/flatmatch/.env`, `chmod 600`. В git
+его нет (`.gitignore`), а `git reset --hard` неотслеживаемые файлы не трогает,
+так что выкатка его не заденет; `backups/` игнорируется так же. Меняются
+переменные руками на месте:
 
 ```sh
 ssh flatmatch
@@ -349,7 +357,7 @@ ssh flatmatch 'cd /opt/flatmatch && docker compose ps'
 
 ### Бэкапы
 
-`scripts/backup.sh` уезжает на сервер тем же rsync и запускается там: читает
+`scripts/backup.sh` приезжает на сервер вместе с кодом и запускается там: читает
 `/opt/flatmatch/.env`, снимает `pg_dump` через `docker compose exec -T
 postgres` и кладёт gzip в `/opt/flatmatch/backups/flatmatch-<дата>.sql.gz`,
 удаляя всё старше семи дней. В кроне (`crontab -e` на сервере):
@@ -390,9 +398,13 @@ docker compose start api parser
    `PasswordAuthentication no`; `systemctl restart ssh` и проверить вход на
    2222 ДО того, как закрывать консоль провайдера.
 4. `ufw allow 22,2222,80,443/tcp && ufw enable`.
-5. `mkdir -p /opt/flatmatch`, `scripts/deploy.sh` с локальной машины, затем
-   `.env` руками на сервере (шаблон — `.env.example`) и ещё раз
-   `docker compose up -d --build`.
+5. Deploy-ключ: на сервере `ssh-keygen -t ed25519 -f /root/.ssh/flatmatch_deploy
+   -N ""`, в `/root/.ssh/config` блок `Host github.com` / `IdentityFile
+   /root/.ssh/flatmatch_deploy` / `IdentitiesOnly yes`; публичный ключ — с Мака
+   `gh repo deploy-key add <файл.pub> --repo rococo4/flatmatch`; проверка
+   `ssh -T git@github.com`. Затем `git clone git@github.com:rococo4/flatmatch.git
+   /opt/flatmatch`, `.env` руками (шаблон — `.env.example`) и
+   `docker compose up -d --build`. Дальше — только `scripts/deploy.sh`.
 6. Крон бэкапа (строка выше) и адрес Mini App в BotFather — `https://<домен>`.
 
 ## Переменные окружения

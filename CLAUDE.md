@@ -608,11 +608,14 @@ URL объявлений (раз в сутки по активным точка�
   обязателен для TMA), фронт — статика. Без k8s/redis/очередей.
 - **Прод**: flatmatch.ru, VPS с репозиторием в /opt/flatmatch, стек тем же
   docker compose (postgres, api, parser, caddy), сертификат — Caddy +
-  Let's Encrypt, ssh по алиасу `flatmatch`. Выкатка — `scripts/deploy.sh`
-  (rsync репозитория + `docker compose up -d --build`), бэкап —
+  Let's Encrypt, ssh по алиасу `flatmatch`. Код — приватный GitHub
+  `rococo4/flatmatch` (origin, с Мака по HTTPS), `/opt/flatmatch` — его клон
+  по read-only deploy-ключу. Выкатка — `scripts/deploy.sh`: проверяет, что
+  локальный main запушен, на сервере `git reset --hard origin/main` +
+  `docker compose up -d --build`; бэкап —
   `scripts/backup.sh` на сервере (pg_dump в /opt/flatmatch/backups, хранить
   7 дней, крон 04:00). Миграции применяет api на старте. Секреты живут
-  ТОЛЬКО в серверном .env: он вне git, rsync его не трогает, в репозитории
+  ТОЛЬКО в серверном .env: он вне git, выкатка его не трогает, в репозитории
   и в документации значений нет. CI нет — деплой руками с машины. Детали и
   восстановление машины — README, раздел «Деплой».
 - **Модерация**: тот же бот, отдельный чат основателя, inline-кнопки; там же

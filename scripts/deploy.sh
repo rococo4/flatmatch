@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
-# Выкатывает репозиторий на прод: rsync в /opt/flatmatch и пересборка стека.
+# Выкатывает прод. Сервер — клон GitHub-репозитория, поэтому выкатка = подтянуть
+# origin/main и пересобрать стек. Локальное дерево на сервер НЕ едет: что не
+# закоммичено и не запушено, то не выкатится — скрипт это проверяет до ssh.
 #
-# Хост — алиас из ~/.ssh/config (по умолчанию flatmatch: IP, порт 2222, ключ).
-# Секреты не едут: .env живёт только на сервере, скрипт его не трогает.
-#
-#   scripts/deploy.sh            # на flatmatch
-#   scripts/deploy.sh other-host # на другой хост с тем же раскладом
+#   scripts/deploy.sh            # на flatmatch (алиас из ~/.ssh/config)
+#   scripts/deploy.sh other-host # другой хост с тем же раскладом
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST="${1:-flatmatch}"
 REMOTE_DIR="/opt/flatmatch"
+BRANCH="main"
 
 cd "$ROOT"
 
@@ -19,31 +19,31 @@ say() { printf '\033[1;34m▸\033[0m %s\n' "$*"; }
 ok()  { printf '\033[1;32m✓\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
-for cmd in rsync ssh; do
+for cmd in git ssh; do
   command -v "$cmd" >/dev/null || die "$cmd не установлен"
 done
+
+current="$(git branch --show-current)"
+[ "$current" = "$BRANCH" ] || die "выкатываем только $BRANCH, а сейчас $current"
+[ -z "$(git status --porcelain --untracked-files=no)" ] \
+  || die "есть незакоммиченные изменения — закоммить или отложи (git stash)"
+
+git fetch -q origin "$BRANCH"
+local_sha="$(git rev-parse HEAD)"
+remote_sha="$(git rev-parse "origin/$BRANCH")"
+[ "$local_sha" = "$remote_sha" ] \
+  || die "локальный $BRANCH (${local_sha:0:7}) не совпадает с origin/$BRANCH (${remote_sha:0:7}) — git push или git pull"
 
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" true 2>/dev/null \
   || die "нет доступа по ssh к $HOST. Проверь ~/.ssh/config и ключ"
 
-# Исключения: чужие сборки, локальные стенды и всё секретное. Локальный .env
-# не шлём, серверный не трогаем: у них разные значения, перезаписать —
-# уронить прод. Исключённое --delete не трогает, поэтому здесь же backups:
-# локально каталога нет, и без этой строки выкатка стирала бы дампы.
-EXCLUDES=(
-  .git node_modules .venv .dev api/.data web/dist .superpowers .env
-  '*.png' .claude web/.env.local __pycache__ .pytest_cache backups
-)
-
-args=()
-for pattern in "${EXCLUDES[@]}"; do
-  args+=(--exclude "$pattern")
-done
-
-say "синхронизирую репозиторий на $HOST:$REMOTE_DIR"
-rsync -az --delete "${args[@]}" -e "ssh" ./ "$HOST:$REMOTE_DIR/"
-ok "файлы на месте"
-
-say "пересобираю стек"
-ssh "$HOST" "cd $REMOTE_DIR && docker compose up -d --build && docker image prune -f && docker compose ps"
+say "выкатываю $(git log -1 --format='%h %s') на $HOST"
+ssh "$HOST" "set -e
+  cd $REMOTE_DIR
+  git fetch -q origin $BRANCH
+  git reset -q --hard origin/$BRANCH
+  echo \"на сервере: \$(git log -1 --format='%h %s')\"
+  docker compose up -d --build
+  docker image prune -f
+  docker compose ps"
 ok "выкачено"

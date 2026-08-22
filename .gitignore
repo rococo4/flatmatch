@@ -4,6 +4,8 @@
 
 # Логи и pid-файлы локального стенда (scripts/dev-up.sh)
 /.dev/
+# Дампы базы на сервере (scripts/backup.sh)
+/backups/
 
 # Go
 /api/bin/

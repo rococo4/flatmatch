@@ -33,6 +33,11 @@ type MatchWithPeer struct {
 	Blocked bool
 }
 
+type Pair struct {
+	AID uuid.UUID
+	BID uuid.UUID
+}
+
 type PollTarget struct {
 	Match    entity.Match
 	UserID   uuid.UUID

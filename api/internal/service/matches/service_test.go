@@ -30,13 +30,14 @@ type fakeRepo struct {
 	err   error
 
 	listCalls   int
-	deleted     bool
+	deleted     *matchesrepo.Pair
 	deletedByID uuid.UUID
 	deletedErr  error
 }
 
 type fakeQueue struct {
 	actors []string
+	forgot []matchesrepo.Pair
 	err    error
 }
 
@@ -72,16 +73,21 @@ func (f *fakeRepo) ByID(context.Context, uuid.UUID, uuid.UUID) (matchesrepo.Matc
 	return f.match, nil
 }
 
-func (f *fakeRepo) Delete(_ context.Context, _, id uuid.UUID) (bool, error) {
+func (f *fakeRepo) Delete(_ context.Context, _, id uuid.UUID) (*matchesrepo.Pair, error) {
 	f.deletedByID = id
 	if f.deletedErr != nil {
-		return false, f.deletedErr
+		return nil, f.deletedErr
 	}
 	return f.deleted, nil
 }
 
 func (f *fakeQueue) FailPendingByActor(_ context.Context, actorKey string) error {
 	f.actors = append(f.actors, actorKey)
+	return f.err
+}
+
+func (f *fakeQueue) ForgetLiked(_ context.Context, a, b uuid.UUID) error {
+	f.forgot = append(f.forgot, matchesrepo.Pair{AID: a, BID: b})
 	return f.err
 }
 
@@ -223,7 +229,8 @@ func TestListReachesRepo(t *testing.T) {
 
 func TestDeleteDropsThePairAndClosesItsPushes(t *testing.T) {
 	f := newFixture(t)
-	f.repo.deleted = true
+	pair := matchesrepo.Pair{AID: f.viewer.ID, BID: f.peer.ID}
+	f.repo.deleted = &pair
 	id := f.repo.match.Match.ID
 
 	if err := f.svc.Delete(t.Context(), f.viewer.ID, id); err != nil {
@@ -235,23 +242,26 @@ func TestDeleteDropsThePairAndClosesItsPushes(t *testing.T) {
 	if len(f.queue.actors) != 1 || f.queue.actors[0] != id.String() {
 		t.Errorf("queue actors = %v, want one call with %s", f.queue.actors, id)
 	}
+	if len(f.queue.forgot) != 1 || f.queue.forgot[0] != pair {
+		t.Errorf("forgotten likes = %v, want one call with %+v", f.queue.forgot, pair)
+	}
 }
 
 func TestDeleteOfSomebodyElsesMatchIsNotFound(t *testing.T) {
 	f := newFixture(t)
-	f.repo.deleted = false
+	f.repo.deleted = nil
 
 	if err := f.svc.Delete(t.Context(), f.viewer.ID, uuid.New()); !errors.Is(err, entity.ErrNotFound) {
 		t.Errorf("Delete() = %v, want ErrNotFound", err)
 	}
-	if len(f.queue.actors) != 0 {
-		t.Errorf("a missing match reached the queue: %v", f.queue.actors)
+	if len(f.queue.actors) != 0 || len(f.queue.forgot) != 0 {
+		t.Errorf("a missing match reached the queue: %v, %v", f.queue.actors, f.queue.forgot)
 	}
 }
 
 func TestDeleteSurvivesABrokenQueue(t *testing.T) {
 	f := newFixture(t)
-	f.repo.deleted = true
+	f.repo.deleted = &matchesrepo.Pair{AID: f.viewer.ID, BID: f.peer.ID}
 	f.queue.err = errors.New("queue is down")
 
 	if err := f.svc.Delete(t.Context(), f.viewer.ID, f.repo.match.Match.ID); err != nil {

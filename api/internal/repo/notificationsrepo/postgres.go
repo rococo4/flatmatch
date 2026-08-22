@@ -157,6 +157,18 @@ func (r *Repo) FailPendingByActor(ctx context.Context, actorKey string) error {
 	return nil
 }
 
+func (r *Repo) ForgetLiked(ctx context.Context, a, b uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM notifications
+		WHERE type = $3
+		  AND (user_id, actor_key) IN (($1, $2::uuid::text), ($2, $1::uuid::text))`,
+		a, b, string(entity.NotifLiked))
+	if err != nil {
+		return fmt.Errorf("forget the likes between %s and %s: %w", a, b, err)
+	}
+	return nil
+}
+
 func (r *Repo) LastLikedTail(ctx context.Context, userID uuid.UUID, since time.Time) (*TailMessage, error) {
 	var tail TailMessage
 	err := r.pool.QueryRow(ctx, `

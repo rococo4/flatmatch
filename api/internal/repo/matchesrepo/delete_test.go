@@ -1,6 +1,7 @@
 package matchesrepo
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -46,24 +47,27 @@ func TestDeleteRemovesMatchLikesAndPolls(t *testing.T) {
 		t.Fatalf("before the delete: %d match, %d likes, %d polls; want 1, 2, 1", matches, likeRows, polls)
 	}
 
-	ok, err := repo.Delete(t.Context(), peer, matchID)
+	pair, err := repo.Delete(t.Context(), peer, matchID)
 	if err != nil {
 		t.Fatalf("Delete() failed: %v", err)
 	}
-	if !ok {
-		t.Fatal("Delete() by a member returned false, want true")
+	if pair == nil {
+		t.Fatal("Delete() by a member returned no pair, want one")
+	}
+	if got := []uuid.UUID{pair.AID, pair.BID}; !slices.Contains(got, me) || !slices.Contains(got, peer) {
+		t.Errorf("Delete() returned %+v, want the pair of %s and %s", pair, me, peer)
 	}
 
 	if matches, likeRows, polls := pairRows(t, pool, matchID, me, peer); matches != 0 || likeRows != 0 || polls != 0 {
 		t.Errorf("after the delete: %d match, %d likes, %d polls; want zeros", matches, likeRows, polls)
 	}
 
-	ok, err = repo.Delete(t.Context(), peer, matchID)
+	pair, err = repo.Delete(t.Context(), peer, matchID)
 	if err != nil {
 		t.Fatalf("the repeated Delete() failed: %v", err)
 	}
-	if ok {
-		t.Error("the repeated Delete() returned true, want false")
+	if pair != nil {
+		t.Errorf("the repeated Delete() returned %+v, want nil", pair)
 	}
 }
 
@@ -79,19 +83,19 @@ func TestDeleteByOutsiderDoesNothing(t *testing.T) {
 	seedSearch(t, pool, me)
 	matchID := matchPair(t, likes, me, peer, testZone)
 
-	ok, err := repo.Delete(t.Context(), stranger, matchID)
+	pair, err := repo.Delete(t.Context(), stranger, matchID)
 	if err != nil {
 		t.Fatalf("Delete() by an outsider failed: %v", err)
 	}
-	if ok {
-		t.Error("Delete() by an outsider returned true, want false")
+	if pair != nil {
+		t.Errorf("Delete() by an outsider returned %+v, want nil", pair)
 	}
 
 	if matches, likeRows, _ := pairRows(t, pool, matchID, me, peer); matches != 1 || likeRows != 2 {
 		t.Errorf("an outsider touched the pair: %d match, %d likes; want 1, 2", matches, likeRows)
 	}
 
-	if ok, err := repo.Delete(t.Context(), me, uuid.New()); err != nil || ok {
-		t.Errorf("Delete() of a missing match = %v, %v; want false, nil", ok, err)
+	if pair, err := repo.Delete(t.Context(), me, uuid.New()); err != nil || pair != nil {
+		t.Errorf("Delete() of a missing match = %v, %v; want nil, nil", pair, err)
 	}
 }

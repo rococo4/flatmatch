@@ -161,7 +161,7 @@ func run() error {
 		matches:  matches.New(matchesRepo, searchesRepo, usersRepo, pointsRepo, notificationsRepo, dir),
 
 		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator, pushes),
-		persons:      people.New(usersRepo, reportsRepo, matchesRepo, moderator),
+		persons:      people.New(usersRepo, reportsRepo, matchesRepo, moderator, notificationsRepo),
 		people:       usersRepo,
 		pairLikes:    likesRepo,
 		pairSearches: searchesRepo,

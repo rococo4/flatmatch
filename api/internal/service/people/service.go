@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/logctx"
 )
 
 type Repository interface {
@@ -21,6 +22,12 @@ type Reports interface {
 
 type Matches interface {
 	IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error)
+	MatchIDBetween(ctx context.Context, a, b uuid.UUID) (*uuid.UUID, error)
+}
+
+type Queue interface {
+	FailPendingByActor(ctx context.Context, actorKey string) error
+	ForgetLiked(ctx context.Context, a, b uuid.UUID) error
 }
 
 type Moderation interface {
@@ -32,10 +39,11 @@ type Service struct {
 	reports    Reports
 	matches    Matches
 	moderation Moderation
+	queue      Queue
 }
 
-func New(users Repository, reports Reports, matches Matches, moderation Moderation) *Service {
-	return &Service{users: users, reports: reports, matches: matches, moderation: moderation}
+func New(users Repository, reports Reports, matches Matches, moderation Moderation, queue Queue) *Service {
+	return &Service{users: users, reports: reports, matches: matches, moderation: moderation, queue: queue}
 }
 
 func (s *Service) Block(ctx context.Context, viewerID, targetID uuid.UUID) error {
@@ -45,7 +53,26 @@ func (s *Service) Block(ctx context.Context, viewerID, targetID uuid.UUID) error
 	if _, err := s.users.ByID(ctx, targetID); err != nil {
 		return err
 	}
-	return s.users.Block(ctx, viewerID, targetID)
+
+	matchID, err := s.matches.MatchIDBetween(ctx, viewerID, targetID)
+	if err != nil {
+		return err
+	}
+	if err := s.users.Block(ctx, viewerID, targetID); err != nil {
+		return err
+	}
+
+	quiet := context.WithoutCancel(ctx)
+	if matchID != nil {
+		if err := s.queue.FailPendingByActor(quiet, matchID.String()); err != nil {
+			logctx.From(ctx).Warn("close the pushes of a blocked match", "match", matchID, "error", err)
+		}
+	}
+	if err := s.queue.ForgetLiked(quiet, viewerID, targetID); err != nil {
+		logctx.From(ctx).Warn("forget the likes of a blocked pair",
+			"blocker", viewerID, "blocked", targetID, "error", err)
+	}
+	return nil
 }
 
 func (s *Service) Report(

@@ -17,7 +17,7 @@ import {
 
 import { ApiError, patchProfile, submitProfile, uploadPhoto } from '../api/client';
 import type { Profile, Questionnaire } from '../api/client';
-import { ABOUT_REJECTED, PHOTO_REJECTED } from '../api/format';
+import { ABOUT_REJECTED, ownPhotoSrc, PHOTO_REJECTED } from '../api/format';
 import { Avatar, LimitChip, S } from '../ui/primitives';
 import { AboutSheet, AgeSheet, ChoiceSheet } from './EdgeStates';
 import {
@@ -166,14 +166,19 @@ const L = {
 export function ProfileEditScreen({
   profile,
   autoOpen,
+  photoStamp,
   onProfile,
+  onPhotoReplaced,
   onBack,
 }: {
   profile: Profile;
   /** Открыть нужное сразу: строка реджекта и кнопка пуша зовут чинить одно (§5). */
   autoOpen?: 'photo' | 'about';
+  /** Метка перезалитого фото: живёт выше экранов — своё фото рисует и профиль. */
+  photoStamp: number | null;
   /** Ответ сервера — истина: локальных правок анкеты здесь нет. */
   onProfile: (next: Profile) => void;
+  onPhotoReplaced: () => void;
   onBack: () => void;
 }) {
   const [sheet, setSheet] = useState<SheetKey | null>(autoOpen === 'about' ? 'about' : null);
@@ -189,14 +194,6 @@ export function ProfileEditScreen({
    * отправить второй раз — модератору ушла бы вторая карточка на то же фото.
    */
   const [sent, setSent] = useState(false);
-  /**
-   * Метка перезалитого фото.
-   *
-   * Ключ в хранилище один на человека (`photos/{id}`), поэтому после замены
-   * адрес байт в байт прежний, и браузер показал бы прежний кадр из кэша.
-   * Метка обманывает кэш, не трогая ни хранилище, ни ответ сервера.
-   */
-  const [photoStamp, setPhotoStamp] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Свежий onBack в ref: оболочка передаёт inline-стрелку, и подписка иначе
@@ -254,8 +251,7 @@ export function ProfileEditScreen({
   // «Уйдёт» — пока карточка не в очереди; у отправленной анкеты она уже там,
   // и обещать будущее время нельзя.
   const reviewChip = profile.status === 'pending' || sent ? 'на проверке' : 'уйдёт на проверку';
-  const photoSrc =
-    profile.photo_url && photoStamp ? `${profile.photo_url}?v=${photoStamp}` : profile.photo_url;
+  const photoSrc = ownPhotoSrc(profile.photo_url, photoStamp);
 
   return (
     <div style={L.screen}>
@@ -483,7 +479,7 @@ export function ProfileEditScreen({
 
   async function upload(file: File) {
     if (!(await call('photo', () => uploadPhoto(file)))) return;
-    setPhotoStamp(Date.now());
+    onPhotoReplaced();
     setSent(false);
   }
 

@@ -639,3 +639,56 @@ func TestFailPendingByActorClosesOneMatchQueue(t *testing.T) {
 		t.Errorf("queue of the user = %+v, want only the other match", left)
 	}
 }
+
+func TestForgetLikedDropsBothDirectionsOfOnePair(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	me := seedUser(t, pool, 1, "active")
+	peer := seedUser(t, pool, 2, "active")
+	third := seedUser(t, pool, 3, "active")
+
+	mustInsert(t, repo, notif(me, entity.NotifLiked, peer.String(), ""))
+	mustInsert(t, repo, notif(peer, entity.NotifLiked, me.String(), ""))
+	mustInsert(t, repo, notif(me, entity.NotifLiked, third.String(), ""))
+	mustInsert(t, repo, notif(me, entity.NotifMatched, peer.String(), ""))
+
+	if err := repo.ForgetLiked(t.Context(), me, peer); err != nil {
+		t.Fatalf("ForgetLiked() failed: %v", err)
+	}
+
+	if n := countRows(t, pool, `SELECT count(*) FROM notifications
+		WHERE type = 'liked' AND (user_id, actor_key) IN (($1, $2::uuid::text), ($2, $1::uuid::text))`,
+		me, peer); n != 0 {
+		t.Errorf("%d liked rows of the pair survived, want none", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM notifications
+		WHERE user_id = $1 AND type = 'liked' AND actor_key = $2::uuid::text`, me, third); n != 1 {
+		t.Errorf("liked rows of another pair = %d, want 1", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM notifications
+		WHERE user_id = $1 AND type = 'matched' AND actor_key = $2::uuid::text`, me, peer); n != 1 {
+		t.Errorf("matched rows of the pair = %d, want 1", n)
+	}
+}
+
+func TestForgetLikedLetsTheNextLikeThrough(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	me := seedUser(t, pool, 1, "active")
+	peer := seedUser(t, pool, 2, "active")
+
+	mustInsert(t, repo, notif(me, entity.NotifLiked, peer.String(), ""))
+	if mustInsert(t, repo, notif(me, entity.NotifLiked, peer.String(), "")) {
+		t.Fatal("the repeated like push was inserted before the forget, want it deduped")
+	}
+
+	if err := repo.ForgetLiked(t.Context(), me, peer); err != nil {
+		t.Fatalf("ForgetLiked() failed: %v", err)
+	}
+
+	if !mustInsert(t, repo, notif(me, entity.NotifLiked, peer.String(), "")) {
+		t.Error("the like after the forget was deduped, want it announced")
+	}
+}

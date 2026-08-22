@@ -16,7 +16,7 @@ import (
 type Repository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]matchesrepo.MatchWithPeer, error)
 	ByID(ctx context.Context, userID, id uuid.UUID) (matchesrepo.MatchWithPeer, error)
-	Delete(ctx context.Context, userID, id uuid.UUID) (bool, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) (*matchesrepo.Pair, error)
 }
 
 type Searches interface {
@@ -33,6 +33,7 @@ type Points interface {
 
 type Queue interface {
 	FailPendingByActor(ctx context.Context, actorKey string) error
+	ForgetLiked(ctx context.Context, a, b uuid.UUID) error
 }
 
 type Service struct {
@@ -73,17 +74,20 @@ func (s *Service) Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo
 }
 
 func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
-	deleted, err := s.repo.Delete(ctx, userID, id)
+	pair, err := s.repo.Delete(ctx, userID, id)
 	if err != nil {
 		return err
 	}
-	if !deleted {
+	if pair == nil {
 		return fmt.Errorf("delete match %s: %w", id, entity.ErrNotFound)
 	}
 
 	quiet := context.WithoutCancel(ctx)
 	if err := s.queue.FailPendingByActor(quiet, id.String()); err != nil {
 		logctx.From(ctx).Warn("close the pushes of a deleted match", "match", id, "error", err)
+	}
+	if err := s.queue.ForgetLiked(quiet, pair.AID, pair.BID); err != nil {
+		logctx.From(ctx).Warn("forget the likes of a deleted match", "match", id, "error", err)
 	}
 	return nil
 }

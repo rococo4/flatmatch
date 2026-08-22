@@ -8,6 +8,13 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/repo/notificationsrepo"
+)
+
+var (
+	_ Matches = (*matchesrepo.Repo)(nil)
+	_ Queue   = (*notificationsrepo.Repo)(nil)
 )
 
 type blockCall struct {
@@ -26,7 +33,20 @@ type fakeReports struct {
 	duplicate bool
 }
 
-type fakeMatches struct{ matched bool }
+type fakeMatches struct {
+	matched bool
+	matchID *uuid.UUID
+}
+
+type forgotPair struct {
+	a uuid.UUID
+	b uuid.UUID
+}
+
+type fakeQueue struct {
+	actors []string
+	forgot []forgotPair
+}
 
 type filedCard struct {
 	report   entity.Report
@@ -68,13 +88,32 @@ func (f fakeMatches) IsMatched(context.Context, uuid.UUID, uuid.UUID) (bool, err
 	return f.matched, nil
 }
 
+func (f fakeMatches) MatchIDBetween(context.Context, uuid.UUID, uuid.UUID) (*uuid.UUID, error) {
+	return f.matchID, nil
+}
+
+func (f *fakeQueue) FailPendingByActor(_ context.Context, actorKey string) error {
+	f.actors = append(f.actors, actorKey)
+	return nil
+}
+
+func (f *fakeQueue) ForgetLiked(_ context.Context, a, b uuid.UUID) error {
+	f.forgot = append(f.forgot, forgotPair{a: a, b: b})
+	return nil
+}
+
 func (f *fakeModeration) ReportFiled(_ context.Context, r entity.Report, reporter, target entity.User) {
 	f.cards = append(f.cards, filedCard{report: r, reporter: reporter, target: target})
 }
 
 func newTestService(users *fakeUsers, reports *fakeReports, matched bool) (*Service, *fakeModeration) {
 	mod := &fakeModeration{}
-	return New(users, reports, fakeMatches{matched: matched}, mod), mod
+	return New(users, reports, fakeMatches{matched: matched}, mod, &fakeQueue{}), mod
+}
+
+func newBlockService(users *fakeUsers, matches fakeMatches) (*Service, *fakeQueue) {
+	queue := &fakeQueue{}
+	return New(users, &fakeReports{}, matches, &fakeModeration{}, queue), queue
 }
 
 func viewer() entity.User {
@@ -121,6 +160,40 @@ func TestBlockWorksOnAlreadyInvisiblePeople(t *testing.T) {
 	}
 	if len(users.blocks) != 1 || users.blocks[0] != (blockCall{blocker: me, blocked: them.ID}) {
 		t.Errorf("blocks = %+v, want one row from me to them", users.blocks)
+	}
+}
+
+func TestBlockClosesThePushesOfTheErasedMatch(t *testing.T) {
+	them := target()
+	matchID := uuid.New()
+	svc, queue := newBlockService(&fakeUsers{user: them, visible: true},
+		fakeMatches{matched: true, matchID: &matchID})
+	me := uuid.New()
+
+	if err := svc.Block(t.Context(), me, them.ID); err != nil {
+		t.Fatalf("Block() failed: %v", err)
+	}
+	if len(queue.actors) != 1 || queue.actors[0] != matchID.String() {
+		t.Errorf("queue actors = %v, want one call with %s", queue.actors, matchID)
+	}
+	if want := (forgotPair{a: me, b: them.ID}); len(queue.forgot) != 1 || queue.forgot[0] != want {
+		t.Errorf("forgotten likes = %v, want one call with %+v", queue.forgot, want)
+	}
+}
+
+func TestBlockOfAnUnmatchedPersonForgetsTheLikesOnly(t *testing.T) {
+	them := target()
+	svc, queue := newBlockService(&fakeUsers{user: them, visible: true}, fakeMatches{})
+	me := uuid.New()
+
+	if err := svc.Block(t.Context(), me, them.ID); err != nil {
+		t.Fatalf("Block() failed: %v", err)
+	}
+	if len(queue.actors) != 0 {
+		t.Errorf("queue actors = %v, want none without a match", queue.actors)
+	}
+	if want := (forgotPair{a: me, b: them.ID}); len(queue.forgot) != 1 || queue.forgot[0] != want {
+		t.Errorf("forgotten likes = %v, want one call with %+v", queue.forgot, want)
 	}
 }
 

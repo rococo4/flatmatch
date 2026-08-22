@@ -46,6 +46,20 @@ export const VERDICT_UI: Record<PoolChip['verdict'], Verdict> = {
 export const PHOTO_REJECTED = 'Фото не подошло — загрузи другое, где видно лицо';
 export const ABOUT_REJECTED = 'Текст „о себе" не подошёл — поправь его';
 
+/**
+ * Адрес СВОЕГО фото с меткой перезалива.
+ *
+ * Ключ в хранилище один на человека (`photos/{id}`), поэтому после замены
+ * адрес байт в байт прежний, и браузер везде показывал бы прежний кадр из
+ * кэша. Метка обманывает кэш, не трогая ни хранилище, ни ответ сервера, и
+ * живёт выше экранов: своё фото рисуют и анкета, и профиль.
+ *
+ * Чужих фото не касается: их ключи меняются вместе с людьми.
+ */
+export function ownPhotoSrc(url: string | undefined, stamp: number | null): string | undefined {
+  return url && stamp ? `${url}?v=${stamp}` : url;
+}
+
 /** Род слова разный — обобщать нельзя. */
 const NOT_SET: Record<PoolChip['param'], string> = {
   price: 'цена не указана',

@@ -82,8 +82,8 @@ func (r *Repo) IsMatched(ctx context.Context, a, b uuid.UUID) (bool, error) {
 	return matched, nil
 }
 
-func (r *Repo) Delete(ctx context.Context, userID, id uuid.UUID) (bool, error) {
-	var deleted bool
+func (r *Repo) Delete(ctx context.Context, userID, id uuid.UUID) (*Pair, error) {
+	var deleted *Pair
 
 	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		var aID, bID uuid.UUID
@@ -124,11 +124,11 @@ func (r *Repo) Delete(ctx context.Context, userID, id uuid.UUID) (bool, error) {
 			return err
 		}
 
-		deleted = true
+		deleted = &Pair{AID: aID, BID: bID}
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("delete match %s of user %s: %w", id, userID, err)
+		return nil, fmt.Errorf("delete match %s of user %s: %w", id, userID, err)
 	}
 	return deleted, nil
 }

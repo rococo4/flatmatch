@@ -677,9 +677,9 @@ func TestLikeAfterTheMatchIsDeletedSpendsAgain(t *testing.T) {
 		t.Error("a matched peer is still in the zone pool")
 	}
 
-	ok, err := matchRepo.Delete(t.Context(), me, res.Match.ID)
-	if err != nil || !ok {
-		t.Fatalf("Delete() = %v, %v; want true, nil", ok, err)
+	pair, err := matchRepo.Delete(t.Context(), me, res.Match.ID)
+	if err != nil || pair == nil {
+		t.Fatalf("Delete() = %v, %v; want the pair, nil", pair, err)
 	}
 
 	if !inPoolOf(t, searchRepo, me, peer) {
@@ -720,8 +720,8 @@ func TestDeletedMatchDoesNotRefundTheSlot(t *testing.T) {
 		t.Fatalf("the reply Create() = %+v, %v; want a match", res, err)
 	}
 
-	if ok, err := matchRepo.Delete(t.Context(), me, res.Match.ID); err != nil || !ok {
-		t.Fatalf("Delete() = %v, %v; want true, nil", ok, err)
+	if pair, err := matchRepo.Delete(t.Context(), me, res.Match.ID); err != nil || pair == nil {
+		t.Fatalf("Delete() = %v, %v; want the pair, nil", pair, err)
 	}
 
 	budget, err := repo.Budget(t.Context(), me)

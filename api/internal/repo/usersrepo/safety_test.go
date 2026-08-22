@@ -22,6 +22,9 @@ func newSafetyRepo(t *testing.T) (*pgxpool.Pool, *Repo) {
 		for _, q := range []string{
 			`DELETE FROM blocks WHERE blocker_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)
 			    OR blocked_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
+			`DELETE FROM match_polls WHERE user_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
+			`DELETE FROM matches WHERE a_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
+			`DELETE FROM likes_users WHERE from_id IN (SELECT id FROM users WHERE tg_id <= $1 AND tg_id > $1-1000)`,
 			`DELETE FROM users WHERE tg_id <= $1 AND tg_id > $1-1000`,
 		} {
 			if _, err := pool.Exec(context.Background(), q, safetyTGBase); err != nil {
@@ -119,5 +122,90 @@ func TestBlockIsIdempotent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("found %d block rows, want 1", count)
+	}
+}
+
+func seedMatchedPair(t *testing.T, pool *pgxpool.Pool, a, b uuid.UUID) uuid.UUID {
+	t.Helper()
+
+	var matchID uuid.UUID
+	err := pool.QueryRow(context.Background(), `
+		INSERT INTO matches (a_id, b_id, context_zone_id)
+		VALUES (least($1::uuid, $2::uuid), greatest($1::uuid, $2::uuid), 'd-khamovniki')
+		RETURNING id`, a, b).Scan(&matchID)
+	if err != nil {
+		t.Fatalf("seed match: %v", err)
+	}
+
+	_, err = pool.Exec(context.Background(), `
+		INSERT INTO likes_users (from_id, to_id, zone_id, spent)
+		VALUES ($1, $2, 'd-khamovniki', true), ($2, $1, NULL, false)`, a, b)
+	if err != nil {
+		t.Fatalf("seed likes: %v", err)
+	}
+
+	_, err = pool.Exec(context.Background(), `
+		INSERT INTO match_polls (match_id, user_id, answer) VALUES ($1, $2, 'talking')`, matchID, a)
+	if err != nil {
+		t.Fatalf("seed poll answer: %v", err)
+	}
+	return matchID
+}
+
+func countSafetyRows(t *testing.T, pool *pgxpool.Pool, query string, args ...any) int {
+	t.Helper()
+
+	var n int
+	if err := pool.QueryRow(context.Background(), query, args...).Scan(&n); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	return n
+}
+
+func TestBlockErasesTheMatchAndBothLikes(t *testing.T) {
+	pool, repo := newSafetyRepo(t)
+	blocker := seedSafetyUser(t, pool, 6)
+	blocked := seedSafetyUser(t, pool, 7)
+	matchID := seedMatchedPair(t, pool, blocker, blocked)
+	ctx := t.Context()
+
+	if err := repo.Block(ctx, blocked, blocker); err != nil {
+		t.Fatalf("Block() failed: %v", err)
+	}
+
+	if n := countSafetyRows(t, pool, `SELECT count(*) FROM matches WHERE id = $1`, matchID); n != 0 {
+		t.Errorf("the match survived the block: %d rows", n)
+	}
+	if n := countSafetyRows(t, pool, `SELECT count(*) FROM likes_users
+		WHERE (from_id, to_id) IN (($1, $2), ($2, $1))`, blocker, blocked); n != 0 {
+		t.Errorf("%d likes of the pair survived the block, want none", n)
+	}
+	if n := countSafetyRows(t, pool, `SELECT count(*) FROM match_polls WHERE match_id = $1`, matchID); n != 0 {
+		t.Errorf("%d poll answers survived the block, want none", n)
+	}
+	if n := countSafetyRows(t, pool,
+		`SELECT count(*) FROM blocks WHERE blocker_id = $1 AND blocked_id = $2`, blocked, blocker); n != 1 {
+		t.Errorf("found %d block rows, want 1", n)
+	}
+}
+
+func TestBlockOfAStrangerLeavesOtherPairsAlone(t *testing.T) {
+	pool, repo := newSafetyRepo(t)
+	blocker := seedSafetyUser(t, pool, 8)
+	blocked := seedSafetyUser(t, pool, 9)
+	third := seedSafetyUser(t, pool, 10)
+	matchID := seedMatchedPair(t, pool, blocker, third)
+	ctx := t.Context()
+
+	if err := repo.Block(ctx, blocker, blocked); err != nil {
+		t.Fatalf("Block() failed: %v", err)
+	}
+
+	if n := countSafetyRows(t, pool, `SELECT count(*) FROM matches WHERE id = $1`, matchID); n != 1 {
+		t.Errorf("the untouched match is gone: %d rows, want 1", n)
+	}
+	if n := countSafetyRows(t, pool, `SELECT count(*) FROM likes_users
+		WHERE (from_id, to_id) IN (($1, $2), ($2, $1))`, blocker, third); n != 2 {
+		t.Errorf("likes of the untouched pair = %d, want 2", n)
 	}
 }

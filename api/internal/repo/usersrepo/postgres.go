@@ -192,10 +192,39 @@ func (r *Repo) SetSourceIfEmpty(ctx context.Context, id uuid.UUID, source string
 }
 
 func (r *Repo) Block(ctx context.Context, blockerID, blockedID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO blocks (blocker_id, blocked_id)
-		VALUES ($1, $2)
-		ON CONFLICT DO NOTHING`, blockerID, blockedID)
+	err := postgres.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `
+			SELECT id FROM users WHERE id IN ($1::uuid, $2::uuid)
+			ORDER BY id FOR NO KEY UPDATE`, blockerID, blockedID); err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM match_polls
+			WHERE match_id IN (
+			    SELECT id FROM matches
+			    WHERE a_id = least($1::uuid, $2::uuid)
+			      AND b_id = greatest($1::uuid, $2::uuid))`, blockerID, blockedID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM matches
+			WHERE a_id = least($1::uuid, $2::uuid)
+			  AND b_id = greatest($1::uuid, $2::uuid)`, blockerID, blockedID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM likes_users
+			WHERE (from_id, to_id) IN (($1, $2), ($2, $1))`, blockerID, blockedID); err != nil {
+			return err
+		}
+
+		_, err := tx.Exec(ctx, `
+			INSERT INTO blocks (blocker_id, blocked_id)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING`, blockerID, blockedID)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("block %s for %s: %w", blockedID, blockerID, err)
 	}

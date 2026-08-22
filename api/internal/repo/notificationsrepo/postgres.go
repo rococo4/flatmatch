@@ -147,6 +147,16 @@ func (r *Repo) FailAllPending(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
+func (r *Repo) FailPendingByActor(ctx context.Context, actorKey string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE notifications SET failed_at = now()
+		WHERE actor_key = $1 AND sent_at IS NULL AND failed_at IS NULL`, actorKey)
+	if err != nil {
+		return fmt.Errorf("fail the pending pushes of actor %s: %w", actorKey, err)
+	}
+	return nil
+}
+
 func (r *Repo) LastLikedTail(ctx context.Context, userID uuid.UUID, since time.Time) (*TailMessage, error) {
 	var tail TailMessage
 	err := r.pool.QueryRow(ctx, `

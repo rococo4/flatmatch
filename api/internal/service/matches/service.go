@@ -3,10 +3,12 @@ package matches
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
+	"flatmatch/api/internal/logctx"
 	"flatmatch/api/internal/repo/matchesrepo"
 	"flatmatch/api/internal/service/zones"
 )
@@ -14,6 +16,7 @@ import (
 type Repository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]matchesrepo.MatchWithPeer, error)
 	ByID(ctx context.Context, userID, id uuid.UUID) (matchesrepo.MatchWithPeer, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) (bool, error)
 }
 
 type Searches interface {
@@ -28,16 +31,23 @@ type Points interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
 }
 
+type Queue interface {
+	FailPendingByActor(ctx context.Context, actorKey string) error
+}
+
 type Service struct {
 	repo     Repository
 	searches Searches
 	users    Users
 	points   Points
+	queue    Queue
 	dir      *zones.Directory
 }
 
-func New(repo Repository, searches Searches, users Users, points Points, dir *zones.Directory) *Service {
-	return &Service{repo: repo, searches: searches, users: users, points: points, dir: dir}
+func New(repo Repository, searches Searches, users Users, points Points, queue Queue,
+	dir *zones.Directory,
+) *Service {
+	return &Service{repo: repo, searches: searches, users: users, points: points, queue: queue, dir: dir}
 }
 
 func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]matchesrepo.MatchWithPeer, error) {
@@ -60,6 +70,22 @@ func (s *Service) Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo
 		return matchesrepo.MatchWithPeer{}, Summary{}, err
 	}
 	return match, summary, nil
+}
+
+func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	deleted, err := s.repo.Delete(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return fmt.Errorf("delete match %s: %w", id, entity.ErrNotFound)
+	}
+
+	quiet := context.WithoutCancel(ctx)
+	if err := s.queue.FailPendingByActor(quiet, id.String()); err != nil {
+		logctx.From(ctx).Warn("close the pushes of a deleted match", "match", id, "error", err)
+	}
+	return nil
 }
 
 func (s *Service) summary(ctx context.Context, viewer entity.User, match matchesrepo.MatchWithPeer) (Summary, error) {

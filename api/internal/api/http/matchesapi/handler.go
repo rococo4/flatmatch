@@ -20,6 +20,7 @@ import (
 type Matches interface {
 	List(ctx context.Context, userID uuid.UUID) ([]matchesrepo.MatchWithPeer, error)
 	Detail(ctx context.Context, userID, id uuid.UUID) (matchesrepo.MatchWithPeer, matches.Summary, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 }
 
 type Photos interface {
@@ -46,6 +47,7 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.list)
 	r.Get("/{id}", h.detail)
+	r.Delete("/{id}", h.remove)
 	return r
 }
 
@@ -88,6 +90,26 @@ func (h *Handler) detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photos.PhotoURL(match.Peer)))
+}
+
+func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "match id is not a uuid", []string{"id"}, err)
+		return
+	}
+
+	if err := h.matches.Delete(r.Context(), user.ID, id); err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusNoContent, nil)
 }
 
 func (h *Handler) zone(id string) *zoneDTO {

@@ -599,3 +599,43 @@ func typesOf(ns []entity.Notification, user uuid.UUID) []entity.NotificationType
 	}
 	return out
 }
+
+func TestFailPendingByActorClosesOneMatchQueue(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	me := seedUser(t, pool, 1, "active")
+	peer := seedUser(t, pool, 2, "active")
+
+	match := uuid.NewString()
+	other := uuid.NewString()
+	mustInsert(t, repo, notif(me, entity.NotifMatched, match, ""))
+	mustInsert(t, repo, notif(me, entity.NotifPostMatch, match, ""))
+	mustInsert(t, repo, notif(peer, entity.NotifMatched, match, ""))
+	mustInsert(t, repo, notif(me, entity.NotifMatched, other, ""))
+
+	sentRow := pendingFor(t, repo, peer)[0]
+	at := time.Now().Add(-time.Hour).UTC().Truncate(time.Millisecond)
+	if err := repo.MarkSent(t.Context(), []uuid.UUID{sentRow.ID}, at); err != nil {
+		t.Fatalf("MarkSent() failed: %v", err)
+	}
+
+	if err := repo.FailPendingByActor(t.Context(), match); err != nil {
+		t.Fatalf("FailPendingByActor() failed: %v", err)
+	}
+
+	if n := countRows(t, pool,
+		`SELECT count(*) FROM notifications WHERE actor_key = $1 AND failed_at IS NOT NULL`, match); n != 2 {
+		t.Errorf("%d rows of the deleted match failed, want 2", n)
+	}
+	if got := sentAt(t, pool, sentRow.ID); got == nil || !got.Equal(at) {
+		t.Errorf("the already sent row changed: sent_at = %v, want %v", got, at)
+	}
+	if n := countRows(t, pool,
+		`SELECT count(*) FROM notifications WHERE actor_key = $1 AND failed_at IS NOT NULL`, other); n != 0 {
+		t.Errorf("another match lost %d rows, want none", n)
+	}
+	if left := pendingFor(t, repo, me); len(left) != 1 || left[0].ActorKey != other {
+		t.Errorf("queue of the user = %+v, want only the other match", left)
+	}
+}

@@ -10,6 +10,7 @@ import (
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/repo/notificationsrepo"
 	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
@@ -21,13 +22,22 @@ var (
 	_ Searches   = (*searchesrepo.Repo)(nil)
 	_ Users      = (*usersrepo.Repo)(nil)
 	_ Points     = (*pointsrepo.Repo)(nil)
+	_ Queue      = (*notificationsrepo.Repo)(nil)
 )
 
 type fakeRepo struct {
 	match matchesrepo.MatchWithPeer
 	err   error
 
-	listCalls int
+	listCalls   int
+	deleted     bool
+	deletedByID uuid.UUID
+	deletedErr  error
+}
+
+type fakeQueue struct {
+	actors []string
+	err    error
 }
 
 type fakeSearches map[uuid.UUID][]entity.Search
@@ -39,6 +49,7 @@ type fakePoints map[uuid.UUID]entity.Point
 type fixture struct {
 	svc      *Service
 	repo     *fakeRepo
+	queue    *fakeQueue
 	searches fakeSearches
 	users    fakeUsers
 	points   fakePoints
@@ -59,6 +70,19 @@ func (f *fakeRepo) ByID(context.Context, uuid.UUID, uuid.UUID) (matchesrepo.Matc
 		return matchesrepo.MatchWithPeer{}, f.err
 	}
 	return f.match, nil
+}
+
+func (f *fakeRepo) Delete(_ context.Context, _, id uuid.UUID) (bool, error) {
+	f.deletedByID = id
+	if f.deletedErr != nil {
+		return false, f.deletedErr
+	}
+	return f.deleted, nil
+}
+
+func (f *fakeQueue) FailPendingByActor(_ context.Context, actorKey string) error {
+	f.actors = append(f.actors, actorKey)
+	return f.err
 }
 
 func (f fakeSearches) ListByUser(_ context.Context, userID uuid.UUID) ([]entity.Search, error) {
@@ -122,7 +146,8 @@ func newFixture(t *testing.T) *fixture {
 		viewer:   viewer,
 		peer:     peer,
 	}
-	f.svc = New(f.repo, f.searches, f.users, f.points, testDir(t))
+	f.queue = &fakeQueue{}
+	f.svc = New(f.repo, f.searches, f.users, f.points, f.queue, testDir(t))
 	return f
 }
 
@@ -193,5 +218,52 @@ func TestListReachesRepo(t *testing.T) {
 	}
 	if f.repo.listCalls != 1 || len(got) != 1 {
 		t.Errorf("listCalls = %d, matches = %d, want 1 and 1", f.repo.listCalls, len(got))
+	}
+}
+
+func TestDeleteDropsThePairAndClosesItsPushes(t *testing.T) {
+	f := newFixture(t)
+	f.repo.deleted = true
+	id := f.repo.match.Match.ID
+
+	if err := f.svc.Delete(t.Context(), f.viewer.ID, id); err != nil {
+		t.Fatalf("Delete() failed: %v", err)
+	}
+	if f.repo.deletedByID != id {
+		t.Errorf("repo saw %s, want %s", f.repo.deletedByID, id)
+	}
+	if len(f.queue.actors) != 1 || f.queue.actors[0] != id.String() {
+		t.Errorf("queue actors = %v, want one call with %s", f.queue.actors, id)
+	}
+}
+
+func TestDeleteOfSomebodyElsesMatchIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	f.repo.deleted = false
+
+	if err := f.svc.Delete(t.Context(), f.viewer.ID, uuid.New()); !errors.Is(err, entity.ErrNotFound) {
+		t.Errorf("Delete() = %v, want ErrNotFound", err)
+	}
+	if len(f.queue.actors) != 0 {
+		t.Errorf("a missing match reached the queue: %v", f.queue.actors)
+	}
+}
+
+func TestDeleteSurvivesABrokenQueue(t *testing.T) {
+	f := newFixture(t)
+	f.repo.deleted = true
+	f.queue.err = errors.New("queue is down")
+
+	if err := f.svc.Delete(t.Context(), f.viewer.ID, f.repo.match.Match.ID); err != nil {
+		t.Errorf("Delete() = %v, want the push failure swallowed", err)
+	}
+}
+
+func TestDeletePropagatesRepoError(t *testing.T) {
+	f := newFixture(t)
+	f.repo.deletedErr = errors.New("database is down")
+
+	if err := f.svc.Delete(t.Context(), f.viewer.ID, f.repo.match.Match.ID); err == nil {
+		t.Error("Delete() swallowed a repo failure")
 	}
 }

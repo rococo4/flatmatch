@@ -3,6 +3,7 @@ package likesrepo
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/postgres/pgtest"
+	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/repo/searchesrepo"
 )
 
 const testTGBase int64 = -996000000
@@ -614,5 +617,61 @@ func waitBlockedBy(t *testing.T, pool *pgxpool.Pool, pid, n int) {
 			t.Fatalf("only %d sessions are waiting for pid %d, want %d", blocked, pid, n)
 		}
 		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+func inPoolOf(t *testing.T, repo *searchesrepo.Repo, viewer, target uuid.UUID) bool {
+	t.Helper()
+	list, err := repo.PoolCandidates(t.Context(), viewer, []string{testZone})
+	if err != nil {
+		t.Fatalf("PoolCandidates() failed: %v", err)
+	}
+	return slices.ContainsFunc(list, func(c entity.PoolCandidate) bool { return c.User.ID == target })
+}
+
+func TestLikeAfterTheMatchIsDeletedSpendsAgain(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	matchRepo := matchesrepo.New(pool)
+	searchRepo := searchesrepo.New(pool)
+
+	me := seedUser(t, pool, 1, "active", "male", "any")
+	peer := seedUser(t, pool, 2, "active", "male", "any")
+	seedSearch(t, pool, me, "active")
+	seedSearch(t, pool, peer, "active")
+
+	if _, err := repo.Create(t.Context(), me, peer, zoneCtx(testZone)); err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	res, err := repo.Create(t.Context(), peer, me, zoneCtx(testZone))
+	if err != nil {
+		t.Fatalf("the reply Create() failed: %v", err)
+	}
+	if res.Match == nil {
+		t.Fatal("the mutual like produced no match")
+	}
+	if inPoolOf(t, searchRepo, me, peer) {
+		t.Error("a matched peer is still in the zone pool")
+	}
+
+	ok, err := matchRepo.Delete(t.Context(), me, res.Match.ID)
+	if err != nil || !ok {
+		t.Fatalf("Delete() = %v, %v; want true, nil", ok, err)
+	}
+
+	if !inPoolOf(t, searchRepo, me, peer) {
+		t.Error("the peer did not come back to the zone pool after the delete")
+	}
+
+	again, err := repo.Create(t.Context(), me, peer, zoneCtx(testZone))
+	if err != nil {
+		t.Fatalf("the like after the delete failed: %v", err)
+	}
+	if !again.Like.Spent {
+		t.Error("the like after the delete was free, want a spent slot")
+	}
+	if again.Match != nil || again.Already {
+		t.Errorf("the like after the delete = %+v, want a fresh one-sided like", again)
 	}
 }

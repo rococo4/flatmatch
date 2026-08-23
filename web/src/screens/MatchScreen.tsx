@@ -42,21 +42,20 @@ const L = {
     color: 'var(--tg-theme-hint-color)',
   } as CSSProperties,
   /** Тихая строка действий: удаление и блок не соревнуются с контактом. */
-  actions: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: 2,
-  } as CSSProperties,
-  quiet: {
+  actions: { display: 'flex', gap: 8, paddingTop: 2 } as CSSProperties,
+  // Полноценные кнопки, а не тихая строка как в профиле: здесь это единственные
+  // действия над мэтчем, и прятать их в подпись значило бы, что их не найдут.
+  danger: {
+    flex: '1 1 0',
+    padding: 12,
     border: 'none',
-    background: 'none',
+    borderRadius: 10,
+    background: 'var(--app-bg)',
     font: 'inherit',
-    fontSize: 13,
-    color: 'var(--tg-theme-hint-color)',
+    fontSize: 15,
+    fontWeight: 590,
+    color: 'var(--tg-theme-destructive-text-color)',
     cursor: 'pointer',
-    padding: 0,
   } as CSSProperties,
   fixed: {
     position: 'sticky',
@@ -279,11 +278,10 @@ export function MatchScreen({
 
         {(onUnmatch || onBlock) && (
           <div style={L.actions}>
-            <button type="button" style={L.quiet} onClick={onUnmatch}>
+            <button type="button" style={L.danger} onClick={onUnmatch}>
               Удалить мэтч
             </button>
-            <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>·</span>
-            <button type="button" style={L.quiet} onClick={onBlock}>
+            <button type="button" style={L.danger} onClick={onBlock}>
               Заблокировать
             </button>
           </div>

@@ -21,7 +21,6 @@ import (
 	"flatmatch/api/internal/api/http/matchesapi"
 	"flatmatch/api/internal/api/http/peopleapi"
 	"flatmatch/api/internal/api/http/pointsapi"
-	"flatmatch/api/internal/api/http/poolsapi"
 	"flatmatch/api/internal/api/http/searchesapi"
 	"flatmatch/api/internal/api/http/usersapi"
 	"flatmatch/api/internal/api/http/zonesapi"
@@ -266,10 +265,6 @@ func router(
 		r.Mount("/matches", matchesapi.New(d.matches, d.accounts, d.dir).Routes())
 		r.Mount("/points", pointsapi.New(d.points, d.deck, d.photos, d.dir).Routes())
 		r.Mount("/deck", deckapi.New(d.deck, d.photos).Routes())
-
-		poolsHandler := poolsapi.New(d.pools, d.searches, d.points, d.photos, d.dir)
-		r.Get("/feed", poolsHandler.Feed)
-		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
 		r.Mount("/people", peopleapi.New(d.persons, d.people, d.pairLikes, d.accounts,
 			d.pairSearches, d.pairPoints, d.pairMatches, d.deck, d.dir).Routes())
 	})

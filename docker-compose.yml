@@ -83,10 +83,15 @@ services:
       - caddy_config:/config
 
   # Telegram channel parser (§8): polls the rental channels, turns posts into
-  # flats, closes points whose post is gone. Part of the stack — without it the
-  # feed stops growing.
+  # flats, closes points whose post is gone.
+  #
+  # SWITCHED OFF at step 11 (stage 1: market flats are hidden, not purged): the
+  # `off` profile keeps it out of `docker compose up -d`. The service block and
+  # the shared photos volume stay so that `docker compose --profile off up -d
+  # parser` brings it back in one command when flats return.
   parser:
     build: ./parser
+    profiles: ["off"]
     restart: unless-stopped
     depends_on:
       postgres:

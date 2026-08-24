@@ -181,3 +181,41 @@ func TestExpireArchivesStaleAndSilentPoints(t *testing.T) {
 		t.Errorf("Expire() = %v, want it to archive nothing twice", again)
 	}
 }
+
+func TestFreshnessSkipsSwitchedOffFlats(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	author := seedUser(t, pool, 1)
+
+	flat := activeFlat(t, repo, &author, entity.SourceUserLink, "https://avito.ru/switched-off")
+	room, err := repo.Create(t.Context(), intentHome(author, entity.StageLive))
+	if err != nil {
+		t.Fatalf("Create(intent_home) failed: %v", err)
+	}
+	for _, id := range []uuid.UUID{flat.ID, room.ID} {
+		backdatePoint(t, pool, id, "last_seen_alive", entity.PointTTLDays+1)
+	}
+	closePoint(t, pool, flat.ID)
+
+	asked := askedIDs(t, repo)
+	if asked[flat.ID] {
+		t.Error("PointsForPing() pings a closed market flat")
+	}
+	if !asked[room.ID] {
+		t.Errorf("PointsForPing() = %v, want the room still pinged", asked)
+	}
+
+	expired := expiredIDs(t, repo)
+	if expired[flat.ID] {
+		t.Error("Expire() touches a closed market flat")
+	}
+	if !expired[room.ID] {
+		t.Errorf("Expire() = %v, want the stale room archived", expired)
+	}
+	if got := pointByID(t, repo, flat.ID); got.Status != entity.PointClosed ||
+		pointer.Get(got.CloseReason) != string(entity.CloseReasonClosed) {
+		t.Errorf("closed flat = %s / %v, want it left closed",
+			got.Status, pointer.Get(got.CloseReason))
+	}
+}

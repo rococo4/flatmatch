@@ -25,6 +25,8 @@ const (
 
 var ErrInvalidForm = errors.New("point form has invalid fields")
 
+var ErrFlatsOff = errors.New("market flats are switched off")
+
 type ErrDuplicateURL struct {
 	Existing entity.Point
 
@@ -119,13 +121,8 @@ func (e *ErrDuplicateURL) Error() string {
 	return fmt.Sprintf("url already belongs to point %s", e.Existing.ID)
 }
 
-func (s *Service) CreateFlat(ctx context.Context, userID uuid.UUID, in CreateFlat) (entity.Point, error) {
-	p, err := s.validFlat(in)
-	if err != nil {
-		return entity.Point{}, err
-	}
-	p.CreatedBy = &userID
-	return s.create(ctx, p)
+func (s *Service) CreateFlat(context.Context, uuid.UUID, CreateFlat) (entity.Point, error) {
+	return entity.Point{}, ErrFlatsOff
 }
 
 func (s *Service) CreateIntentHome(ctx context.Context, userID uuid.UUID, in CreateIntentHome) (entity.Point, error) {

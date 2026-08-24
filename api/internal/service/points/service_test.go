@@ -272,89 +272,22 @@ func TestNormalizeURL(t *testing.T) {
 	}
 }
 
-func TestCreateFlatValidatesTheForm(t *testing.T) {
-	tests := []struct {
-		name string
-		with func(*CreateFlat)
-		want []string
-	}{
-		{"cheap", func(f *CreateFlat) { f.PriceTotal = MinPrice - 1 }, []string{"price_total"}},
-		{"expensive", func(f *CreateFlat) { f.PriceTotal = MaxPrice + 1 }, []string{"price_total"}},
-		{"foreign link", func(f *CreateFlat) { f.URL = "https://realty.yandex.ru/1" }, []string{"url"}},
-		{"unknown zone", func(f *CreateFlat) { f.ZoneID = "st-nowhere" }, []string{"zone_id"}},
-		{"district instead of a station", func(f *CreateFlat) { f.ZoneID = district }, []string{"zone_id"}},
-		{"no photo", func(f *CreateFlat) { f.PhotoKeys[0] = "  " }, []string{"photo_keys"}},
-		{"zero rooms", func(f *CreateFlat) { f.Rooms = pointer.To(0) }, []string{"rooms"}},
-		{"garbage bathrooms", func(f *CreateFlat) {
-			f.Bathrooms = pointer.To(entity.ParseBathrooms("три"))
-		}, []string{"bathrooms"}},
-		{"garbage utilities", func(f *CreateFlat) {
-			f.Utilities = pointer.To(entity.ParseUtilities("как-нибудь"))
-		}, []string{"utilities"}},
-		{"garbage restrictions", func(f *CreateFlat) {
-			f.Restrictions = []entity.Restriction{entity.ParseRestriction("no_children")}
-		}, []string{"restrictions"}},
-		{"everything at once", func(f *CreateFlat) {
-			f.URL, f.PriceTotal, f.PhotoKeys = "", 0, nil
-		}, []string{"url", "price_total", "photo_keys"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := &fakeRepo{}
-			s := newService(t, repo, &fakeSearches{}, nil)
-			in := validFlat()
-			tt.with(&in)
-
-			_, err := s.CreateFlat(t.Context(), uuid.New(), in)
-			if got := fields(t, err); !slices.Equal(got, tt.want) {
-				t.Errorf("fields = %v, want %v", got, tt.want)
-			}
-
-			if repo.createCalls != 0 {
-				t.Errorf("the form reached the repository %d times", repo.createCalls)
-			}
-		})
-	}
-}
-
-func TestCreateFlatFillsProvenance(t *testing.T) {
+func TestCreateFlatIsSwitchedOff(t *testing.T) {
 	repo := &fakeRepo{}
 	notify := &fakeNotifier{}
 	s := newService(t, repo, &fakeSearches{}, notify)
-	author := uuid.New()
 
-	in := validFlat()
-	in.Bathrooms = pointer.To(entity.BathroomsSeparate)
-	in.Utilities = pointer.To(entity.UtilitiesMeters)
-	in.Restrictions = []entity.Restriction{
-		entity.RestrictionNoPets, entity.RestrictionNoPets, entity.RestrictionNoSmoking}
+	_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
 
-	created, err := s.CreateFlat(t.Context(), author, in)
-	if err != nil {
-		t.Fatalf("CreateFlat() failed: %v", err)
+	if !errors.Is(err, ErrFlatsOff) {
+		t.Fatalf("CreateFlat() = %v, want ErrFlatsOff", err)
 	}
-
-	sent := repo.createIn
-	if sent.Type != entity.PointFlat || sent.Source != entity.SourceUserLink ||
-		sent.CreatedBy == nil || *sent.CreatedBy != author {
-		t.Errorf("provenance = %s / %s / %v, want flat / user_link / %s",
-			sent.Type, sent.Source, sent.CreatedBy, author)
+	if repo.createCalls != 0 || len(repo.urlCalls) != 0 {
+		t.Errorf("the flat reached the repository: %d create(s), %v url look-up(s)",
+			repo.createCalls, repo.urlCalls)
 	}
-
-	if sent.Status != "" {
-		t.Errorf("Status = %q, want it left to the repository", sent.Status)
-	}
-	if sent.URLNorm == nil || *sent.URLNorm != "https://avito.ru/moskva/kvartiry/2-k_kvartira_1234567" {
-		t.Errorf("URLNorm = %v, want the normalised link", sent.URLNorm)
-	}
-
-	want := []entity.Restriction{entity.RestrictionNoPets, entity.RestrictionNoSmoking}
-	if !slices.Equal(sent.Restrictions, want) {
-		t.Errorf("Restrictions = %v, want %v", sent.Restrictions, want)
-	}
-
-	if len(notify.got) != 1 || notify.got[0].ID != created.ID {
-		t.Errorf("moderation queue got %+v, want the created point %s", notify.got, created.ID)
+	if len(notify.got) != 0 {
+		t.Errorf("moderation queue got %+v, want nothing", notify.got)
 	}
 }
 
@@ -365,8 +298,8 @@ func TestModerationSurvivesACancelledRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	if _, err := s.CreateFlat(ctx, uuid.New(), validFlat()); err != nil {
-		t.Fatalf("CreateFlat() failed: %v", err)
+	if _, err := s.CreateIntentHome(ctx, uuid.New(), validHome()); err != nil {
+		t.Fatalf("CreateIntentHome() failed: %v", err)
 	}
 	if len(notify.ctxs) != 1 {
 		t.Fatalf("moderation was called %d times, want 1", len(notify.ctxs))
@@ -374,81 +307,6 @@ func TestModerationSurvivesACancelledRequest(t *testing.T) {
 	if err := notify.ctxs[0].Err(); err != nil {
 		t.Errorf("moderation got a cancelled context: %v", err)
 	}
-}
-
-func TestCreateFlatAnswersDuplicateLink(t *testing.T) {
-	existing := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointActive}
-
-	t.Run("already there", func(t *testing.T) {
-		repo := &fakeRepo{
-			byURL: []*entity.Point{&existing},
-			card:  pointsrepo.FeedPoint{Point: existing, PoolCount: 3},
-		}
-		s := newService(t, repo, &fakeSearches{}, nil)
-
-		_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
-		var dup *ErrDuplicateURL
-		if !errors.As(err, &dup) || dup.Existing.ID != existing.ID {
-			t.Fatalf("CreateFlat() = %v, want ErrDuplicateURL with %s", err, existing.ID)
-		}
-
-		if dup.PoolCount != 3 {
-			t.Errorf("PoolCount = %d, want 3", dup.PoolCount)
-		}
-		if repo.createCalls != 0 {
-			t.Errorf("a duplicate reached the repository %d times", repo.createCalls)
-		}
-	})
-
-	t.Run("still on review", func(t *testing.T) {
-		pending := entity.Point{ID: uuid.New(), Type: entity.PointFlat, Status: entity.PointPending}
-		repo := &fakeRepo{
-			byURL: []*entity.Point{&pending},
-			card:  pointsrepo.FeedPoint{Point: pending, PoolCount: 1},
-		}
-		s := newService(t, repo, &fakeSearches{}, nil)
-
-		_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
-		var dup *ErrDuplicateURL
-		if !errors.As(err, &dup) {
-			t.Fatalf("CreateFlat() = %v, want ErrDuplicateURL", err)
-		}
-		if dup.Existing.ID != pending.ID || dup.PoolCount != 0 {
-			t.Errorf("duplicate = %s / pool %d, want the pending point with an empty pool",
-				dup.Existing.ID, dup.PoolCount)
-		}
-		if repo.cardCalls != 0 {
-			t.Errorf("the pool of a point on review was read %d time(s)", repo.cardCalls)
-		}
-	})
-
-	t.Run("lost the race", func(t *testing.T) {
-		repo := &fakeRepo{
-			byURL:     []*entity.Point{nil, &existing},
-			createErr: pointsrepo.ErrURLTaken,
-		}
-		s := newService(t, repo, &fakeSearches{}, nil)
-
-		_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
-		var dup *ErrDuplicateURL
-		if !errors.As(err, &dup) || dup.Existing.ID != existing.ID {
-			t.Fatalf("CreateFlat() = %v, want ErrDuplicateURL with %s", err, existing.ID)
-		}
-		if len(repo.urlCalls) != 2 {
-			t.Errorf("ByURLNorm called %d times, want a re-read after the race", len(repo.urlCalls))
-		}
-	})
-
-	t.Run("nothing to point at", func(t *testing.T) {
-		repo := &fakeRepo{byURL: []*entity.Point{nil, nil}, createErr: pointsrepo.ErrURLTaken}
-		s := newService(t, repo, &fakeSearches{}, nil)
-
-		_, err := s.CreateFlat(t.Context(), uuid.New(), validFlat())
-		var dup *ErrDuplicateURL
-		if errors.As(err, &dup) || !errors.Is(err, pointsrepo.ErrURLTaken) {
-			t.Errorf("CreateFlat() = %v, want the raw ErrURLTaken", err)
-		}
-	})
 }
 
 func TestCreateIntentHomeValidatesTheStage(t *testing.T) {

@@ -148,31 +148,7 @@ var (
 
 var devLikers = []int64{1, 3}
 
-var (
-	flatCrowded = uuid.MustParse("5eed0000-0000-4000-8000-000000000001")
-	flatFresh   = uuid.MustParse("5eed0000-0000-4000-8000-000000000002")
-	flatRedLine = uuid.MustParse("5eed0000-0000-4000-8000-000000000003")
-	homeOfKatya = uuid.MustParse("5eed0000-0000-4000-8000-000000000004")
-	devFlat     = uuid.MustParse("5eed0000-0000-4000-8000-000000000005")
-)
-
-type seedFlat struct {
-	id      uuid.UUID
-	zone    string
-	price   int
-	rooms   int
-	ageDays int
-
-	pool []int64
-}
-
-var flats = []seedFlat{
-	{flatCrowded, "st-frunzenskaya", 165000, 3, 7, []int64{2, 3, 4, 5, 7}},
-
-	{flatFresh, "st-sportivnaya", 135000, 2, 0, []int64{1, 16}},
-
-	{flatRedLine, "st-sokolniki", 128000, 2, 21, []int64{3, 9, 13}},
-}
+var homeOfKatya = uuid.MustParse("5eed0000-0000-4000-8000-000000000004")
 
 var localHosts = []string{"localhost", "127.0.0.1", "::1", "postgres"}
 
@@ -205,7 +181,7 @@ func run() error {
 		return fmt.Errorf("upload the placeholder avatar: %w", err)
 	}
 
-	var users, searches, members int
+	var users, searches int
 	var hasDev bool
 	err = postgres.InTx(ctx, pool, func(tx pgx.Tx) error {
 		ids, err := upsertPeople(ctx, tx)
@@ -218,11 +194,7 @@ func run() error {
 			return err
 		}
 
-		byOffset := offsetIndex(ids)
-		if members, err = seedFlats(ctx, tx, byOffset); err != nil {
-			return err
-		}
-		if err := seedIntentHome(ctx, tx, byOffset); err != nil {
+		if err := seedIntentHome(ctx, tx, offsetIndex(ids)); err != nil {
 			return err
 		}
 
@@ -232,10 +204,7 @@ func run() error {
 		}
 		hasDev = true
 
-		if err := likeDevUser(ctx, tx, devID); err != nil {
-			return err
-		}
-		return seedDevFlat(ctx, tx, devID)
+		return likeDevUser(ctx, tx, devID)
 	})
 	if err != nil {
 		return err
@@ -243,13 +212,11 @@ func run() error {
 
 	fmt.Printf("seeded %d people and %d searches; tg_id %d…%d, photo %s\n",
 		users, searches, seedTGBase, seedTGBase+int64(len(people))-1, photos.URL(avatarKey))
-	fmt.Printf("seeded %d market flats with %d pool entries, and Катя's «к себе» with one response\n",
-		len(flats), members)
+	fmt.Printf("seeded Катя's «к себе» with one response\n")
 	if hasDev {
-		fmt.Printf("dev user %d has %d incoming likes from the crowd and one flat of their own on moderation\n",
-			devTGID, len(devLikers))
+		fmt.Printf("dev user %d has %d incoming likes from the crowd\n", devTGID, len(devLikers))
 	} else {
-		fmt.Printf("dev user %d is not in the database — incoming likes and the pending flat skipped\n", devTGID)
+		fmt.Printf("dev user %d is not in the database — incoming likes skipped\n", devTGID)
 	}
 	return nil
 }
@@ -322,44 +289,6 @@ func replaceSearches(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (int, erro
 	return len(people), nil
 }
 
-func seedFlats(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) (int, error) {
-	const query = `
-		INSERT INTO points (id, type, status, source, zone_id, price_total, rooms,
-			isolated, photo_keys, created_at, edited_at, last_seen_alive)
-		VALUES ($1, 'flat', 'active', 'manual', $2, $3, $4, true, ARRAY[$5],
-			now() - make_interval(days => $6::int), now() - make_interval(days => $6::int),
-			now() - make_interval(days => $6::int))
-		ON CONFLICT (id) DO UPDATE SET
-			status = 'active', close_reason = NULL, zone_id = EXCLUDED.zone_id,
-			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
-			isolated = EXCLUDED.isolated, photo_keys = EXCLUDED.photo_keys,
-			created_at = EXCLUDED.created_at, edited_at = EXCLUDED.edited_at,
-			last_seen_alive = EXCLUDED.last_seen_alive, gone_count = 0,
-			ping_asked_at = NULL`
-
-	members := 0
-	for _, f := range flats {
-		if _, err := tx.Exec(ctx, query, f.id, f.zone, f.price, f.rooms, avatarKey, f.ageDays); err != nil {
-			return 0, fmt.Errorf("upsert flat %s: %w", f.zone, err)
-		}
-		if err := enterPool(ctx, tx, f.id, offsetIDs(byOffset, f.pool)); err != nil {
-			return 0, fmt.Errorf("fill the pool of %s: %w", f.zone, err)
-		}
-		members += len(f.pool)
-	}
-	return members, nil
-}
-
-func enterPool(ctx context.Context, tx pgx.Tx, pointID uuid.UUID, userIDs []uuid.UUID) error {
-	const query = `
-		INSERT INTO likes_points (user_id, point_id, created_at)
-		SELECT member.id, $1, now() - make_interval(hours => member.ord::int)
-		FROM unnest($2::uuid[]) WITH ORDINALITY AS member(id, ord)
-		ON CONFLICT DO NOTHING`
-	_, err := tx.Exec(ctx, query, pointID, userIDs)
-	return err
-}
-
 func seedIntentHome(ctx context.Context, tx pgx.Tx, byOffset map[int64]uuid.UUID) error {
 	katya, oleg := byOffset[1], byOffset[2]
 
@@ -421,44 +350,12 @@ func likeDevUser(ctx context.Context, tx pgx.Tx, devID uuid.UUID) error {
 	return nil
 }
 
-func seedDevFlat(ctx context.Context, tx pgx.Tx, devID uuid.UUID) error {
-	const query = `
-		INSERT INTO points (id, type, status, source, created_by, zone_id,
-			price_total, rooms, isolated, photo_keys, url_norm, created_at, edited_at)
-		VALUES ($1, 'flat', 'pending', 'user_link', $2, 'st-frunzenskaya',
-			150000, 2, true, ARRAY[$3], $4,
-			now() - make_interval(hours => 2), now() - make_interval(hours => 2))
-		ON CONFLICT (id) DO UPDATE SET
-			created_by = EXCLUDED.created_by, zone_id = EXCLUDED.zone_id,
-			price_total = EXCLUDED.price_total, rooms = EXCLUDED.rooms,
-			isolated = EXCLUDED.isolated, photo_keys = EXCLUDED.photo_keys,
-			url_norm = EXCLUDED.url_norm, created_at = EXCLUDED.created_at,
-			edited_at = EXCLUDED.edited_at`
-
-	const url = "https://avito.ru/moskva/kvartiry/2-k._kvartira_55m_57et._1234567890"
-	if _, err := tx.Exec(ctx, query, devFlat, devID, avatarKey, url); err != nil {
-		return fmt.Errorf("upsert the flat of the dev user: %w", err)
-	}
-	if err := enterPool(ctx, tx, devFlat, []uuid.UUID{devID}); err != nil {
-		return fmt.Errorf("put the dev user into their own pool: %w", err)
-	}
-	return nil
-}
-
 func offsetIndex(ids []uuid.UUID) map[int64]uuid.UUID {
 	byOffset := make(map[int64]uuid.UUID, len(people))
 	for i, p := range people {
 		byOffset[p.n] = ids[i]
 	}
 	return byOffset
-}
-
-func offsetIDs(byOffset map[int64]uuid.UUID, offsets []int64) []uuid.UUID {
-	ids := make([]uuid.UUID, len(offsets))
-	for i, n := range offsets {
-		ids[i] = byOffset[n]
-	}
-	return ids
 }
 
 func (p seedPerson) profile() entity.Profile {

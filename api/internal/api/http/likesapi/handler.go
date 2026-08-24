@@ -14,6 +14,7 @@ import (
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/httpx"
 	"flatmatch/api/internal/repo/likesrepo"
+	"flatmatch/api/internal/service/deck"
 	"flatmatch/api/internal/service/zones"
 )
 
@@ -33,6 +34,11 @@ type Points interface {
 	ByID(ctx context.Context, id uuid.UUID) (entity.Point, error)
 }
 
+type Pairs interface {
+	RankIncoming(ctx context.Context, viewerID uuid.UUID,
+		list []likesrepo.IncomingLike) ([]deck.RankedLike, error)
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 }
@@ -41,6 +47,7 @@ type Handler struct {
 	likes  Likes
 	photos Photos
 	points Points
+	pairs  Pairs
 	dir    ZoneDir
 }
 
@@ -49,8 +56,8 @@ var (
 	errSelfLike        = errors.New("a like to oneself")
 )
 
-func New(likes Likes, photos Photos, points Points, dir ZoneDir) *Handler {
-	return &Handler{likes: likes, photos: photos, points: points, dir: dir}
+func New(likes Likes, photos Photos, points Points, pairs Pairs, dir ZoneDir) *Handler {
+	return &Handler{likes: likes, photos: photos, points: points, pairs: pairs, dir: dir}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -107,37 +114,44 @@ func (h *Handler) incoming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	likes, err := h.likes.Incoming(r.Context(), user.ID)
+	incoming, err := h.likes.Incoming(r.Context(), user.ID)
+	if err != nil {
+		h.handleError(w, r, user.ID, err)
+		return
+	}
+	ranked, err := h.pairs.RankIncoming(r.Context(), user.ID, incoming)
 	if err != nil {
 		h.handleError(w, r, user.ID, err)
 		return
 	}
 
-	out := make([]incomingDTO, 0, len(likes))
-	for _, like := range likes {
-		point, err := h.point(r.Context(), like.PointID)
+	out := make([]incomingDTO, 0, len(ranked))
+	for _, item := range ranked {
+		point, roomZone, err := h.point(r.Context(), item.Like.PointID)
 		if err != nil {
 			h.handleError(w, r, user.ID, err)
 			return
 		}
-		out = append(out, toIncoming(like, h.photos.PhotoURLs(like.From), h.zone(like.ZoneID), point))
+		out = append(out, toIncoming(item.Like, h.photos.PhotoURLs(item.Like.From),
+			h.zone(item.Like.ZoneID), point, toPairDTO(item.Pair, point, roomZone)))
 	}
 	httpx.JSON(w, r, http.StatusOK, out)
 }
 
-func (h *Handler) point(ctx context.Context, id *uuid.UUID) (*pointDTO, error) {
+func (h *Handler) point(ctx context.Context, id *uuid.UUID) (*pointDTO, *zoneDTO, error) {
 	if id == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	p, err := h.points.ByID(ctx, *id)
 	switch {
 	case errors.Is(err, entity.ErrNotFound):
-		return nil, nil
+		return nil, nil, nil
 	case err != nil:
-		return nil, err
+		return nil, nil, err
 	}
 	station, _ := h.dir.Get(p.ZoneID)
-	return &pointDTO{ID: p.ID, Kind: string(p.Type), Label: pointLabel(p.Type, station.Name)}, nil
+	return &pointDTO{ID: p.ID, Kind: string(p.Type), Label: pointLabel(p.Type, station.Name)},
+		h.zone(p.ZoneID), nil
 }
 
 func (h *Handler) zone(id string) *zoneDTO {

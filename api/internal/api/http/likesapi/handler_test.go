@@ -13,6 +13,7 @@ import (
 	"flatmatch/api/internal/api/http/authmw"
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/repo/likesrepo"
+	"flatmatch/api/internal/service/deck"
 	"flatmatch/api/internal/service/likes"
 	"flatmatch/api/internal/service/zones"
 	"flatmatch/api/internal/tma"
@@ -31,6 +32,11 @@ type fakeLikes struct {
 type fakePhotos struct{}
 
 type fakePoints struct{ point entity.Point }
+
+type fakePairs struct {
+	got   []likesrepo.IncomingLike
+	calls int
+}
 
 type fakeDir struct{}
 
@@ -149,7 +155,7 @@ func newRouter(likes *fakeLikes, points fakePoints, viewer uuid.UUID) chi.Router
 	r.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: viewer, Status: entity.StatusActive},
 	}, nil))
-	r.Mount("/likes", New(likes, fakePhotos{}, points, fakeDir{}).Routes())
+	r.Mount("/likes", New(likes, fakePhotos{}, points, &fakePairs{}, fakeDir{}).Routes())
 	return r
 }
 
@@ -194,4 +200,17 @@ func (fakeValidator) Validate(string) (tma.InitData, error) {
 
 func (f fakeAccounts) EnsureFromTelegram(context.Context, entity.TelegramIdentity) (entity.User, error) {
 	return f.user, nil
+}
+
+func (f *fakePairs) RankIncoming(_ context.Context, _ uuid.UUID,
+	list []likesrepo.IncomingLike,
+) ([]deck.RankedLike, error) {
+	f.calls++
+	f.got = list
+
+	out := make([]deck.RankedLike, 0, len(list))
+	for _, like := range list {
+		out = append(out, deck.RankedLike{Like: like})
+	}
+	return out, nil
 }

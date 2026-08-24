@@ -28,19 +28,24 @@ type Accounts interface {
 	OwnPhotoURLs(u entity.User) []string
 }
 
+type Passes interface {
+	ClearPasses(ctx context.Context, userID uuid.UUID) (int, error)
+}
+
 type Bot interface {
 	Username() string
 }
 
 type Handler struct {
 	accounts Accounts
+	passes   Passes
 	bot      Bot
 }
 
 var errNoUserInContext = errors.New("no authenticated user in request context")
 
-func New(accounts Accounts, bot Bot) *Handler {
-	return &Handler{accounts: accounts, bot: bot}
+func New(accounts Accounts, passes Passes, bot Bot) *Handler {
+	return &Handler{accounts: accounts, passes: passes, bot: bot}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -50,6 +55,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Post("/me/photos", h.addPhoto)
 	r.Delete("/me/photos/{index}", h.removePhoto)
 	r.Put("/me/photos/order", h.reorderPhotos)
+	r.Delete("/me/passes", h.clearPasses)
 	r.Post("/me/submit", h.submit)
 	r.Post("/me/source", h.setSource)
 	return r
@@ -161,6 +167,21 @@ func (h *Handler) reorderPhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.respondSelf(w, r, updated)
+}
+
+func (h *Handler) clearPasses(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	restored, err := h.passes.ClearPasses(r.Context(), user.ID)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, passesResponse{Restored: restored})
 }
 
 func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {

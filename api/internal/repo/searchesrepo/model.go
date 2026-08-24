@@ -18,15 +18,21 @@ const candidateColumns = `s.id, s.user_id, s.zone_id, s.price_min, s.price_max,
 	s.close_reason, s.pool_seen_at, s.last_active_at, s.ttl_asked_at,
 	s.created_at, s.updated_at,
 	u.id AS u_id, u.name AS u_name, u.age AS u_age, u.gender AS u_gender,
-	u.schedule AS u_schedule, u.smoking AS u_smoking,
+	u.occupation AS u_occupation, u.schedule AS u_schedule, u.smoking AS u_smoking,
 	u.pets_own AS u_pets_own, u.pets_ok AS u_pets_ok, u.noise AS u_noise,
 	u.guests AS u_guests, u.cleaning AS u_cleaning, u.alcohol AS u_alcohol,
-	u.expenses AS u_expenses, u.photo_keys AS u_photo_keys,
+	u.expenses AS u_expenses, u.about AS u_about, u.about_status AS u_about_status,
+	u.photo_keys AS u_photo_keys,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
 
 type ZoneUsers struct {
 	ZoneID  string
 	UserIDs []uuid.UUID
+}
+
+type DeckCandidate struct {
+	User     entity.User
+	Searches []entity.Search
 }
 
 type searchRow struct {
@@ -55,6 +61,7 @@ type candidateRow struct {
 	UName        string    `db:"u_name"`
 	UAge         *int      `db:"u_age"`
 	UGender      *string   `db:"u_gender"`
+	UOccupation  *string   `db:"u_occupation"`
 	USchedule    *string   `db:"u_schedule"`
 	USmoking     *string   `db:"u_smoking"`
 	UPetsOwn     *string   `db:"u_pets_own"`
@@ -64,6 +71,8 @@ type candidateRow struct {
 	UCleaning    *string   `db:"u_cleaning"`
 	UAlcohol     *string   `db:"u_alcohol"`
 	UExpenses    *string   `db:"u_expenses"`
+	UAbout       *string   `db:"u_about"`
+	UAboutStatus string    `db:"u_about_status"`
 	UPhotoKeys   []string  `db:"u_photo_keys"`
 	UPhotoStatus string    `db:"u_photo_status"`
 	ULastSeen    time.Time `db:"u_last_seen"`
@@ -105,30 +114,34 @@ func (r searchRow) toEntity() entity.Search {
 }
 
 func (r candidateRow) toEntity() entity.PoolCandidate {
-	return entity.PoolCandidate{
-		User: entity.User{
-			ID:   r.UID,
-			Name: r.UName,
-			Profile: entity.Profile{
-				Age:      pointer.Get(r.UAge),
-				Gender:   entity.ParseGender(pointer.Get(r.UGender)),
-				Schedule: entity.ParseSchedule(pointer.Get(r.USchedule)),
-				Smoking:  entity.ParseSmoking(pointer.Get(r.USmoking)),
-				PetsOwn:  entity.ParsePetsOwn(pointer.Get(r.UPetsOwn)),
-				PetsOK:   entity.ParsePetsOK(pointer.Get(r.UPetsOK)),
-				Noise:    entity.ParseNoise(pointer.Get(r.UNoise)),
-				Guests:   entity.ParseGuests(pointer.Get(r.UGuests)),
-				Cleaning: entity.ParseCleaning(pointer.Get(r.UCleaning)),
-				Alcohol:  entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
-				Expenses: entity.ParseExpenses(pointer.Get(r.UExpenses)),
-			},
-			PhotoKeys:   r.UPhotoKeys,
-			PhotoStatus: entity.ParseModerationStatus(r.UPhotoStatus),
-			LastSeen:    r.ULastSeen,
+	return entity.PoolCandidate{User: r.user(), Search: r.searchRow.toEntity()}
+}
 
-			Status: entity.StatusActive,
+func (r candidateRow) user() entity.User {
+	return entity.User{
+		ID:   r.UID,
+		Name: r.UName,
+		Profile: entity.Profile{
+			Age:        pointer.Get(r.UAge),
+			Gender:     entity.ParseGender(pointer.Get(r.UGender)),
+			Occupation: entity.ParseOccupation(pointer.Get(r.UOccupation)),
+			Schedule:   entity.ParseSchedule(pointer.Get(r.USchedule)),
+			Smoking:    entity.ParseSmoking(pointer.Get(r.USmoking)),
+			PetsOwn:    entity.ParsePetsOwn(pointer.Get(r.UPetsOwn)),
+			PetsOK:     entity.ParsePetsOK(pointer.Get(r.UPetsOK)),
+			Noise:      entity.ParseNoise(pointer.Get(r.UNoise)),
+			Guests:     entity.ParseGuests(pointer.Get(r.UGuests)),
+			Cleaning:   entity.ParseCleaning(pointer.Get(r.UCleaning)),
+			Alcohol:    entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
+			Expenses:   entity.ParseExpenses(pointer.Get(r.UExpenses)),
+			About:      pointer.Get(r.UAbout),
 		},
-		Search: r.searchRow.toEntity(),
+		PhotoKeys:   r.UPhotoKeys,
+		PhotoStatus: entity.ParseModerationStatus(r.UPhotoStatus),
+		AboutStatus: entity.ParseModerationStatus(r.UAboutStatus),
+		LastSeen:    r.ULastSeen,
+
+		Status: entity.StatusActive,
 	}
 }
 

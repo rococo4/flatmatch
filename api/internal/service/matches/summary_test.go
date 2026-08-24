@@ -152,6 +152,33 @@ func TestSummaryReadsTheFreshestActiveSearchOfBothSides(t *testing.T) {
 	}
 }
 
+func TestSummaryTakesTheBestPairOfSearches(t *testing.T) {
+	f := newFixture(t)
+	f.searches[f.viewer.ID] = []entity.Search{
+		active(entity.SearchParams{ZoneID: "line-2", PriceMin: pointer.To(90000), PriceMax: 120000,
+			MoveInMonths: []time.Time{oct}}),
+		active(entity.SearchParams{ZoneID: "line-1", PriceMin: pointer.To(35000), PriceMax: 45000,
+			MoveInMonths: []time.Time{sept}}),
+	}
+	f.searches[f.peer.ID] = []entity.Search{
+		active(entity.SearchParams{ZoneID: "line-2", PriceMin: pointer.To(30000), PriceMax: 40000,
+			MoveInMonths: []time.Time{sept}}),
+		active(entity.SearchParams{ZoneID: "line-1", PriceMin: pointer.To(40000), PriceMax: 55000,
+			MoveInMonths: []time.Time{sept}}),
+	}
+
+	_, summary := f.detail(t)
+
+	want := []ParamOverlap{
+		{Param: ParamPrice, Min: 40000, Max: 45000},
+		{Param: ParamMoveIn, Values: []string{"2026-09"}},
+	}
+	if !slices.EqualFunc(summary.ParamsOverlap, want, sameOverlap) {
+		t.Errorf("ParamsOverlap = %v, want %v — берётся совместимая пара, а не первая активная",
+			summary.ParamsOverlap, want)
+	}
+}
+
 func TestSummaryWithoutActiveSearchOnOneSide(t *testing.T) {
 	f := newFixture(t)
 	f.searches[f.viewer.ID] = []entity.Search{

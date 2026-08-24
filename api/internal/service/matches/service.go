@@ -10,6 +10,7 @@ import (
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/logctx"
 	"flatmatch/api/internal/repo/matchesrepo"
+	"flatmatch/api/internal/service/pools"
 	"flatmatch/api/internal/service/zones"
 )
 
@@ -105,16 +106,16 @@ func (s *Service) summary(ctx context.Context, viewer entity.User, match matches
 		out.Zone = &zone
 	}
 
-	mine, err := s.activeSearch(ctx, viewer.ID)
+	mine, err := s.searches.ListByUser(ctx, viewer.ID)
 	if err != nil {
 		return Summary{}, err
 	}
-	theirs, err := s.activeSearch(ctx, match.Peer.ID)
+	theirs, err := s.searches.ListByUser(ctx, match.Peer.ID)
 	if err != nil {
 		return Summary{}, err
 	}
-	if mine != nil && theirs != nil {
-		out.ParamsOverlap = paramsOverlap(*mine, *theirs)
+	if pair, ok := pools.BestPair(s.dir, mine, theirs); ok {
+		out.ParamsOverlap = paramsOverlap(pair.Mine.SearchParams, pair.Theirs.SearchParams)
 	}
 	return out, nil
 }
@@ -142,20 +143,6 @@ func (s *Service) pointContext(ctx context.Context, pointID uuid.UUID) (*PointCo
 		Kind:  point.Type,
 		Label: pointLabel(point.Type, author, station.Name),
 	}, nil
-}
-
-func (s *Service) activeSearch(ctx context.Context, userID uuid.UUID) (*entity.SearchParams, error) {
-	list, err := s.searches.ListByUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, search := range list {
-		if search.Status == entity.SearchActive {
-			return &search.SearchParams, nil
-		}
-	}
-	return nil, nil
 }
 
 func withoutHiddenContacts(m matchesrepo.MatchWithPeer) matchesrepo.MatchWithPeer {

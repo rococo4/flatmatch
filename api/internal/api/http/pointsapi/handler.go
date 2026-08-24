@@ -37,6 +37,10 @@ type Points interface {
 	Pool(ctx context.Context, viewer entity.User, pointID uuid.UUID) (points.PoolView, error)
 }
 
+type Passes interface {
+	PassPoint(ctx context.Context, viewerID, pointID uuid.UUID) error
+}
+
 type Photos interface {
 	URL(key string) string
 }
@@ -47,6 +51,7 @@ type ZoneDir interface {
 
 type Handler struct {
 	points Points
+	passes Passes
 	photos Photos
 	dir    ZoneDir
 }
@@ -55,8 +60,8 @@ var errNoUserInContext = errors.New("no authenticated user in request context")
 
 var errNoAliveField = errors.New("vote body carries no alive field")
 
-func New(points Points, photos Photos, dir ZoneDir) *Handler {
-	return &Handler{points: points, photos: photos, dir: dir}
+func New(points Points, passes Passes, photos Photos, dir ZoneDir) *Handler {
+	return &Handler{points: points, passes: passes, photos: photos, dir: dir}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -70,6 +75,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Post("/{id}/enter", h.enter)
 	r.Delete("/{id}/enter", h.leave)
 	r.Post("/{id}/close", h.close)
+	r.Post("/{id}/pass", h.pass)
 	r.Post("/{id}/vote", h.vote)
 	r.Post("/{id}/restore", h.restore)
 	r.Get("/{id}/pool", h.pool)
@@ -201,6 +207,24 @@ func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) close(w http.ResponseWriter, r *http.Request) {
 	h.membership(w, r, h.points.Close)
+}
+
+func (h *Handler) pass(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+	id, ok := pointID(w, r)
+	if !ok {
+		return
+	}
+
+	if err := h.passes.PassPoint(r.Context(), user.ID, id); err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusNoContent, nil)
 }
 
 func (h *Handler) vote(w http.ResponseWriter, r *http.Request) {

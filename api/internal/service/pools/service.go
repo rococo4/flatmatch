@@ -162,7 +162,7 @@ func rankedSections(dir *zones.Directory, photos PhotoURLs, viewer entity.User, 
 		for i := range sections {
 			if sections[i].ID == sc.section {
 				p := newPerson(dir, photos, viewer, sc)
-				p.ZoneMatch = zoneMatch(dir, mine.ZoneID, sc.cand.Search.ZoneID)
+				p.ZoneMatch = ZoneMatch(dir, mine.ZoneID, sc.cand.Search.ZoneID)
 				sections[i].People = append(sections[i].People, p)
 			}
 		}
@@ -217,31 +217,6 @@ func zoneMatchFirst(a, b Person) int {
 		return 1
 	}
 	return freshestFirst(a, b)
-}
-
-func zoneMatch(dir *zones.Directory, mineID, theirsID string) bool {
-	if mineID == theirsID {
-		return true
-	}
-	mine, ok1 := dir.Get(mineID)
-	theirs, ok2 := dir.Get(theirsID)
-	if !ok1 || !ok2 {
-		return false
-	}
-	return subset(mine.Stations, theirs.Stations) || subset(theirs.Stations, mine.Stations)
-}
-
-func subset(inner, outer []string) bool {
-	set := make(map[string]bool, len(outer))
-	for _, s := range outer {
-		set[s] = true
-	}
-	for _, s := range inner {
-		if !set[s] {
-			return false
-		}
-	}
-	return true
 }
 
 func freshestFirst(a, b Person) int {

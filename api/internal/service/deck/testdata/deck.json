@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "stations": [
+    {"id": "st:zd:north", "name": "Северная", "lat": 55.9, "lng": 37.5},
+    {"id": "st:zd:south", "name": "Южная", "lat": 55.6, "lng": 37.5},
+    {"id": "st:zd:east", "name": "Восточная", "lat": 55.75, "lng": 37.8},
+    {"id": "st:zd:west", "name": "Западная", "lat": 55.75, "lng": 37.2},
+    {"id": "st:zd:outer", "name": "Дальняя", "lat": 55.4, "lng": 37.9}
+  ],
+  "zones": [
+    {"id": "zd-district", "kind": "district", "name": "Тестовый район",
+     "name_in": "в Тестовом районе", "name_gen": "Тестового района",
+     "stations": ["st:zd:north", "st:zd:south", "st:zd:east"]},
+    {"id": "zd-line", "kind": "line", "name": "тестовая ветка",
+     "name_in": "на тестовой ветке", "name_gen": "тестовой ветки",
+     "stations": ["st:zd:north", "st:zd:south"]},
+    {"id": "zd-cross", "kind": "line", "name": "сквозная ветка",
+     "name_in": "на сквозной ветке", "name_gen": "сквозной ветки",
+     "stations": ["st:zd:north", "st:zd:west"]},
+    {"id": "zd-station-east", "kind": "station", "name": "Восточная",
+     "name_in": "у метро Восточная", "name_gen": "метро Восточная",
+     "stations": ["st:zd:east"]},
+    {"id": "zd-far", "kind": "station", "name": "Дальняя",
+     "name_in": "у метро Дальняя", "name_gen": "метро Дальняя",
+     "stations": ["st:zd:outer"]}
+  ]
+}

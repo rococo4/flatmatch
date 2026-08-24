@@ -47,7 +47,7 @@ func (f *fakeService) Report(_ context.Context, viewer entity.User, targetID uui
 
 func newSafetyRouter(service *fakeService, viewerID uuid.UUID) chi.Router {
 	handler := New(service, &fakePeople{}, &fakeLikes{}, fakePhotos{},
-		fakeSearches{}, fakePoints{}, fakeMatches{}, fakeDir{})
+		fakeSearches{}, fakePoints{}, fakeMatches{}, &fakePasses{}, fakeDir{})
 	return newRouter(handler, viewerID)
 }
 

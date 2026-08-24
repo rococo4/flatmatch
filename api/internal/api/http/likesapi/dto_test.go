@@ -10,6 +10,9 @@ import (
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/repo/likesrepo"
+	"flatmatch/api/internal/service/deck"
+	"flatmatch/api/internal/service/pools"
+	"flatmatch/api/internal/service/zones"
 )
 
 func TestIncomingCarriesNoContacts(t *testing.T) {
@@ -25,7 +28,7 @@ func TestIncomingCarriesNoContacts(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	raw, err := json.Marshal(toIncoming(like, []string{"/media/photos/a1b2.jpg"}, nil, nil))
+	raw, err := json.Marshal(toIncoming(like, []string{"/media/photos/a1b2.jpg"}, nil, nil, pairDTO{}))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -34,6 +37,37 @@ func TestIncomingCarriesNoContacts(t *testing.T) {
 		if strings.Contains(string(raw), forbidden) {
 			t.Errorf("incoming JSON leaks %q:\n%s", forbidden, raw)
 		}
+	}
+}
+
+func TestPairOfARoomLikeCarriesTheRoomZone(t *testing.T) {
+	roomZone := &zoneDTO{ID: "st-sokol", Name: "Сокол"}
+	point := &pointDTO{ID: uuid.New(), Kind: string(entity.PointIntentHome), Label: "на твою комнату"}
+	pair := &deck.Pair{
+		Zone:      zones.Zone{ID: "d-khamovniki", Name: "Хамовники"},
+		ZoneMatch: true,
+		Section:   pools.SectionAll,
+		Chips:     []pools.Chip{{Param: pools.ParamPrice, Verdict: pools.VerdictGreen}},
+	}
+
+	got := toPairDTO(pair, point, roomZone)
+
+	if !got.Room {
+		t.Error("a like on my room must be marked as a room like")
+	}
+	if got.Zone == nil || got.Zone.ID != "st-sokol" {
+		t.Errorf("zone = %+v, want the zone of the room", got.Zone)
+	}
+	if got.Section != "all" || len(got.Chips) != 1 || !got.ZoneMatch {
+		t.Errorf("pair = %+v, want the full match with its chips", got)
+	}
+}
+
+func TestPairWithoutSearchesIsEmpty(t *testing.T) {
+	got := toPairDTO(nil, nil, nil)
+
+	if got.Room || got.Zone != nil || got.Section != string(pools.SectionNone) || len(got.Chips) != 0 {
+		t.Errorf("pair = %+v, want an empty one", got)
 	}
 }
 

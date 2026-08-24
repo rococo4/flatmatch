@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/api/http/authmw"
+	"flatmatch/api/internal/api/http/deckapi"
 	"flatmatch/api/internal/api/http/likesapi"
 	"flatmatch/api/internal/api/http/matchesapi"
 	"flatmatch/api/internal/api/http/peopleapi"
@@ -31,10 +32,12 @@ import (
 	"flatmatch/api/internal/repo/likesrepo"
 	"flatmatch/api/internal/repo/matchesrepo"
 	"flatmatch/api/internal/repo/notificationsrepo"
+	"flatmatch/api/internal/repo/passesrepo"
 	"flatmatch/api/internal/repo/pointsrepo"
 	"flatmatch/api/internal/repo/reportsrepo"
 	"flatmatch/api/internal/repo/searchesrepo"
 	"flatmatch/api/internal/repo/usersrepo"
+	"flatmatch/api/internal/service/deck"
 	"flatmatch/api/internal/service/likes"
 	"flatmatch/api/internal/service/matches"
 	"flatmatch/api/internal/service/moderation"
@@ -62,6 +65,7 @@ type visibility struct {
 type deps struct {
 	accounts *users.Service
 	searches *searches.Service
+	deck     *deck.Service
 	pools    *pools.Service
 	likes    *likes.Service
 	matches  *matches.Service
@@ -130,6 +134,7 @@ func run() error {
 
 	usersRepo := usersrepo.New(pool)
 	searchesRepo := searchesrepo.New(pool)
+	passesRepo := passesrepo.New(pool)
 	likesRepo := likesrepo.New(pool)
 	pointsRepo := pointsrepo.New(pool)
 	matchesRepo := matchesrepo.New(pool)
@@ -156,9 +161,11 @@ func run() error {
 	wired := deps{
 		accounts: users.New(usersRepo, photos, moderator),
 		searches: searches.New(searchesRepo, dir, pushes),
-		pools:    pools.New(searchesRepo, dir, photos),
-		likes:    likes.New(likesRepo, dir, pushes, pointsRepo),
-		matches:  matches.New(matchesRepo, searchesRepo, usersRepo, pointsRepo, notificationsRepo, dir),
+		deck: deck.New(searchesRepo, pointsRepo, passesRepo, usersRepo,
+			matchesRepo, likesRepo, dir),
+		pools:   pools.New(searchesRepo, dir, photos),
+		likes:   likes.New(likesRepo, dir, pushes, pointsRepo),
+		matches: matches.New(matchesRepo, searchesRepo, usersRepo, pointsRepo, notificationsRepo, dir),
 
 		points:       points.New(pointsRepo, searchesRepo, photos, dir, moderator, pushes),
 		persons:      people.New(usersRepo, reportsRepo, matchesRepo, moderator, notificationsRepo),
@@ -252,18 +259,19 @@ func router(
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authmw.New(validator, d.accounts, d.pairSearches))
-		r.Mount("/", usersapi.New(d.accounts, d.bot).Routes())
+		r.Mount("/", usersapi.New(d.accounts, d.deck, d.bot).Routes())
 		r.Mount("/zones", zonesapi.New(d.dir, d.pools).Routes())
 		r.Mount("/searches", searchesapi.New(d.searches, d.pools, d.points, d.dir).Routes())
-		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.pairPoints, d.dir).Routes())
+		r.Mount("/likes", likesapi.New(d.likes, d.accounts, d.pairPoints, d.deck, d.dir).Routes())
 		r.Mount("/matches", matchesapi.New(d.matches, d.accounts, d.dir).Routes())
-		r.Mount("/points", pointsapi.New(d.points, d.photos, d.dir).Routes())
+		r.Mount("/points", pointsapi.New(d.points, d.deck, d.photos, d.dir).Routes())
+		r.Mount("/deck", deckapi.New(d.deck, d.photos).Routes())
 
 		poolsHandler := poolsapi.New(d.pools, d.searches, d.points, d.photos, d.dir)
 		r.Get("/feed", poolsHandler.Feed)
 		r.Get("/pools/zone/{zoneID}", poolsHandler.ZonePool)
 		r.Mount("/people", peopleapi.New(d.persons, d.people, d.pairLikes, d.accounts,
-			d.pairSearches, d.pairPoints, d.pairMatches, d.dir).Routes())
+			d.pairSearches, d.pairPoints, d.pairMatches, d.deck, d.dir).Routes())
 	})
 
 	return r

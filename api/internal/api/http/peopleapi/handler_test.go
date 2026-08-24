@@ -45,6 +45,11 @@ type fakePoints struct {
 
 type fakeSearches struct{ met bool }
 
+type fakePasses struct {
+	targets []uuid.UUID
+	err     error
+}
+
 type fakeValidator struct{}
 
 type fakeAccounts struct{ user entity.User }
@@ -53,7 +58,7 @@ func TestProfileChecksVisibilityBeforeLikes(t *testing.T) {
 	likes := &fakeLikes{}
 	pointCalls := 0
 	router := newRouter(New(&fakeService{}, &fakePeople{err: entity.ErrNotFound}, likes, fakePhotos{},
-		fakeSearches{}, fakePoints{calls: &pointCalls}, fakeMatches{}, fakeDir{}), uuid.New())
+		fakeSearches{}, fakePoints{calls: &pointCalls}, fakeMatches{}, &fakePasses{}, fakeDir{}), uuid.New())
 
 	rec := get(router, "/people/"+uuid.NewString()+"?point="+uuid.NewString())
 
@@ -74,7 +79,7 @@ func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 	likes := &fakeLikes{}
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
 	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, likes, fakePhotos{},
-		fakeSearches{met: true}, fakePoints{}, fakeMatches{}, fakeDir{}), uuid.New())
+		fakeSearches{met: true}, fakePoints{}, fakeMatches{}, &fakePasses{}, fakeDir{}), uuid.New())
 
 	rec := get(router, "/people/"+target.ID.String())
 
@@ -89,7 +94,7 @@ func TestProfileReadsLikesOfVisiblePerson(t *testing.T) {
 func TestProfileHiddenWithoutMeeting(t *testing.T) {
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
 	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
-		fakeSearches{}, fakePoints{}, fakeMatches{}, fakeDir{}), uuid.New())
+		fakeSearches{}, fakePoints{}, fakeMatches{}, &fakePasses{}, fakeDir{}), uuid.New())
 
 	rec := get(router, "/people/"+target.ID.String())
 
@@ -153,7 +158,7 @@ func TestProfileOpensToThePointRelation(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
-				fakeSearches{}, tc.points, fakeMatches{}, fakeDir{}), viewer)
+				fakeSearches{}, tc.points, fakeMatches{}, &fakePasses{}, fakeDir{}), viewer)
 
 			rec := get(router, "/people/"+target.ID.String()+"?point="+tc.points.point.ID.String())
 
@@ -176,13 +181,47 @@ func TestProfileIgnoresAnUnrelatedPointParam(t *testing.T) {
 	viewer := uuid.New()
 	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
 	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
-		fakeSearches{}, fakePoints{}, fakeMatches{}, fakeDir{}), viewer)
+		fakeSearches{}, fakePoints{}, fakeMatches{}, &fakePasses{}, fakeDir{}), viewer)
 
 	for _, param := range []string{uuid.NewString(), "not-a-uuid"} {
 		rec := get(router, "/people/"+target.ID.String()+"?point="+param)
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("status for point=%s = %d, want %d", param, rec.Code, http.StatusNotFound)
 		}
+	}
+}
+
+func TestPassStoresTheTargetAndAnswersEmpty(t *testing.T) {
+	passes := &fakePasses{}
+	target := entity.User{ID: uuid.New(), Name: "Катя", Status: entity.StatusActive}
+	router := newRouter(New(&fakeService{}, &fakePeople{user: target}, &fakeLikes{}, fakePhotos{},
+		fakeSearches{met: true}, fakePoints{}, fakeMatches{}, passes, fakeDir{}), uuid.New())
+
+	req := httptest.NewRequest(http.MethodPost, "/people/"+target.ID.String()+"/pass", nil)
+	req.Header.Set("Authorization", "tma stub")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusNoContent, rec.Body)
+	}
+	if len(passes.targets) != 1 || passes.targets[0] != target.ID {
+		t.Errorf("passes = %v, want one row for %s", passes.targets, target.ID)
+	}
+}
+
+func TestPassOfAnUnreachablePersonIsNotFound(t *testing.T) {
+	passes := &fakePasses{err: entity.ErrNotFound}
+	router := newRouter(New(&fakeService{}, &fakePeople{}, &fakeLikes{}, fakePhotos{},
+		fakeSearches{}, fakePoints{}, fakeMatches{}, passes, fakeDir{}), uuid.New())
+
+	req := httptest.NewRequest(http.MethodPost, "/people/"+uuid.NewString()+"/pass", nil)
+	req.Header.Set("Authorization", "tma stub")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusNotFound, rec.Body)
 	}
 }
 
@@ -254,6 +293,14 @@ func (f fakeSearches) ListByUser(context.Context, uuid.UUID) ([]entity.Search, e
 
 func (f fakeSearches) HasActiveIn(context.Context, uuid.UUID, []string) (bool, error) {
 	return f.met, nil
+}
+
+func (f *fakePasses) PassPerson(_ context.Context, _, targetID uuid.UUID) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.targets = append(f.targets, targetID)
+	return nil
 }
 
 func (fakeValidator) Validate(string) (tma.InitData, error) {

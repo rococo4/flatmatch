@@ -31,6 +31,11 @@ type fakeAccounts struct {
 	photoErr error
 }
 
+type fakePasses struct {
+	restored int
+	calls    int
+}
+
 type fakeBot struct{}
 
 type fakeValidator struct{}
@@ -82,10 +87,31 @@ func (fakeValidator) Validate(string) (tma.InitData, error) {
 }
 
 func newTestRouter(accounts *fakeAccounts) chi.Router {
+	return newRouterWithPasses(accounts, &fakePasses{})
+}
+
+func newRouterWithPasses(accounts *fakeAccounts, passes *fakePasses) chi.Router {
 	r := chi.NewRouter()
 	r.Use(authmw.New(fakeValidator{}, accounts, nil))
-	r.Mount("/", New(accounts, fakeBot{}).Routes())
+	r.Mount("/", New(accounts, passes, fakeBot{}).Routes())
 	return r
+}
+
+func TestClearPassesAnswersWithTheCount(t *testing.T) {
+	accounts := &fakeAccounts{user: entity.User{ID: uuid.New(), Status: entity.StatusActive}}
+	passes := &fakePasses{restored: 4}
+
+	rec := call(newRouterWithPasses(accounts, passes), http.MethodDelete, "/me/passes", "", "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"restored":4`) {
+		t.Errorf("body = %s, want the restored count", rec.Body)
+	}
+	if passes.calls != 1 {
+		t.Errorf("service saw %d call(s), want one", passes.calls)
+	}
 }
 
 func postSource(router chi.Router, body string) *httptest.ResponseRecorder {
@@ -292,4 +318,9 @@ func TestSetSourceRefusesABrokenBody(t *testing.T) {
 	if len(accounts.sources) != 0 {
 		t.Errorf("an unreadable body reached the service: %v", accounts.sources)
 	}
+}
+
+func (f *fakePasses) ClearPasses(context.Context, uuid.UUID) (int, error) {
+	f.calls++
+	return f.restored, nil
 }

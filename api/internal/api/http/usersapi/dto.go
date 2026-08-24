@@ -44,6 +44,10 @@ type sourceRequest struct {
 	Source string `json:"source"`
 }
 
+type passesResponse struct {
+	Restored int `json:"restored"`
+}
+
 type orderRequest struct {
 	Order []int `json:"order"`
 }

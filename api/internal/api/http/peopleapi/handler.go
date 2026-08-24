@@ -51,6 +51,10 @@ type Matches interface {
 	MatchIDBetween(ctx context.Context, a, b uuid.UUID) (*uuid.UUID, error)
 }
 
+type Passes interface {
+	PassPerson(ctx context.Context, viewerID, targetID uuid.UUID) error
+}
+
 type ZoneDir interface {
 	Get(id string) (zones.Zone, bool)
 	Intersecting(id string) []string
@@ -64,6 +68,7 @@ type Handler struct {
 	searches Searches
 	points   Points
 	matches  Matches
+	passes   Passes
 	dir      ZoneDir
 }
 
@@ -73,10 +78,10 @@ var (
 )
 
 func New(service Service, people People, likes Likes, photos Photos,
-	searches Searches, points Points, matches Matches, dir ZoneDir) *Handler {
+	searches Searches, points Points, matches Matches, passes Passes, dir ZoneDir) *Handler {
 	return &Handler{
 		service: service, people: people, likes: likes, photos: photos,
-		searches: searches, points: points, matches: matches, dir: dir,
+		searches: searches, points: points, matches: matches, passes: passes, dir: dir,
 	}
 }
 
@@ -84,6 +89,7 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/{id}", h.profile)
 	r.Post("/{id}/block", h.block)
+	r.Post("/{id}/pass", h.pass)
 	r.Post("/{id}/report", h.report)
 	return r
 }
@@ -156,6 +162,19 @@ func (h *Handler) block(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.Block(r.Context(), viewer.ID, id); err != nil {
+		handleError(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusNoContent, nil)
+}
+
+func (h *Handler) pass(w http.ResponseWriter, r *http.Request) {
+	viewer, id, ok := viewerAndTarget(w, r)
+	if !ok {
+		return
+	}
+
+	if err := h.passes.PassPerson(r.Context(), viewer.ID, id); err != nil {
 		handleError(w, r, err)
 		return
 	}

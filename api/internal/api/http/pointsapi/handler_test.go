@@ -51,6 +51,8 @@ type fakePoints struct {
 
 	photoKey  string
 	photoBody []byte
+
+	passes *fakePasses
 }
 
 type fakeValidator struct{}
@@ -58,6 +60,11 @@ type fakeValidator struct{}
 type fakeAccounts struct{ user entity.User }
 
 type fakeDir struct{}
+
+type fakePasses struct {
+	targets []uuid.UUID
+	err     error
+}
 
 func TestCreateAnswersWithTheCardOnReview(t *testing.T) {
 	viewer := uuid.New()
@@ -281,13 +288,44 @@ func TestEnterAndLeave(t *testing.T) {
 	}
 }
 
+func TestPassStoresTheRoomAndAnswersEmpty(t *testing.T) {
+	service := &fakePoints{}
+	id := uuid.New()
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+id.String()+"/pass", "")
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusNoContent, rec.Body)
+	}
+	if len(service.passes.targets) != 1 || service.passes.targets[0] != id {
+		t.Errorf("passes = %v, want one row for %s", service.passes.targets, id)
+	}
+}
+
+func TestPassOfAMissingRoomIsNotFound(t *testing.T) {
+	service := &fakePoints{passes: &fakePasses{err: entity.ErrNotFound}}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+uuid.NewString()+"/pass", "")
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusNotFound, rec.Body)
+	}
+}
+
+func passes(service *fakePoints) *fakePasses {
+	if service.passes == nil {
+		service.passes = &fakePasses{}
+	}
+	return service.passes
+}
+
 func do(t *testing.T, service *fakePoints, viewer uuid.UUID, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	router := chi.NewRouter()
 	router.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: viewer, Status: entity.StatusActive},
 	}, nil))
-	router.Mount("/points", New(service, stubPhotos{}, fakeDir{}).Routes())
+	router.Mount("/points", New(service, passes(service), stubPhotos{}, fakeDir{}).Routes())
 
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Authorization", "tma stub")
@@ -445,7 +483,7 @@ func upload(t *testing.T, service *fakePoints, contentType, body string) *httpte
 	router.Use(authmw.New(fakeValidator{}, fakeAccounts{
 		user: entity.User{ID: uuid.New(), Status: entity.StatusActive},
 	}, nil))
-	router.Mount("/points", New(service, stubPhotos{}, fakeDir{}).Routes())
+	router.Mount("/points", New(service, passes(service), stubPhotos{}, fakeDir{}).Routes())
 
 	req := httptest.NewRequest(http.MethodPost, "/points/photo", strings.NewReader(body))
 	req.Header.Set("Authorization", "tma stub")
@@ -619,4 +657,12 @@ func TestIntentHomeFormCarriesTheDescription(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"description":"Светлая комната с балконом"`) {
 		t.Errorf("body = %s, want the description back on the card", rec.Body)
 	}
+}
+
+func (f *fakePasses) PassPoint(_ context.Context, _, pointID uuid.UUID) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.targets = append(f.targets, pointID)
+	return nil
 }

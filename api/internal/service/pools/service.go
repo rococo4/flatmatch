@@ -81,8 +81,10 @@ func (s *Service) Counts(ctx context.Context, viewerID uuid.UUID, params entity.
 		if newSince != nil && sc.cand.Search.CreatedAt.After(*newSince) {
 			c.NewCount++
 		}
-		if urls := photoURLs(s.photos, sc.cand.User); len(c.Avatars) < avatarCap && len(urls) > 0 {
-			c.Avatars = append(c.Avatars, urls[0])
+		if len(c.Avatars) < avatarCap {
+			if urls := photoURLs(s.photos, sc.cand.User); len(urls) > 0 {
+				c.Avatars = append(c.Avatars, urls[0])
+			}
 		}
 	}
 	return c, nil

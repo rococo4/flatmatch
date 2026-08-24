@@ -100,10 +100,29 @@ func (r *Repo) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Profile
 	return user, nil
 }
 
+func (r *Repo) AppendPhoto(ctx context.Context, id uuid.UUID, key string) (entity.User, error) {
+	const query = `
+		UPDATE users
+		SET photo_keys = photo_keys || $2::text[], photo_status = 'pending'
+		WHERE id = $1 AND cardinality(photo_keys) < $3
+		RETURNING ` + columns
+
+	user, err := r.one(ctx, query, id, []string{key}, entity.MaxUserPhotos)
+	if errors.Is(err, entity.ErrNotFound) {
+		if _, missing := r.ByID(ctx, id); missing == nil {
+			return entity.User{}, fmt.Errorf("append a photo of user %s: %w", id, entity.ErrPhotoLimit)
+		}
+	}
+	if err != nil {
+		return entity.User{}, fmt.Errorf("append a photo of user %s: %w", id, err)
+	}
+	return user, nil
+}
+
 func (r *Repo) SetPhotos(ctx context.Context, id uuid.UUID, keys []string) (entity.User, error) {
 	const query = `
 		UPDATE users
-		SET photo_keys = COALESCE($2::text[], '{}'), photo_status = 'pending'
+		SET photo_keys = COALESCE($2::text[], '{}')
 		WHERE id = $1
 		RETURNING ` + columns
 

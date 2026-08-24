@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"slices"
 
 	"github.com/google/uuid"
 
@@ -19,6 +18,7 @@ type Repository interface {
 	EnsureByTelegramID(ctx context.Context, tg entity.TelegramIdentity) (entity.User, error)
 	ByID(ctx context.Context, id uuid.UUID) (entity.User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error)
+	AppendPhoto(ctx context.Context, id uuid.UUID, key string) (entity.User, error)
 	SetPhotos(ctx context.Context, id uuid.UUID, keys []string) (entity.User, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status entity.Status) (entity.User, error)
 	SetSourceIfEmpty(ctx context.Context, id uuid.UUID, source string) error
@@ -47,7 +47,7 @@ var (
 	ErrInvalidSource = errors.New("source code is not a valid tracking code")
 	ErrIncomplete    = errors.New("profile is not filled in")
 
-	ErrPhotoLimit        = errors.New("profile already holds the maximum number of photos")
+	ErrPhotoLimit        = entity.ErrPhotoLimit
 	ErrLastPhoto         = errors.New("the last photo of a submitted profile cannot be removed")
 	ErrInvalidPhotoIndex = errors.New("no photo under that index")
 	ErrInvalidPhotoOrder = errors.New("photo order is not a permutation of the set")
@@ -87,14 +87,6 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Prof
 }
 
 func (s *Service) AddPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error) {
-	user, err := s.repo.ByID(ctx, id)
-	if err != nil {
-		return entity.User{}, err
-	}
-	if len(user.PhotoKeys) >= entity.MaxUserPhotos {
-		return entity.User{}, &entity.FieldsError{Err: ErrPhotoLimit, Fields: []string{"photo"}}
-	}
-
 	contentType, ext, err := imagetype.Sniff(file)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("photo of user %s: %w", id, err)
@@ -104,7 +96,16 @@ func (s *Service) AddPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker
 	if err := s.photos.Put(ctx, key, file, contentType); err != nil {
 		return entity.User{}, fmt.Errorf("store photo of user %s: %w", id, err)
 	}
-	return s.repo.SetPhotos(ctx, id, append(slices.Clone(user.PhotoKeys), key))
+
+	updated, err := s.repo.AppendPhoto(ctx, id, key)
+	if err != nil {
+		s.drop(ctx, id, key)
+		if errors.Is(err, ErrPhotoLimit) {
+			return entity.User{}, &entity.FieldsError{Err: ErrPhotoLimit, Fields: []string{"photo"}}
+		}
+		return entity.User{}, err
+	}
+	return updated, nil
 }
 
 func (s *Service) RemovePhoto(ctx context.Context, id uuid.UUID, index int) (entity.User, error) {
@@ -126,10 +127,7 @@ func (s *Service) RemovePhoto(ctx context.Context, id uuid.UUID, index int) (ent
 		return entity.User{}, err
 	}
 
-	if err := s.photos.Delete(ctx, user.PhotoKeys[index]); err != nil {
-		logctx.From(ctx).Warn("delete a dropped photo",
-			"user_id", id, "key", user.PhotoKeys[index], "error", err)
-	}
+	s.drop(ctx, id, user.PhotoKeys[index])
 	return updated, nil
 }
 
@@ -194,6 +192,13 @@ func (s *Service) OwnPhotoURLs(u entity.User) []string {
 		out = append(out, s.photos.URL(key))
 	}
 	return out
+}
+
+func (s *Service) drop(ctx context.Context, id uuid.UUID, key string) {
+	if err := s.photos.Delete(ctx, key); err != nil {
+		logctx.From(ctx).Warn("delete a photo the profile no longer holds",
+			"user_id", id, "key", key, "error", err)
+	}
 }
 
 func (s *Service) enqueue(ctx context.Context, u entity.User) {

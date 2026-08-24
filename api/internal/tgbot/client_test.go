@@ -350,3 +350,15 @@ func TestModerationSenderKeepsOneVerdictPerCard(t *testing.T) {
 		})
 	}
 }
+
+func TestModerationSenderRefusesACardWithoutPhotos(t *testing.T) {
+	api := newBotAPI(t)
+
+	if _, err := NewModerationSender(api.client()).
+		SendModerationPhotos(t.Context(), -100500, nil, "Катя, 24", nil); err == nil {
+		t.Fatal("SendModerationPhotos() accepted a card with no photos")
+	}
+	if api.count() != 0 {
+		t.Errorf("%d calls made, want none", api.count())
+	}
+}

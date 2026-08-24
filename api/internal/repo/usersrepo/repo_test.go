@@ -3,6 +3,7 @@ package usersrepo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -248,7 +249,7 @@ func TestUpdateProfileSendsRewrittenAboutBackToModeration(t *testing.T) {
 	}
 }
 
-func TestSetPhotosQueuesTheNewSet(t *testing.T) {
+func TestAppendPhotoAddsToTheEndAndQueuesTheSet(t *testing.T) {
 	pool := newTestPool(t)
 	repo := New(pool)
 	user := seedUser(t, repo)
@@ -260,19 +261,88 @@ func TestSetPhotosQueuesTheNewSet(t *testing.T) {
 		t.Fatalf("approve photo: %v", err)
 	}
 
-	got, err := repo.SetPhotos(ctx, user.ID, []string{"photos/new.jpg", "photos/second.jpg"})
+	first, err := repo.AppendPhoto(ctx, user.ID, "photos/new.jpg")
+	if err != nil {
+		t.Fatalf("AppendPhoto() failed: %v", err)
+	}
+	if !slices.Equal(first.PhotoKeys, []string{"photos/old.jpg", "photos/new.jpg"}) {
+		t.Errorf("PhotoKeys = %v, want the new key at the end", first.PhotoKeys)
+	}
+	if first.PhotoStatus != entity.ModerationPending {
+		t.Errorf("PhotoStatus = %q, want %q", first.PhotoStatus, entity.ModerationPending)
+	}
+	if first.PhotoApproved() {
+		t.Error("a freshly uploaded photo must not count as approved")
+	}
+
+	second, err := repo.AppendPhoto(ctx, user.ID, "photos/third.jpg")
+	if err != nil {
+		t.Fatalf("second AppendPhoto() failed: %v", err)
+	}
+	want := []string{"photos/old.jpg", "photos/new.jpg", "photos/third.jpg"}
+	if !slices.Equal(second.PhotoKeys, want) {
+		t.Errorf("PhotoKeys = %v, want %v — neither upload may overwrite the other", second.PhotoKeys, want)
+	}
+}
+
+func TestAppendPhotoStopsAtTheCapWithoutTouchingTheRow(t *testing.T) {
+	pool := newTestPool(t)
+	repo := New(pool)
+	user := seedUser(t, repo)
+	ctx := t.Context()
+
+	full := make([]string, 0, entity.MaxUserPhotos)
+	for i := range entity.MaxUserPhotos {
+		full = append(full, fmt.Sprintf("photos/%d.jpg", i))
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET photo_keys = $2, photo_status = 'ok' WHERE id = $1`, user.ID, full,
+	); err != nil {
+		t.Fatalf("fill the photo set: %v", err)
+	}
+
+	if _, err := repo.AppendPhoto(ctx, user.ID, "photos/sixth.jpg"); !errors.Is(err, entity.ErrPhotoLimit) {
+		t.Fatalf("AppendPhoto() error = %v, want ErrPhotoLimit", err)
+	}
+
+	got, err := repo.ByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ByID() failed: %v", err)
+	}
+	if !slices.Equal(got.PhotoKeys, full) {
+		t.Errorf("PhotoKeys = %v, want the row left alone", got.PhotoKeys)
+	}
+	if got.PhotoStatus != entity.ModerationOK {
+		t.Errorf("PhotoStatus = %q, want the refused upload to leave the verdict alone", got.PhotoStatus)
+	}
+
+	if _, err := repo.AppendPhoto(ctx, uuid.New(), "photos/x.jpg"); !errors.Is(err, entity.ErrNotFound) {
+		t.Errorf("AppendPhoto() of nobody = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetPhotosLeavesTheVerdictAlone(t *testing.T) {
+	pool := newTestPool(t)
+	repo := New(pool)
+	user := seedUser(t, repo)
+	ctx := t.Context()
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE users SET photo_keys = ARRAY['photos/a.jpg', 'photos/b.jpg'], photo_status = 'ok'
+		WHERE id = $1`, user.ID); err != nil {
+		t.Fatalf("approve photos: %v", err)
+	}
+
+	got, err := repo.SetPhotos(ctx, user.ID, []string{"photos/b.jpg", "photos/a.jpg"})
 	if err != nil {
 		t.Fatalf("SetPhotos() failed: %v", err)
 	}
-	if !slices.Equal(got.PhotoKeys, []string{"photos/new.jpg", "photos/second.jpg"}) {
-		t.Errorf("PhotoKeys = %v, want the new set in order", got.PhotoKeys)
+	if !slices.Equal(got.PhotoKeys, []string{"photos/b.jpg", "photos/a.jpg"}) {
+		t.Errorf("PhotoKeys = %v, want the new order", got.PhotoKeys)
 	}
-
-	if got.PhotoStatus != entity.ModerationPending {
-		t.Errorf("PhotoStatus = %q, want %q", got.PhotoStatus, entity.ModerationPending)
-	}
-	if got.PhotoApproved() {
-		t.Error("a freshly uploaded photo must not count as approved")
+	if got.PhotoStatus != entity.ModerationOK {
+		t.Errorf("PhotoStatus = %q, want %q — reordering approved photos shows nothing new",
+			got.PhotoStatus, entity.ModerationOK)
 	}
 }
 

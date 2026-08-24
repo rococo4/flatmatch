@@ -13,6 +13,8 @@ var ErrSearchClosed = errors.New("search is closed")
 
 var ErrPointLimit = errors.New("point limit reached")
 
+var ErrPhotoLimit = errors.New("photo limit reached")
+
 var ErrLikeLimit = errors.New("daily like limit reached")
 
 var ErrNeedSearch = errors.New("an active search is required to like")

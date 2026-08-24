@@ -26,6 +26,7 @@ type fakeRepo struct {
 	patched    entity.ProfilePatch
 	photoKeys  []string
 	photoCall  bool
+	appendErr  error
 	setStatus  entity.Status
 	statusCall bool
 }
@@ -44,13 +45,25 @@ func (f *fakeRepo) UpdateProfile(_ context.Context, _ uuid.UUID, p entity.Profil
 	return f.user, f.err
 }
 
+func (f *fakeRepo) AppendPhoto(_ context.Context, _ uuid.UUID, key string) (entity.User, error) {
+	if f.appendErr != nil {
+		return entity.User{}, f.appendErr
+	}
+	f.photoCall = true
+	f.photoKeys = append(slices.Clone(f.user.PhotoKeys), key)
+
+	updated := f.user
+	updated.PhotoKeys = f.photoKeys
+	updated.PhotoStatus = entity.ModerationPending
+	return updated, f.err
+}
+
 func (f *fakeRepo) SetPhotos(_ context.Context, _ uuid.UUID, keys []string) (entity.User, error) {
 	f.photoCall = true
 	f.photoKeys = keys
 
 	updated := f.user
 	updated.PhotoKeys = keys
-	updated.PhotoStatus = entity.ModerationPending
 	return updated, f.err
 }
 
@@ -332,10 +345,13 @@ func TestAddPhotoAppendsAKeyOfItsOwn(t *testing.T) {
 	}
 }
 
-func TestAddPhotoStopsAtTheFifth(t *testing.T) {
+func TestAddPhotoReportsTheCapTheRepositoryEnforces(t *testing.T) {
 	store := &fakeStore{}
 	keys := []string{"photos/1.jpg", "photos/2.jpg", "photos/3.jpg", "photos/4.jpg", "photos/5.jpg"}
-	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, PhotoKeys: keys}}
+	repo := &fakeRepo{
+		user:      entity.User{Status: entity.StatusActive, PhotoKeys: keys},
+		appendErr: entity.ErrPhotoLimit,
+	}
 
 	_, err := New(repo, store, nil).AddPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile))
 
@@ -346,8 +362,23 @@ func TestAddPhotoStopsAtTheFifth(t *testing.T) {
 	if !slices.Equal(fields.Fields, []string{"photo"}) {
 		t.Errorf("fields = %v, want [photo]", fields.Fields)
 	}
-	if len(store.put) != 0 || repo.photoCall {
-		t.Errorf("a sixth photo reached the store %v or the row %v", store.put, repo.photoCall)
+	if repo.photoCall {
+		t.Error("the refused upload still changed the row")
+	}
+	if !slices.Equal(store.deleted, store.put) {
+		t.Errorf("stored %v but deleted %v — the refused upload was left orphaned", store.put, store.deleted)
+	}
+}
+
+func TestAddPhotoCleansUpAfterAFailedRow(t *testing.T) {
+	store := &fakeStore{}
+	repo := &fakeRepo{appendErr: errors.New("connection refused")}
+
+	if _, err := New(repo, store, nil).AddPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err == nil {
+		t.Fatal("AddPhoto() hid a repository failure")
+	}
+	if len(store.put) != 1 || !slices.Equal(store.deleted, store.put) {
+		t.Errorf("stored %v and deleted %v, want the orphaned object cleaned up", store.put, store.deleted)
 	}
 }
 
@@ -385,8 +416,9 @@ func TestRemovePhotoDropsTheChosenOne(t *testing.T) {
 	if !slices.Equal(store.deleted, []string{"photos/a.jpg"}) {
 		t.Errorf("deleted %v, want the dropped file gone", store.deleted)
 	}
-	if updated.PhotoStatus != entity.ModerationPending {
-		t.Errorf("photo status = %q, want the whole set back on review", updated.PhotoStatus)
+	if updated.PhotoStatus != entity.ModerationOK {
+		t.Errorf("photo status = %q, want %q — dropping an approved photo shows nothing new",
+			updated.PhotoStatus, entity.ModerationOK)
 	}
 }
 
@@ -466,8 +498,9 @@ func TestReorderPhotosStoresTheNewOrder(t *testing.T) {
 	if !slices.Equal(repo.photoKeys, []string{"photos/c.jpg", "photos/a.jpg", "photos/b.jpg"}) {
 		t.Errorf("recorded %v, want [c a b]", repo.photoKeys)
 	}
-	if updated.PhotoStatus != entity.ModerationPending {
-		t.Errorf("photo status = %q, want the whole set back on review", updated.PhotoStatus)
+	if updated.PhotoStatus != entity.ModerationOK {
+		t.Errorf("photo status = %q, want %q — a drag must not make the profile invisible",
+			updated.PhotoStatus, entity.ModerationOK)
 	}
 }
 

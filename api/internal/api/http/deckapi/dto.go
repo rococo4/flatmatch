@@ -128,6 +128,7 @@ type deckResponse struct {
 	Cards    []cardDTO `json:"cards"`
 	NoSearch bool      `json:"no_search"`
 	Total    int       `json:"total"`
+	Passed   int       `json:"passed"`
 }
 
 func parseQuery(v url.Values) (deck.Query, string, bool) {
@@ -216,7 +217,12 @@ func parseQuery(v url.Values) (deck.Query, string, bool) {
 }
 
 func toResponse(d deck.Deck, photos Photos) deckResponse {
-	out := deckResponse{Cards: make([]cardDTO, 0, len(d.Cards)), NoSearch: d.NoSearch, Total: d.Total}
+	out := deckResponse{
+		Cards:    make([]cardDTO, 0, len(d.Cards)),
+		NoSearch: d.NoSearch,
+		Total:    d.Total,
+		Passed:   d.Passed,
+	}
 	for _, card := range d.Cards {
 		out.Cards = append(out.Cards, toCard(card, photos))
 	}

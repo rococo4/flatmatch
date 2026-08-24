@@ -82,6 +82,7 @@ type Card struct {
 type Deck struct {
 	Cards    []Card
 	Total    int
+	Passed   int
 	NoSearch bool
 }
 

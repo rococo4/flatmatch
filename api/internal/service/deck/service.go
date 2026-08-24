@@ -25,6 +25,11 @@ func New(searches Searches, points Points, passes Passes, people People,
 }
 
 func (s *Service) Deck(ctx context.Context, viewerID uuid.UUID, q Query) (Deck, error) {
+	passed, err := s.passes.ActiveTargets(ctx, viewerID, passWindow)
+	if err != nil {
+		return Deck{}, err
+	}
+
 	list, err := s.searches.ListByUser(ctx, viewerID)
 	if err != nil {
 		return Deck{}, err
@@ -32,7 +37,7 @@ func (s *Service) Deck(ctx context.Context, viewerID uuid.UUID, q Query) (Deck, 
 
 	mine := activeOnly(list)
 	if len(mine) == 0 {
-		return Deck{Cards: []Card{}, NoSearch: true}, nil
+		return Deck{Cards: []Card{}, Passed: len(passed), NoSearch: true}, nil
 	}
 	zoneIDs := s.zoneUnion(mine)
 
@@ -52,8 +57,9 @@ func (s *Service) Deck(ctx context.Context, viewerID uuid.UUID, q Query) (Deck, 
 		cards = append(cards, rooms...)
 	}
 
+	cards = roomsWinOverPeople(cards)
 	slices.SortFunc(cards, deckOrder)
-	out := Deck{Cards: []Card{}, Total: len(cards)}
+	out := Deck{Cards: []Card{}, Total: len(cards), Passed: len(passed)}
 	if len(cards) > cardCap {
 		cards = cards[:cardCap]
 	}
@@ -86,11 +92,21 @@ func (s *Service) PassPoint(ctx context.Context, viewerID, pointID uuid.UUID) er
 	if point.Type != entity.PointIntentHome || point.Status != entity.PointActive {
 		return entity.ErrNotFound
 	}
+	if point.CreatedBy != nil && *point.CreatedBy == viewerID {
+		return entity.ErrSelfTarget
+	}
 	return s.passes.Upsert(ctx, viewerID, pointID)
 }
 
 func (s *Service) ClearPasses(ctx context.Context, userID uuid.UUID) (int, error) {
-	return s.passes.Clear(ctx, userID)
+	passed, err := s.passes.ActiveTargets(ctx, userID, passWindow)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := s.passes.Clear(ctx, userID); err != nil {
+		return 0, err
+	}
+	return len(passed), nil
 }
 
 func (s *Service) RankIncoming(ctx context.Context, viewerID uuid.UUID,
@@ -205,7 +221,7 @@ func (s *Service) roomPair(mine []entity.Search, room entity.Point) (Pair, bool)
 		next := Pair{
 			Zone:      zone,
 			ZoneMatch: pools.ZoneMatch(s.dir, m.ZoneID, room.ZoneID),
-			Section:   pools.SectionPartial,
+			Section:   pools.SectionNone,
 		}
 		if shareFits(m.SearchParams, room.PriceShare) {
 			next.Section = pools.SectionAll
@@ -258,6 +274,27 @@ func toPair(p pools.Pair) Pair {
 		Chips:     p.Chips,
 		Params:    pointer.To(p.Theirs.SearchParams),
 	}
+}
+
+func roomsWinOverPeople(cards []Card) []Card {
+	authors := make(map[uuid.UUID]bool)
+	for _, card := range cards {
+		if card.Kind == KindRoom && card.Room.Point.CreatedBy != nil {
+			authors[*card.Room.Point.CreatedBy] = true
+		}
+	}
+	if len(authors) == 0 {
+		return cards
+	}
+
+	out := make([]Card, 0, len(cards))
+	for _, card := range cards {
+		if card.Kind == KindPerson && authors[card.Person.ID] {
+			continue
+		}
+		out = append(out, card)
+	}
+	return out
 }
 
 func activeOnly(list []entity.Search) []entity.Search {

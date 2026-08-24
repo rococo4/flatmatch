@@ -312,6 +312,19 @@ func TestPassOfAMissingRoomIsNotFound(t *testing.T) {
 	}
 }
 
+func TestPassOfMyOwnRoomIsRefused(t *testing.T) {
+	service := &fakePoints{passes: &fakePasses{err: entity.ErrSelfTarget}}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points/"+uuid.NewString()+"/pass", "")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusBadRequest, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"invalid_field"`) {
+		t.Errorf("body = %s, want invalid_field", rec.Body)
+	}
+}
+
 func passes(service *fakePoints) *fakePasses {
 	if service.passes == nil {
 		service.passes = &fakePasses{}

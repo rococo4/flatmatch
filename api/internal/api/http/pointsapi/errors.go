@@ -45,6 +45,8 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.Error(w, r, http.StatusConflict, httpx.CodePointNotPaused, pointNotPausedMessage, err)
 	case errors.Is(err, entity.ErrNotVotable):
 		httpx.Error(w, r, http.StatusUnprocessableEntity, httpx.CodeNotVotable, notVotableMessage, err)
+	case errors.Is(err, entity.ErrSelfTarget):
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "the point is yours", []string{"id"}, err)
 	case errors.Is(err, entity.ErrNotFound):
 
 		httpx.Error(w, r, http.StatusNotFound, httpx.CodeNotFound, "no such point", err)

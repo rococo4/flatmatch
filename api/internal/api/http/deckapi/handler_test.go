@@ -178,15 +178,32 @@ func TestDeckHidesUnapprovedPhotoAndAbout(t *testing.T) {
 	}
 }
 
+func TestDeckCarriesThePassedCount(t *testing.T) {
+	d := &fakeDeck{deck: deck.Deck{Cards: []deck.Card{}, Passed: 3}}
+
+	rec := get(t, d, "/deck")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", rec.Code, rec.Body)
+	}
+
+	var got deckResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v (%s)", err, rec.Body)
+	}
+	if got.Passed != 3 {
+		t.Errorf("passed = %d, want 3 — «Показать пропущенных · N» считает по нему", got.Passed)
+	}
+}
+
 func TestDeckWithoutSearchAnswersEmpty(t *testing.T) {
-	d := &fakeDeck{deck: deck.Deck{NoSearch: true, Cards: []deck.Card{}}}
+	d := &fakeDeck{deck: deck.Deck{NoSearch: true, Cards: []deck.Card{}, Passed: 2}}
 
 	rec := get(t, d, "/deck")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (%s)", rec.Code, rec.Body)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`"cards":[]`, `"no_search":true`, `"total":0`} {
+	for _, want := range []string{`"cards":[]`, `"no_search":true`, `"total":0`, `"passed":2`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body %s does not carry %s", body, want)
 		}

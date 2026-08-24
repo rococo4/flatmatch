@@ -56,6 +56,7 @@ type fakePoints struct {
 
 type fakePasses struct {
 	active  []uuid.UUID
+	deleted int
 	passed  []uuid.UUID
 	cleared int
 	within  time.Duration
@@ -203,8 +204,8 @@ func TestDeckRoomSectionFollowsThePriceShare(t *testing.T) {
 		gone  bool
 	}{
 		"доля в вилке":        {42000, "zd-station-east", pools.SectionAll, false},
-		"доля выше вилки":     {90000, "zd-station-east", pools.SectionPartial, false},
-		"доля ниже вилки":     {10000, "zd-station-east", pools.SectionPartial, false},
+		"доля выше вилки":     {90000, "zd-station-east", pools.SectionNone, false},
+		"доля ниже вилки":     {10000, "zd-station-east", pools.SectionNone, false},
 		"зона не пересеклась": {42000, "zd-far", "", true},
 	}
 
@@ -353,8 +354,28 @@ func TestPassPointTakesLiveRoomsOnly(t *testing.T) {
 	}
 }
 
-func TestClearPassesCountsWhatCameBack(t *testing.T) {
-	passes := &fakePasses{active: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}}
+func TestPassPointRefusesMyOwnRoom(t *testing.T) {
+	me := uuid.New()
+	mine := entity.Point{
+		ID: uuid.New(), Type: entity.PointIntentHome, Status: entity.PointActive, CreatedBy: &me,
+	}
+	passes := &fakePasses{}
+	points := &fakePoints{byID: map[uuid.UUID]entity.Point{mine.ID: mine}}
+	svc := newService(t, &fakeSearches{}, points, passes, fakePeople{}, fakeMatches{}, fakeLikes{})
+
+	if err := svc.PassPoint(t.Context(), me, mine.ID); !errors.Is(err, entity.ErrSelfTarget) {
+		t.Errorf("PassPoint(own room) = %v, want ErrSelfTarget", err)
+	}
+	if len(passes.passed) != 0 {
+		t.Errorf("my own room landed in passes: %v", passes.passed)
+	}
+}
+
+func TestClearPassesCountsOnlyTheLivingOnes(t *testing.T) {
+	passes := &fakePasses{
+		active:  []uuid.UUID{uuid.New(), uuid.New(), uuid.New()},
+		deleted: 7,
+	}
 	svc := newService(t, &fakeSearches{}, &fakePoints{}, passes, fakePeople{}, fakeMatches{}, fakeLikes{})
 
 	got, err := svc.ClearPasses(t.Context(), uuid.New())
@@ -362,7 +383,59 @@ func TestClearPassesCountsWhatCameBack(t *testing.T) {
 		t.Fatalf("ClearPasses() failed: %v", err)
 	}
 	if got != 3 || passes.cleared != 1 {
-		t.Errorf("ClearPasses() = %d after %d call(s), want 3 after one", got, passes.cleared)
+		t.Errorf("ClearPasses() = %d after %d call(s), want the three living passes after one",
+			got, passes.cleared)
+	}
+	if passes.within != passWindow {
+		t.Errorf("pass window = %v, want %v", passes.within, passWindow)
+	}
+}
+
+func TestDeckCountsThePassedForTheEndScreen(t *testing.T) {
+	now := time.Now()
+	passes := &fakePasses{active: []uuid.UUID{uuid.New(), uuid.New()}}
+	searches := &fakeSearches{mine: []entity.Search{testSearch("zd-district", 35000, 45000, now, sept)}}
+	svc := newService(t, searches, &fakePoints{}, passes, fakePeople{}, fakeMatches{}, fakeLikes{})
+
+	got, err := svc.Deck(t.Context(), uuid.New(), Query{People: true, Rooms: true})
+	if err != nil {
+		t.Fatalf("Deck() failed: %v", err)
+	}
+	if got.Passed != 2 {
+		t.Errorf("Passed = %d, want the two living passes", got.Passed)
+	}
+
+	searches.mine = []entity.Search{closedSearch()}
+	empty, err := svc.Deck(t.Context(), uuid.New(), Query{People: true, Rooms: true})
+	if err != nil {
+		t.Fatalf("Deck() failed: %v", err)
+	}
+	if !empty.NoSearch || empty.Passed != 2 {
+		t.Errorf("Deck() = %+v, want the passed count even without a search", empty)
+	}
+}
+
+func TestDeckKeepsOnlyTheRoomOfAPersonWhoAlsoSearches(t *testing.T) {
+	now := time.Now()
+	both := person("и ищет, и зовёт к себе", now)
+	searches := &fakeSearches{
+		mine: []entity.Search{testSearch("zd-district", 35000, 45000, now, sept)},
+		candidates: []searchesrepo.DeckCandidate{
+			{User: both, Searches: []entity.Search{testSearch("zd-district", 40000, 55000, now, sept)}},
+		},
+	}
+	points := &fakePoints{rooms: []pointsrepo.FeedPoint{room(both, "zd-station-east", 42000, now)}}
+	svc := newService(t, searches, points, &fakePasses{}, fakePeople{}, fakeMatches{}, fakeLikes{})
+
+	got, err := svc.Deck(t.Context(), uuid.New(), Query{People: true, Rooms: true})
+	if err != nil {
+		t.Fatalf("Deck() failed: %v", err)
+	}
+	if len(got.Cards) != 1 || got.Total != 1 {
+		t.Fatalf("deck = %v (total %d), want the room card alone", cardKinds(got.Cards), got.Total)
+	}
+	if got.Cards[0].Kind != KindRoom {
+		t.Errorf("card = %s, want the room — она богаче и несёт конкретный объект", got.Cards[0].Kind)
 	}
 }
 
@@ -479,7 +552,7 @@ func (f *fakePasses) ActiveTargets(_ context.Context, _ uuid.UUID, within time.D
 
 func (f *fakePasses) Clear(context.Context, uuid.UUID) (int, error) {
 	f.cleared++
-	return len(f.active), nil
+	return f.deleted, nil
 }
 
 func (f fakePeople) VisibleByID(_ context.Context, _, id uuid.UUID) (entity.User, error) {

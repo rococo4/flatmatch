@@ -20,10 +20,10 @@ type zoneDTO struct {
 }
 
 type peerDTO struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Name     string    `json:"name"`
-	Age      int       `json:"age"`
-	PhotoURL string    `json:"photo_url"`
+	UserID    uuid.UUID `json:"user_id"`
+	Name      string    `json:"name"`
+	Age       int       `json:"age"`
+	PhotoURLs []string  `json:"photo_urls"`
 }
 
 type peerContactDTO struct {
@@ -69,20 +69,20 @@ type sharedDTO struct {
 	Value string `json:"value"`
 }
 
-func toMatchDTO(m matchesrepo.MatchWithPeer, photoURL string, zone *zoneDTO) matchDTO {
+func toMatchDTO(m matchesrepo.MatchWithPeer, photoURLs []string, zone *zoneDTO) matchDTO {
 	return matchDTO{
 		MatchID: m.Match.ID,
-		Peer:    toPeerDTO(m.Peer, photoURL),
+		Peer:    toPeerDTO(m.Peer, photoURLs),
 		Zone:    zone,
 		At:      m.Match.CreatedAt,
 	}
 }
 
-func toMatchDetail(m matchesrepo.MatchWithPeer, summary matches.Summary, photoURL string) matchDetailResponse {
+func toMatchDetail(m matchesrepo.MatchWithPeer, summary matches.Summary, photoURLs []string) matchDetailResponse {
 	out := matchDetailResponse{
 		MatchID: m.Match.ID,
 		Peer: peerContactDTO{
-			peerDTO:    toPeerDTO(m.Peer, photoURL),
+			peerDTO:    toPeerDTO(m.Peer, photoURLs),
 			Username:   m.Peer.Username,
 			TelegramID: m.Peer.TelegramID,
 		},
@@ -106,8 +106,8 @@ func toMatchDetail(m matchesrepo.MatchWithPeer, summary matches.Summary, photoUR
 	return out
 }
 
-func toPeerDTO(u entity.User, photoURL string) peerDTO {
-	return peerDTO{UserID: u.ID, Name: u.Name, Age: u.Profile.Age, PhotoURL: photoURL}
+func toPeerDTO(u entity.User, photoURLs []string) peerDTO {
+	return peerDTO{UserID: u.ID, Name: u.Name, Age: u.Profile.Age, PhotoURLs: photoURLs}
 }
 
 func toParamOverlap(o matches.ParamOverlap) paramOverlapDTO {

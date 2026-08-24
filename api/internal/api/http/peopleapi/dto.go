@@ -35,10 +35,10 @@ type reportRequest struct {
 }
 
 type profileResponse struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Name     string    `json:"name"`
-	Age      int       `json:"age"`
-	PhotoURL string    `json:"photo_url"`
+	UserID    uuid.UUID `json:"user_id"`
+	Name      string    `json:"name"`
+	Age       int       `json:"age"`
+	PhotoURLs []string  `json:"photo_urls"`
 
 	Occupation string `json:"occupation"`
 	Schedule   string `json:"schedule"`
@@ -93,17 +93,17 @@ func (r reportRequest) contextKey() string {
 
 func toProfile(
 	viewer, target entity.User,
-	photoURL string, zone *zoneDTO, point *pointDTO,
+	photoURLs []string, zone *zoneDTO, point *pointDTO,
 	myLike, likedMe bool,
 	matchID *uuid.UUID,
 	budget entity.LikeBudget,
 ) profileResponse {
 	p := target.Profile
 	out := profileResponse{
-		UserID:   target.ID,
-		Name:     target.Name,
-		Age:      p.Age,
-		PhotoURL: photoURL,
+		UserID:    target.ID,
+		Name:      target.Name,
+		Age:       p.Age,
+		PhotoURLs: photoURLs,
 
 		Occupation: string(p.Occupation),
 		Schedule:   string(p.Schedule),

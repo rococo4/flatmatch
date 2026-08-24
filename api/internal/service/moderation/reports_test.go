@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -56,10 +57,10 @@ func complainant() entity.User {
 
 func reported() entity.User {
 	return entity.User{
-		ID:       uuid.New(),
-		Name:     "Катя",
-		Profile:  entity.Profile{Age: 24, About: "люблю тишину"},
-		PhotoKey: "photos/katya.jpg",
+		ID:        uuid.New(),
+		Name:      "Катя",
+		Profile:   entity.Profile{Age: 24, About: "люблю тишину"},
+		PhotoKeys: []string{"photos/katya.jpg"},
 	}
 }
 
@@ -78,8 +79,8 @@ func TestReportFiledSendsACardWithTwoVerdicts(t *testing.T) {
 	if card.chatID != testChat {
 		t.Errorf("chat = %d, want the moderation chat %d", card.chatID, testChat)
 	}
-	if card.path != "/photos/"+target.PhotoKey {
-		t.Errorf("photo = %q, want the face of the reported person", card.path)
+	if !slices.Equal(card.paths, []string{"/photos/" + target.PhotoKeys[0]}) {
+		t.Errorf("photos = %v, want the face of the reported person", card.paths)
 	}
 
 	for _, want := range []string{

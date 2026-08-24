@@ -110,6 +110,11 @@ type getUpdatesRequest struct {
 	AllowedUpdates []string `json:"allowed_updates"`
 }
 
+type inputMediaPhoto struct {
+	Type  string `json:"type"`
+	Media string `json:"media"`
+}
+
 func NewClient(token string) *Client {
 	return &Client{
 		token: token,
@@ -169,6 +174,37 @@ func (c *Client) SendPhotoFile(ctx context.Context, chatID int64, path, caption 
 		return 0, err
 	}
 	return sent.MessageID, nil
+}
+
+func (c *Client) SendMediaGroupFiles(ctx context.Context, chatID int64, paths []string) error {
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+
+	media := make([]inputMediaPhoto, 0, len(paths))
+	for i, p := range paths {
+		name := fmt.Sprintf("photo%d", i)
+		if err := attachFile(form, name, p); err != nil {
+			return err
+		}
+		media = append(media, inputMediaPhoto{Type: "photo", Media: "attach://" + name})
+	}
+
+	encoded, err := json.Marshal(media)
+	if err != nil {
+		return fmt.Errorf("encode sendMediaGroup album: %w", err)
+	}
+	for _, f := range [][2]string{
+		{"chat_id", strconv.FormatInt(chatID, 10)},
+		{"media", string(encoded)},
+	} {
+		if err := form.WriteField(f[0], f[1]); err != nil {
+			return fmt.Errorf("build sendMediaGroup request: %w", err)
+		}
+	}
+	if err := form.Close(); err != nil {
+		return fmt.Errorf("build sendMediaGroup request: %w", err)
+	}
+	return c.do(ctx, "sendMediaGroup", form.FormDataContentType(), body.Bytes(), nil)
 }
 
 func (c *Client) EditMessageText(ctx context.Context, chatID int64, messageID int, text string, kb *InlineKeyboard) error {
@@ -252,6 +288,23 @@ func (c *Client) do(ctx context.Context, method, contentType string, body []byte
 	}
 	if err := json.Unmarshal(env.Result, out); err != nil {
 		return fmt.Errorf("decode %s result: %w", method, err)
+	}
+	return nil
+}
+
+func attachFile(form *multipart.Writer, field, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open photo for the album: %w", err)
+	}
+	defer file.Close()
+
+	part, err := form.CreateFormFile(field, filepath.Base(path))
+	if err != nil {
+		return fmt.Errorf("build the album request: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("read photo for the album: %w", err)
 	}
 	return nil
 }

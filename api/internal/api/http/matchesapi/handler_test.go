@@ -118,7 +118,7 @@ func (f *fakeMatches) Delete(_ context.Context, userID, id uuid.UUID) error {
 	return f.err
 }
 
-func (fakePhotos) PhotoURL(entity.User) string { return "" }
+func (fakePhotos) PhotoURLs(entity.User) []string { return nil }
 
 func (fakeDir) Get(string) (zones.Zone, bool) { return zones.Zone{}, false }
 

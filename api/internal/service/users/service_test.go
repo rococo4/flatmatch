@@ -24,7 +24,8 @@ type fakeRepo struct {
 	sourceCall bool
 
 	patched    entity.ProfilePatch
-	photoKey   string
+	photoKeys  []string
+	photoCall  bool
 	setStatus  entity.Status
 	statusCall bool
 }
@@ -43,9 +44,14 @@ func (f *fakeRepo) UpdateProfile(_ context.Context, _ uuid.UUID, p entity.Profil
 	return f.user, f.err
 }
 
-func (f *fakeRepo) SetPhoto(_ context.Context, _ uuid.UUID, key string) (entity.User, error) {
-	f.photoKey = key
-	return f.user, f.err
+func (f *fakeRepo) SetPhotos(_ context.Context, _ uuid.UUID, keys []string) (entity.User, error) {
+	f.photoCall = true
+	f.photoKeys = keys
+
+	updated := f.user
+	updated.PhotoKeys = keys
+	updated.PhotoStatus = entity.ModerationPending
+	return updated, f.err
 }
 
 func (f *fakeRepo) SetStatus(_ context.Context, _ uuid.UUID, s entity.Status) (entity.User, error) {
@@ -62,14 +68,22 @@ func (f *fakeRepo) SetSourceIfEmpty(_ context.Context, _ uuid.UUID, source strin
 
 var jpegFile = []byte("\xff\xd8\xff\xe0")
 
-type fakeStore struct{ put string }
+type fakeStore struct {
+	put     []string
+	deleted []string
+}
 
 func (f *fakeStore) Put(_ context.Context, key string, _ io.Reader, _ string) error {
-	f.put = key
+	f.put = append(f.put, key)
 	return nil
 }
-func (f *fakeStore) Delete(context.Context, string) error { return nil }
-func (f *fakeStore) URL(key string) string                { return "/media/" + key }
+
+func (f *fakeStore) Delete(_ context.Context, key string) error {
+	f.deleted = append(f.deleted, key)
+	return nil
+}
+
+func (f *fakeStore) URL(key string) string { return "/media/" + key }
 
 type fakeNotifier struct {
 	queued []entity.User
@@ -207,9 +221,9 @@ func TestSubmitNamesEverythingStillMissing(t *testing.T) {
 
 func TestSubmitSendsACompleteDraftToModeration(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{
-		Status:   entity.StatusDraft,
-		Profile:  completeProfile(),
-		PhotoKey: "photos/x.jpg",
+		Status:    entity.StatusDraft,
+		Profile:   completeProfile(),
+		PhotoKeys: []string{"photos/x.jpg"},
 	}}
 
 	if _, err := newService(repo).Submit(t.Context(), uuid.New()); err != nil {
@@ -222,9 +236,9 @@ func TestSubmitSendsACompleteDraftToModeration(t *testing.T) {
 
 func TestSubmitLeavesAnApprovedAccountActive(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{
-		Status:   entity.StatusActive,
-		Profile:  completeProfile(),
-		PhotoKey: "photos/x.jpg",
+		Status:    entity.StatusActive,
+		Profile:   completeProfile(),
+		PhotoKeys: []string{"photos/x.jpg"},
 	}}
 
 	user, err := newService(repo).Submit(t.Context(), uuid.New())
@@ -243,7 +257,7 @@ func TestEditsOfAnApprovedAccountReachModerationOnSubmitOnly(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{
 		Status:      entity.StatusActive,
 		Profile:     completeProfile(),
-		PhotoKey:    "photos/x.jpg",
+		PhotoKeys:   []string{"photos/x.jpg"},
 		PhotoStatus: entity.ModerationPending,
 		AboutStatus: entity.ModerationPending,
 	}}
@@ -253,8 +267,8 @@ func TestEditsOfAnApprovedAccountReachModerationOnSubmitOnly(t *testing.T) {
 	if _, err := svc.UpdateProfile(t.Context(), uuid.New(), entity.ProfilePatch{About: &about}); err != nil {
 		t.Fatalf("UpdateProfile() failed: %v", err)
 	}
-	if _, err := svc.SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
-		t.Fatalf("SetPhoto() failed: %v", err)
+	if _, err := svc.AddPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("AddPhoto() failed: %v", err)
 	}
 	if len(notifier.queued) != 0 {
 		t.Fatalf("moderation got %d cards before the button, want none", len(notifier.queued))
@@ -275,7 +289,7 @@ func TestSubmitOfAnUntouchedApprovedAccountIsSilent(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{
 		Status:      entity.StatusActive,
 		Profile:     completeProfile(),
-		PhotoKey:    "photos/x.jpg",
+		PhotoKeys:   []string{"photos/x.jpg"},
 		PhotoStatus: entity.ModerationOK,
 		AboutStatus: entity.ModerationOK,
 	}}
@@ -289,59 +303,221 @@ func TestSubmitOfAnUntouchedApprovedAccountIsSilent(t *testing.T) {
 	}
 }
 
-func TestSetPhotoKeepsOneObjectPerUser(t *testing.T) {
+func TestAddPhotoAppendsAKeyOfItsOwn(t *testing.T) {
 	store := &fakeStore{}
-	repo := &fakeRepo{}
+	repo := &fakeRepo{user: entity.User{
+		Status:      entity.StatusDraft,
+		PhotoKeys:   []string{"photos/first.jpg"},
+		PhotoStatus: entity.ModerationOK,
+	}}
 	id := uuid.New()
 
-	if _, err := New(repo, store, nil).SetPhoto(t.Context(), id, bytes.NewReader(jpegFile)); err != nil {
-		t.Fatalf("SetPhoto() failed: %v", err)
+	updated, err := New(repo, store, nil).AddPhoto(t.Context(), id, bytes.NewReader(jpegFile))
+	if err != nil {
+		t.Fatalf("AddPhoto() failed: %v", err)
 	}
 
-	want := "photos/" + id.String() + ".jpg"
-	if store.put != want {
-		t.Errorf("stored under %q, want %q", store.put, want)
+	if len(store.put) != 1 {
+		t.Fatalf("store got %v, want exactly one file", store.put)
 	}
-	if repo.photoKey != want {
-		t.Errorf("recorded key %q, want %q", repo.photoKey, want)
+	key := store.put[0]
+	if !strings.HasPrefix(key, "photos/"+id.String()+"-") || !strings.HasSuffix(key, ".jpg") {
+		t.Errorf("stored under %q, want photos/<user>-<hex>.jpg", key)
+	}
+	if !slices.Equal(repo.photoKeys, []string{"photos/first.jpg", key}) {
+		t.Errorf("recorded %v, want the new key appended to the end", repo.photoKeys)
+	}
+	if updated.PhotoStatus != entity.ModerationPending {
+		t.Errorf("photo status = %q, want the whole set back on review", updated.PhotoStatus)
 	}
 }
 
-func TestSetPhotoRefusesWhatIsNotAnImage(t *testing.T) {
+func TestAddPhotoStopsAtTheFifth(t *testing.T) {
+	store := &fakeStore{}
+	keys := []string{"photos/1.jpg", "photos/2.jpg", "photos/3.jpg", "photos/4.jpg", "photos/5.jpg"}
+	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, PhotoKeys: keys}}
+
+	_, err := New(repo, store, nil).AddPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile))
+
+	var fields *entity.FieldsError
+	if !errors.As(err, &fields) || !errors.Is(err, ErrPhotoLimit) {
+		t.Fatalf("AddPhoto() error = %v, want ErrPhotoLimit", err)
+	}
+	if !slices.Equal(fields.Fields, []string{"photo"}) {
+		t.Errorf("fields = %v, want [photo]", fields.Fields)
+	}
+	if len(store.put) != 0 || repo.photoCall {
+		t.Errorf("a sixth photo reached the store %v or the row %v", store.put, repo.photoCall)
+	}
+}
+
+func TestAddPhotoRefusesWhatIsNotAnImage(t *testing.T) {
 	store := &fakeStore{}
 	repo := &fakeRepo{}
 
-	_, err := New(repo, store, nil).SetPhoto(t.Context(), uuid.New(), strings.NewReader("PDF-1.4 или что угодно"))
+	_, err := New(repo, store, nil).AddPhoto(t.Context(), uuid.New(), strings.NewReader("PDF-1.4 или что угодно"))
 	if !errors.Is(err, ErrUnsupportedImage) {
-		t.Fatalf("SetPhoto() error = %v, want ErrUnsupportedImage", err)
+		t.Fatalf("AddPhoto() error = %v, want ErrUnsupportedImage", err)
 	}
-	if store.put != "" {
-		t.Errorf("stored %q, want nothing written", store.put)
+	if len(store.put) != 0 {
+		t.Errorf("stored %v, want nothing written", store.put)
 	}
-	if repo.photoKey != "" {
-		t.Errorf("recorded key %q, want the row left alone", repo.photoKey)
+	if repo.photoCall {
+		t.Error("the row was touched despite an unsupported file")
 	}
 }
 
-func TestPhotoURLHidesAnUnreviewedPhoto(t *testing.T) {
-	svc := newService(&fakeRepo{})
-	user := entity.User{PhotoKey: "photos/x.jpg", PhotoStatus: entity.ModerationPending}
+func TestRemovePhotoDropsTheChosenOne(t *testing.T) {
+	store := &fakeStore{}
+	repo := &fakeRepo{user: entity.User{
+		Status:      entity.StatusActive,
+		PhotoKeys:   []string{"photos/a.jpg", "photos/b.jpg"},
+		PhotoStatus: entity.ModerationOK,
+	}}
 
-	if got := svc.PhotoURL(user); got != "" {
-		t.Errorf("PhotoURL() = %q, want empty until a moderator has looked", got)
+	updated, err := New(repo, store, nil).RemovePhoto(t.Context(), uuid.New(), 0)
+	if err != nil {
+		t.Fatalf("RemovePhoto() failed: %v", err)
+	}
+	if !slices.Equal(repo.photoKeys, []string{"photos/b.jpg"}) {
+		t.Errorf("recorded %v, want [photos/b.jpg]", repo.photoKeys)
+	}
+	if !slices.Equal(store.deleted, []string{"photos/a.jpg"}) {
+		t.Errorf("deleted %v, want the dropped file gone", store.deleted)
+	}
+	if updated.PhotoStatus != entity.ModerationPending {
+		t.Errorf("photo status = %q, want the whole set back on review", updated.PhotoStatus)
+	}
+}
+
+func TestRemovePhotoKeepsTheLastOneOfASubmittedProfile(t *testing.T) {
+	submitted := []entity.User{
+		{Status: entity.StatusPending, PhotoKeys: []string{"photos/a.jpg"}},
+		{Status: entity.StatusActive, PhotoKeys: []string{"photos/a.jpg"}, PhotoStatus: entity.ModerationOK},
+		{Status: entity.StatusDraft, PhotoKeys: []string{"photos/a.jpg"}, PhotoStatus: entity.ModerationRejected},
 	}
 
-	if got := svc.OwnPhotoURL(user); got == "" {
-		t.Error("OwnPhotoURL() is empty, the owner must see their own upload")
+	for _, user := range submitted {
+		repo := &fakeRepo{user: user}
+
+		_, err := newService(repo).RemovePhoto(t.Context(), uuid.New(), 0)
+
+		var fields *entity.FieldsError
+		if !errors.As(err, &fields) || !errors.Is(err, ErrLastPhoto) {
+			t.Fatalf("%s/%s: RemovePhoto() error = %v, want ErrLastPhoto",
+				user.Status, user.PhotoStatus, err)
+		}
+		if !slices.Equal(fields.Fields, []string{"photo"}) {
+			t.Errorf("fields = %v, want [photo]", fields.Fields)
+		}
+		if repo.photoCall {
+			t.Error("the row was touched despite the refusal")
+		}
+	}
+}
+
+func TestRemovePhotoLetsAFreshDraftEmptyTheSet(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Status:      entity.StatusDraft,
+		PhotoKeys:   []string{"photos/a.jpg"},
+		PhotoStatus: entity.ModerationPending,
+		AboutStatus: entity.ModerationPending,
+	}}
+
+	if _, err := newService(repo).RemovePhoto(t.Context(), uuid.New(), 0); err != nil {
+		t.Fatalf("RemovePhoto() failed: %v", err)
+	}
+	if len(repo.photoKeys) != 0 {
+		t.Errorf("recorded %v, want an empty set", repo.photoKeys)
+	}
+}
+
+func TestRemovePhotoRefusesAnIndexOutsideTheSet(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Status:    entity.StatusActive,
+		PhotoKeys: []string{"photos/a.jpg", "photos/b.jpg"},
+	}}
+
+	_, err := newService(repo).RemovePhoto(t.Context(), uuid.New(), 5)
+
+	var fields *entity.FieldsError
+	if !errors.As(err, &fields) || !errors.Is(err, ErrInvalidPhotoIndex) {
+		t.Fatalf("RemovePhoto() error = %v, want ErrInvalidPhotoIndex", err)
+	}
+	if !slices.Equal(fields.Fields, []string{"index"}) {
+		t.Errorf("fields = %v, want [index]", fields.Fields)
+	}
+	if repo.photoCall {
+		t.Error("the row was touched despite an index outside the set")
+	}
+}
+
+func TestReorderPhotosStoresTheNewOrder(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Status:      entity.StatusActive,
+		PhotoKeys:   []string{"photos/a.jpg", "photos/b.jpg", "photos/c.jpg"},
+		PhotoStatus: entity.ModerationOK,
+	}}
+
+	updated, err := newService(repo).ReorderPhotos(t.Context(), uuid.New(), []int{2, 0, 1})
+	if err != nil {
+		t.Fatalf("ReorderPhotos() failed: %v", err)
+	}
+	if !slices.Equal(repo.photoKeys, []string{"photos/c.jpg", "photos/a.jpg", "photos/b.jpg"}) {
+		t.Errorf("recorded %v, want [c a b]", repo.photoKeys)
+	}
+	if updated.PhotoStatus != entity.ModerationPending {
+		t.Errorf("photo status = %q, want the whole set back on review", updated.PhotoStatus)
+	}
+}
+
+func TestReorderPhotosRefusesAnythingButAPermutation(t *testing.T) {
+	repo := &fakeRepo{user: entity.User{
+		Status:    entity.StatusActive,
+		PhotoKeys: []string{"photos/a.jpg", "photos/b.jpg"},
+	}}
+
+	_, err := newService(repo).ReorderPhotos(t.Context(), uuid.New(), []int{0, 0})
+
+	var fields *entity.FieldsError
+	if !errors.As(err, &fields) || !errors.Is(err, ErrInvalidPhotoOrder) {
+		t.Fatalf("ReorderPhotos() error = %v, want ErrInvalidPhotoOrder", err)
+	}
+	if !slices.Equal(fields.Fields, []string{"order"}) {
+		t.Errorf("fields = %v, want [order]", fields.Fields)
+	}
+	if repo.photoCall {
+		t.Error("the row was touched despite a broken order")
+	}
+}
+
+func TestPhotoURLsHideAnUnreviewedSet(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	user := entity.User{
+		PhotoKeys:   []string{"photos/x.jpg", "photos/y.jpg"},
+		PhotoStatus: entity.ModerationPending,
+	}
+
+	if got := svc.PhotoURLs(user); len(got) != 0 {
+		t.Errorf("PhotoURLs() = %v, want empty until a moderator has looked", got)
+	}
+
+	if got := svc.OwnPhotoURLs(user); !slices.Equal(got, []string{"/media/photos/x.jpg", "/media/photos/y.jpg"}) {
+		t.Errorf("OwnPhotoURLs() = %v, the owner must see their own uploads in order", got)
+	}
+
+	user.PhotoStatus = entity.ModerationOK
+	if got := svc.PhotoURLs(user); !slices.Equal(got, []string{"/media/photos/x.jpg", "/media/photos/y.jpg"}) {
+		t.Errorf("PhotoURLs() = %v, want the approved set in order", got)
 	}
 }
 
 func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{
-		Name:     "Катя",
-		Status:   entity.StatusDraft,
-		Profile:  completeProfile(),
-		PhotoKey: "photos/x.jpg",
+		Name:      "Катя",
+		Status:    entity.StatusDraft,
+		Profile:   completeProfile(),
+		PhotoKeys: []string{"photos/x.jpg"},
 	}}
 	svc, notifier := newModeratedService(repo)
 
@@ -364,9 +540,9 @@ func TestSubmitPutsTheQuestionnaireInFrontOfTheModerator(t *testing.T) {
 
 func TestResubmitDoesNotDuplicateTheCard(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{
-		Status:   entity.StatusPending,
-		Profile:  completeProfile(),
-		PhotoKey: "photos/x.jpg",
+		Status:    entity.StatusPending,
+		Profile:   completeProfile(),
+		PhotoKeys: []string{"photos/x.jpg"},
 	}}
 	svc, notifier := newModeratedService(repo)
 
@@ -382,8 +558,8 @@ func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{Status: entity.StatusDraft}}
 	svc, notifier := newModeratedService(repo)
 
-	if _, err := svc.SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
-		t.Fatalf("SetPhoto() failed: %v", err)
+	if _, err := svc.AddPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("AddPhoto() failed: %v", err)
 	}
 	if len(notifier.queued) != 0 {
 		t.Errorf("queued %d questionnaires, want none", len(notifier.queued))
@@ -393,8 +569,8 @@ func TestPhotoOfAnUnfinishedProfileWaitsForTheSubmit(t *testing.T) {
 func TestAStandWithoutABotStillWorks(t *testing.T) {
 	repo := &fakeRepo{user: entity.User{Status: entity.StatusActive, Profile: completeProfile()}}
 
-	if _, err := newService(repo).SetPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
-		t.Fatalf("SetPhoto() failed without a moderation chat: %v", err)
+	if _, err := newService(repo).AddPhoto(t.Context(), uuid.New(), bytes.NewReader(jpegFile)); err != nil {
+		t.Fatalf("AddPhoto() failed without a moderation chat: %v", err)
 	}
 }
 

@@ -34,6 +34,7 @@ const homeForm = `{"type":"intent_home","stage":"live","zone_id":"st-sokol",
 
 type fakePoints struct {
 	created entity.Point
+	homeIn  points.CreateIntentHome
 	err     error
 
 	card    pointsrepo.FeedPoint
@@ -228,7 +229,7 @@ func TestPoolMembersCarryNoContacts(t *testing.T) {
 			User: entity.User{
 				ID: uuid.New(), TelegramID: 777000123, Name: "Катя", Username: "katya",
 				Profile:     entity.Profile{Age: 27, Schedule: entity.ScheduleOwl},
-				PhotoKey:    "users/katya.jpg",
+				PhotoKeys:   []string{"users/katya.jpg"},
 				PhotoStatus: entity.ModerationOK,
 			},
 			Search: &entity.Search{SearchParams: entity.SearchParams{
@@ -300,7 +301,8 @@ func (f *fakePoints) CreateFlat(context.Context, uuid.UUID, points.CreateFlat) (
 	return f.created, f.err
 }
 
-func (f *fakePoints) CreateIntentHome(context.Context, uuid.UUID, points.CreateIntentHome) (entity.Point, error) {
+func (f *fakePoints) CreateIntentHome(_ context.Context, _ uuid.UUID, in points.CreateIntentHome) (entity.Point, error) {
+	f.homeIn = in
 	return f.created, f.err
 }
 
@@ -592,5 +594,29 @@ func TestRestoreRefusesAnActivePoint(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"point_not_paused"`) ||
 		!strings.Contains(rec.Body.String(), "Квартира и так активна") {
 		t.Errorf("body = %s, want point_not_paused with its message", rec.Body)
+	}
+}
+
+func TestIntentHomeFormCarriesTheDescription(t *testing.T) {
+	const form = `{"type":"intent_home","stage":"live","zone_id":"st-sokol",
+		"price_share":40000,"photo_keys":["points/room.jpg"],
+		"description":"Светлая комната с балконом"}`
+
+	service := &fakePoints{created: entity.Point{
+		ID: uuid.New(), Type: entity.PointIntentHome, Status: entity.PointPending,
+		Stage: pointer.To(entity.StageLive), ZoneID: station,
+		Description: pointer.To("Светлая комната с балконом"),
+	}}
+
+	rec := do(t, service, uuid.New(), http.MethodPost, "/points", form)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusCreated, rec.Body)
+	}
+	if service.homeIn.Description == nil || *service.homeIn.Description != "Светлая комната с балконом" {
+		t.Errorf("service saw description %v, want it passed through", service.homeIn.Description)
+	}
+	if !strings.Contains(rec.Body.String(), `"description":"Светлая комната с балконом"`) {
+		t.Errorf("body = %s, want the description back on the card", rec.Body)
 	}
 }

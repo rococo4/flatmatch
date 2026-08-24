@@ -12,7 +12,7 @@ import (
 func seedSubmitted(t *testing.T, repo *Repo) entity.User {
 	t.Helper()
 	user := seedUser(t, repo)
-	user, err := repo.SetPhoto(t.Context(), user.ID, "photos/test.jpg")
+	user, err := repo.SetPhotos(t.Context(), user.ID, []string{"photos/test.jpg"})
 	if err != nil {
 		t.Fatalf("seed photo: %v", err)
 	}

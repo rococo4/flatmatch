@@ -467,6 +467,9 @@ func TestCreateIntentHomeValidatesTheStage(t *testing.T) {
 		}, []string{"move_in"}},
 		{"share out of range", func(h *CreateIntentHome) { h.PriceShare = 900000 }, []string{"price_share"}},
 		{"no room photo", func(h *CreateIntentHome) { h.PhotoKeys = nil }, []string{"photo_keys"}},
+		{"description past the cap", func(h *CreateIntentHome) {
+			h.Description = pointer.To(strings.Repeat("я", entity.PointDescriptionMaxLen+1))
+		}, []string{"description"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -920,5 +923,35 @@ func TestRestorePropagatesTheRepositoryError(t *testing.T) {
 	}
 	if repo.cardCalls != 0 {
 		t.Errorf("CardByID called %d times after a failed restore, want 0", repo.cardCalls)
+	}
+}
+
+func TestCreateIntentHomeCarriesTheRoomDescription(t *testing.T) {
+	repo := &fakeRepo{}
+	s := newService(t, repo, &fakeSearches{}, nil)
+	in := validHome()
+	in.Description = pointer.To("  Светлая комната с балконом, окна во двор.  ")
+
+	if _, err := s.CreateIntentHome(t.Context(), uuid.New(), in); err != nil {
+		t.Fatalf("CreateIntentHome() failed: %v", err)
+	}
+	if repo.createIn.Description == nil ||
+		*repo.createIn.Description != "Светлая комната с балконом, окна во двор." {
+		t.Errorf("Description = %v, want it trimmed and stored", repo.createIn.Description)
+	}
+
+	full := validHome()
+	full.Description = pointer.To(strings.Repeat("я", entity.PointDescriptionMaxLen))
+	if _, err := s.CreateIntentHome(t.Context(), uuid.New(), full); err != nil {
+		t.Errorf("a description exactly at the cap was refused: %v", err)
+	}
+
+	blank := validHome()
+	blank.Description = pointer.To("   ")
+	if _, err := s.CreateIntentHome(t.Context(), uuid.New(), blank); err != nil {
+		t.Fatalf("CreateIntentHome() with a blank description failed: %v", err)
+	}
+	if repo.createIn.Description != nil {
+		t.Errorf("Description = %v, want a blank one dropped", repo.createIn.Description)
 	}
 }

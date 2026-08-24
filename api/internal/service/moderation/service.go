@@ -14,7 +14,7 @@ import (
 )
 
 type Sender interface {
-	SendModerationPhoto(ctx context.Context, chatID int64, photoPath, caption string, buttons [][2]string) (int, error)
+	SendModerationPhotos(ctx context.Context, chatID int64, photoPaths []string, caption string, buttons [][2]string) (int, error)
 }
 
 type UsersMod interface {
@@ -69,7 +69,7 @@ func New(bot Sender, chatID int64, users UsersMod, points PointsMod, reports Rep
 }
 
 func (s *Service) UserPending(ctx context.Context, u entity.User) {
-	s.send(ctx, subjectUser, u.ID, u.PhotoKey, userCaption(u), [][2]string{
+	s.send(ctx, subjectUser, u.ID, u.PhotoKeys, userCaption(u), [][2]string{
 		{"ок", callback(subjectUser, opOK, u.ID)},
 		{"фото не ок", callback(subjectUser, opPhoto, u.ID)},
 		{"текст не ок", callback(subjectUser, opAbout, u.ID)},
@@ -77,14 +77,14 @@ func (s *Service) UserPending(ctx context.Context, u entity.User) {
 }
 
 func (s *Service) PointPending(ctx context.Context, p entity.Point) {
-	s.send(ctx, subjectPoint, p.ID, coverPhoto(p), s.pointCaption(p), [][2]string{
+	s.send(ctx, subjectPoint, p.ID, p.PhotoKeys, s.pointCaption(p), [][2]string{
 		{"ок", callback(subjectPoint, opOK, p.ID)},
 		{"отклонить", callback(subjectPoint, opNo, p.ID)},
 	})
 }
 
 func (s *Service) ReportFiled(ctx context.Context, r entity.Report, reporter, target entity.User) {
-	s.send(ctx, subjectReport, r.ID, target.PhotoKey, s.reportCaption(ctx, r, reporter, target), [][2]string{
+	s.send(ctx, subjectReport, r.ID, target.PhotoKeys, s.reportCaption(ctx, r, reporter, target), [][2]string{
 		{"Забанить", callback(subjectReport, opBan, r.ID)},
 		{"Пропустить", callback(subjectReport, opSkip, r.ID)},
 	})
@@ -131,23 +131,28 @@ func (s *Service) resendReport(ctx context.Context, r entity.Report) {
 	s.ReportFiled(ctx, r, reporter, target)
 }
 
-func (s *Service) send(ctx context.Context, subject string, id uuid.UUID, photoKey, caption string, buttons [][2]string) {
+func (s *Service) send(ctx context.Context, subject string, id uuid.UUID, photoKeys []string, caption string, buttons [][2]string) {
 	log := logctx.From(ctx).With("subject", subject, "id", id)
 	if s.chatID == 0 {
 		log.Warn("moderation chat is not configured, the queue only piles up in the database")
 		return
 	}
-	if photoKey == "" {
+
+	paths := make([]string, 0, len(photoKeys))
+	for _, key := range photoKeys {
+		path, err := s.photos.Path(key)
+		if err != nil {
+			log.Warn("resolve photo for moderation", "key", key, "error", err)
+			continue
+		}
+		paths = append(paths, path)
+	}
+	if len(paths) == 0 {
 		log.Warn("nothing to show the moderator: no photo")
 		return
 	}
 
-	path, err := s.photos.Path(photoKey)
-	if err != nil {
-		log.Warn("resolve photo for moderation", "error", err)
-		return
-	}
-	if _, err := s.bot.SendModerationPhoto(ctx, s.chatID, path, caption, buttons); err != nil {
+	if _, err := s.bot.SendModerationPhotos(ctx, s.chatID, paths, caption, buttons); err != nil {
 		log.Warn("send to the moderation chat", "error", err)
 	}
 }
@@ -159,8 +164,12 @@ func (s *Service) pointCaption(p entity.Point) string {
 	}
 
 	if p.Type == entity.PointIntentHome {
-		return fmt.Sprintf("%s\nдоля %d ₽ · м. %s",
+		caption := fmt.Sprintf("%s\nдоля %d ₽ · м. %s",
 			stageLabel(p.Stage), pointer.Get(p.PriceShare), station)
+		if p.Description != nil {
+			caption += "\n" + *p.Description
+		}
+		return caption
 	}
 
 	caption := fmt.Sprintf("%s\n%d ₽ · м. %s",
@@ -256,11 +265,4 @@ func stageLabel(stage *entity.PointStage) string {
 		return "заезжает · ищет со-съёмщика со старта"
 	}
 	return "живёт здесь"
-}
-
-func coverPhoto(p entity.Point) string {
-	if len(p.PhotoKeys) == 0 {
-		return ""
-	}
-	return p.PhotoKeys[0]
 }

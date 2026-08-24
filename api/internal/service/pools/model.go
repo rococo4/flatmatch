@@ -29,7 +29,7 @@ type PhotoURLs interface {
 
 type Person struct {
 	User          entity.User
-	PhotoURL      string
+	PhotoURLs     []string
 	SharedAnswers int
 	Chips         []Chip
 	Params        entity.SearchParams

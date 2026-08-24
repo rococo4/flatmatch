@@ -45,13 +45,13 @@ type pointDTO struct {
 }
 
 type incomingDTO struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Name     string    `json:"name"`
-	Age      int       `json:"age"`
-	PhotoURL string    `json:"photo_url"`
-	Schedule string    `json:"schedule"`
-	Smoking  string    `json:"smoking"`
-	PetsOwn  string    `json:"pets_own"`
+	UserID    uuid.UUID `json:"user_id"`
+	Name      string    `json:"name"`
+	Age       int       `json:"age"`
+	PhotoURLs []string  `json:"photo_urls"`
+	Schedule  string    `json:"schedule"`
+	Smoking   string    `json:"smoking"`
+	PetsOwn   string    `json:"pets_own"`
 
 	Zone         *zoneDTO  `json:"zone,omitempty"`
 	Point        *pointDTO `json:"point,omitempty"`
@@ -71,15 +71,15 @@ func toLikeResponse(res entity.LikeResult) likeResponse {
 	return out
 }
 
-func toIncoming(like likesrepo.IncomingLike, photoURL string, zone *zoneDTO, point *pointDTO) incomingDTO {
+func toIncoming(like likesrepo.IncomingLike, photoURLs []string, zone *zoneDTO, point *pointDTO) incomingDTO {
 	return incomingDTO{
-		UserID:   like.From.ID,
-		Name:     like.From.Name,
-		Age:      like.From.Profile.Age,
-		PhotoURL: photoURL,
-		Schedule: string(like.From.Profile.Schedule),
-		Smoking:  string(like.From.Profile.Smoking),
-		PetsOwn:  string(like.From.Profile.PetsOwn),
+		UserID:    like.From.ID,
+		Name:      like.From.Name,
+		Age:       like.From.Profile.Age,
+		PhotoURLs: photoURLs,
+		Schedule:  string(like.From.Profile.Schedule),
+		Smoking:   string(like.From.Profile.Smoking),
+		PetsOwn:   string(like.From.Profile.PetsOwn),
 
 		Zone:         zone,
 		Point:        point,

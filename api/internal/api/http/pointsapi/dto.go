@@ -43,6 +43,7 @@ type createRequest struct {
 	Utilities    *string  `json:"utilities"`
 	Restrictions []string `json:"restrictions"`
 	PhotoKeys    []string `json:"photo_keys"`
+	Description  *string  `json:"description"`
 	MoveIn       *string  `json:"move_in"`
 	Deposit      *int     `json:"deposit"`
 }
@@ -62,10 +63,11 @@ type Card struct {
 	Utilities    string   `json:"utilities,omitempty"`
 	Restrictions []string `json:"restrictions,omitempty"`
 
-	PhotoURLs []string `json:"photo_urls"`
-	URL       string   `json:"url,omitempty"`
-	MoveIn    string   `json:"move_in,omitempty"`
-	Deposit   *int     `json:"deposit,omitempty"`
+	PhotoURLs   []string `json:"photo_urls"`
+	Description string   `json:"description,omitempty"`
+	URL         string   `json:"url,omitempty"`
+	MoveIn      string   `json:"move_in,omitempty"`
+	Deposit     *int     `json:"deposit,omitempty"`
 
 	CreatedDaysAgo int        `json:"created_days_ago"`
 	LastSeenAlive  time.Time  `json:"last_seen_alive"`
@@ -85,7 +87,7 @@ type authorDTO struct {
 	UserID     uuid.UUID `json:"user_id"`
 	Name       string    `json:"name"`
 	Age        int       `json:"age"`
-	PhotoURL   string    `json:"photo_url"`
+	PhotoURLs  []string  `json:"photo_urls"`
 	Occupation string    `json:"occupation"`
 	Schedule   string    `json:"schedule"`
 	Smoking    string    `json:"smoking"`
@@ -111,7 +113,7 @@ type memberDTO struct {
 	UserID        uuid.UUID  `json:"user_id"`
 	Name          string     `json:"name"`
 	Age           int        `json:"age"`
-	PhotoURL      string     `json:"photo_url"`
+	PhotoURLs     []string   `json:"photo_urls"`
 	Schedule      string     `json:"schedule"`
 	Smoking       string     `json:"smoking"`
 	PetsOwn       string     `json:"pets_own"`
@@ -168,6 +170,7 @@ func (b createRequest) toIntentHome() (points.CreateIntentHome, error) {
 		Isolated:     b.Isolated,
 		Restrictions: parseRestrictions(b.Restrictions),
 		PhotoKeys:    b.PhotoKeys,
+		Description:  b.Description,
 		Deposit:      b.Deposit,
 	}
 	if b.MoveIn != nil && *b.MoveIn != "" {
@@ -249,6 +252,9 @@ func toCard(fp pointsrepo.FeedPoint, photos Photos, zone zoneDTO, viewerID uuid.
 		out.Restrictions = append(out.Restrictions, string(r))
 	}
 
+	if p.Description != nil {
+		out.Description = *p.Description
+	}
 	if p.URLNorm != nil {
 		out.URL = *p.URLNorm
 	}
@@ -269,7 +275,7 @@ func toAuthor(u entity.User, photos Photos) authorDTO {
 		UserID:     u.ID,
 		Name:       u.Name,
 		Age:        u.Profile.Age,
-		PhotoURL:   personPhoto(u, photos),
+		PhotoURLs:  personPhotos(u, photos),
 		Occupation: string(u.Profile.Occupation),
 		Schedule:   string(u.Profile.Schedule),
 		Smoking:    string(u.Profile.Smoking),
@@ -283,7 +289,7 @@ func toMember(m points.MemberView, photos Photos, zone *zoneDTO) memberDTO {
 		UserID:        m.User.ID,
 		Name:          m.User.Name,
 		Age:           m.User.Profile.Age,
-		PhotoURL:      personPhoto(m.User, photos),
+		PhotoURLs:     personPhotos(m.User, photos),
 		Schedule:      string(m.User.Profile.Schedule),
 		Smoking:       string(m.User.Profile.Smoking),
 		PetsOwn:       string(m.User.Profile.PetsOwn),
@@ -325,11 +331,11 @@ func toZoneDTO(z zones.Zone) zoneDTO {
 	return zoneDTO{ID: z.ID, Name: z.Name, NameIn: z.NameIn, NameGen: z.NameGen}
 }
 
-func personPhoto(u entity.User, photos Photos) string {
+func personPhotos(u entity.User, photos Photos) []string {
 	if !u.PhotoApproved() {
-		return ""
+		return []string{}
 	}
-	return photos.URL(u.PhotoKey)
+	return photoURLs(u.PhotoKeys, photos)
 }
 
 func daysAgo(t time.Time) int {

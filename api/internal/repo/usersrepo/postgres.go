@@ -100,16 +100,16 @@ func (r *Repo) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Profile
 	return user, nil
 }
 
-func (r *Repo) SetPhoto(ctx context.Context, id uuid.UUID, key string) (entity.User, error) {
+func (r *Repo) SetPhotos(ctx context.Context, id uuid.UUID, keys []string) (entity.User, error) {
 	const query = `
 		UPDATE users
-		SET photo_key = $2, photo_status = 'pending'
+		SET photo_keys = COALESCE($2::text[], '{}'), photo_status = 'pending'
 		WHERE id = $1
 		RETURNING ` + columns
 
-	user, err := r.one(ctx, query, id, key)
+	user, err := r.one(ctx, query, id, keys)
 	if err != nil {
-		return entity.User{}, fmt.Errorf("set photo of user %s: %w", id, err)
+		return entity.User{}, fmt.Errorf("set photos of user %s: %w", id, err)
 	}
 	return user, nil
 }

@@ -29,7 +29,7 @@ type ownProfile struct {
 	Expenses   entity.Expenses   `json:"expenses,omitempty"`
 	About      string            `json:"about,omitempty"`
 
-	PhotoURL    string                  `json:"photo_url,omitempty"`
+	PhotoURLs   []string                `json:"photo_urls"`
 	PhotoStatus entity.ModerationStatus `json:"photo_status"`
 	AboutStatus entity.ModerationStatus `json:"about_status"`
 
@@ -42,6 +42,10 @@ type ownProfile struct {
 
 type sourceRequest struct {
 	Source string `json:"source"`
+}
+
+type orderRequest struct {
+	Order []int `json:"order"`
 }
 
 type patchRequest struct {
@@ -63,7 +67,7 @@ type patchRequest struct {
 	OnboardingStep *int `json:"onboarding_step"`
 }
 
-func toOwnProfile(u entity.User, photoURL, botUsername string) ownProfile {
+func toOwnProfile(u entity.User, photoURLs []string, botUsername string) ownProfile {
 	return ownProfile{
 		ID:         u.ID.String(),
 		TelegramID: u.TelegramID,
@@ -85,7 +89,7 @@ func toOwnProfile(u entity.User, photoURL, botUsername string) ownProfile {
 		Expenses:   u.Profile.Expenses,
 		About:      u.Profile.About,
 
-		PhotoURL:    photoURL,
+		PhotoURLs:   photoURLs,
 		PhotoStatus: u.PhotoStatus,
 		AboutStatus: u.AboutStatus,
 

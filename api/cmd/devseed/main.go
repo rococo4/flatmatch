@@ -258,7 +258,7 @@ func upsertPeople(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, error) {
 	const query = `
 		INSERT INTO users (tg_id, name, tg_username, age, gender, gender_pref,
 			occupation, schedule, smoking, pets_own, pets_ok, noise, guests,
-			cleaning, alcohol, expenses, about, photo_key,
+			cleaning, alcohol, expenses, about, photo_keys,
 			photo_status, about_status, status, onboarding_step, last_seen)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
 			$15, $16, $17, $18, 'ok', 'ok', 'active', $19, now())
@@ -271,7 +271,7 @@ func upsertPeople(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, error) {
 			noise = EXCLUDED.noise, guests = EXCLUDED.guests,
 			cleaning = EXCLUDED.cleaning, alcohol = EXCLUDED.alcohol,
 			expenses = EXCLUDED.expenses, about = EXCLUDED.about,
-			photo_key = EXCLUDED.photo_key, photo_status = 'ok',
+			photo_keys = EXCLUDED.photo_keys, photo_status = 'ok',
 			about_status = 'ok', status = 'active',
 			onboarding_step = EXCLUDED.onboarding_step, last_seen = now()
 		RETURNING id`
@@ -287,7 +287,7 @@ func upsertPeople(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, error) {
 			string(profile.Occupation), string(profile.Schedule), string(profile.Smoking),
 			string(profile.PetsOwn), string(profile.PetsOK), string(profile.Noise),
 			string(profile.Guests), string(profile.Cleaning), string(profile.Alcohol),
-			string(profile.Expenses), profile.About, avatarKey, onboardingDone,
+			string(profile.Expenses), profile.About, []string{avatarKey}, onboardingDone,
 		).Scan(&id)
 		if err != nil {
 			return nil, fmt.Errorf("upsert %s (n=%d): %w", p.name, p.n, err)

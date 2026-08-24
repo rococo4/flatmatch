@@ -21,7 +21,7 @@ const candidateColumns = `s.id, s.user_id, s.zone_id, s.price_min, s.price_max,
 	u.schedule AS u_schedule, u.smoking AS u_smoking,
 	u.pets_own AS u_pets_own, u.pets_ok AS u_pets_ok, u.noise AS u_noise,
 	u.guests AS u_guests, u.cleaning AS u_cleaning, u.alcohol AS u_alcohol,
-	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
+	u.expenses AS u_expenses, u.photo_keys AS u_photo_keys,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
 
 type ZoneUsers struct {
@@ -64,7 +64,7 @@ type candidateRow struct {
 	UCleaning    *string   `db:"u_cleaning"`
 	UAlcohol     *string   `db:"u_alcohol"`
 	UExpenses    *string   `db:"u_expenses"`
-	UPhotoKey    *string   `db:"u_photo_key"`
+	UPhotoKeys   []string  `db:"u_photo_keys"`
 	UPhotoStatus string    `db:"u_photo_status"`
 	ULastSeen    time.Time `db:"u_last_seen"`
 }
@@ -122,7 +122,7 @@ func (r candidateRow) toEntity() entity.PoolCandidate {
 				Alcohol:  entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
 				Expenses: entity.ParseExpenses(pointer.Get(r.UExpenses)),
 			},
-			PhotoKey:    pointer.Get(r.UPhotoKey),
+			PhotoKeys:   r.UPhotoKeys,
 			PhotoStatus: entity.ParseModerationStatus(r.UPhotoStatus),
 			LastSeen:    r.ULastSeen,
 

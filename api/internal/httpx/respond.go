@@ -21,6 +21,9 @@ const (
 	CodeTooLarge          Code = "too_large"
 	CodeUnsupportedMedia  Code = "unsupported_media"
 
+	CodePhotoLimit Code = "photo_limit"
+	CodeLastPhoto  Code = "last_photo"
+
 	CodeSearchLimit  Code = "search_limit"
 	CodeSearchClosed Code = "search_closed"
 

@@ -131,7 +131,7 @@ func TestAuthorCarriesNoContacts(t *testing.T) {
 		Name:        "Катя",
 		Username:    "katya",
 		Profile:     entity.Profile{Age: 27, Schedule: entity.ScheduleOwl},
-		PhotoKey:    "users/katya.jpg",
+		PhotoKeys:   []string{"users/katya.jpg"},
 		PhotoStatus: entity.ModerationOK,
 	}
 
@@ -149,8 +149,8 @@ func TestAuthorCarriesNoContacts(t *testing.T) {
 	}
 
 	card.Author.PhotoStatus = entity.ModerationPending
-	if got := toCard(card, stubPhotos{}, zoneDTO{}, uuid.New()); got.Author.PhotoURL != "" {
-		t.Errorf("unapproved author photo leaked: %q", got.Author.PhotoURL)
+	if got := toCard(card, stubPhotos{}, zoneDTO{}, uuid.New()); len(got.Author.PhotoURLs) != 0 {
+		t.Errorf("unapproved author photo leaked: %v", got.Author.PhotoURLs)
 	}
 }
 

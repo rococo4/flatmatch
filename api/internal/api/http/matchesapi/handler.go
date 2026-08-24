@@ -24,7 +24,7 @@ type Matches interface {
 }
 
 type Photos interface {
-	PhotoURL(u entity.User) string
+	PhotoURLs(u entity.User) []string
 }
 
 type ZoneDir interface {
@@ -66,7 +66,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]matchDTO, 0, len(all))
 	for _, m := range all {
-		out = append(out, toMatchDTO(m, h.photos.PhotoURL(m.Peer), h.zone(m.Match.ContextZone)))
+		out = append(out, toMatchDTO(m, h.photos.PhotoURLs(m.Peer), h.zone(m.Match.ContextZone)))
 	}
 	httpx.JSON(w, r, http.StatusOK, out)
 }
@@ -89,7 +89,7 @@ func (h *Handler) detail(w http.ResponseWriter, r *http.Request) {
 		handleError(w, r, err)
 		return
 	}
-	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photos.PhotoURL(match.Peer)))
+	httpx.JSON(w, r, http.StatusOK, toMatchDetail(match, summary, h.photos.PhotoURLs(match.Peer)))
 }
 
 func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {

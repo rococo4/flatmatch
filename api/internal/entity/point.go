@@ -15,6 +15,8 @@ const MaxIntentHomeLive = 1
 
 const MaxPointPhotos = 10
 
+const PointDescriptionMaxLen = 400
+
 type PointType string
 
 const (
@@ -121,7 +123,8 @@ type Point struct {
 	Utilities    *Utilities
 	Restrictions []Restriction
 
-	PhotoKeys []string
+	PhotoKeys   []string
+	Description *string
 
 	URLNorm     *string
 	MoveIn      *time.Time

@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 
 	"github.com/google/uuid"
 
 	"flatmatch/api/internal/entity"
 	"flatmatch/api/internal/imagetype"
+	"flatmatch/api/internal/logctx"
 )
 
 type Repository interface {
 	EnsureByTelegramID(ctx context.Context, tg entity.TelegramIdentity) (entity.User, error)
 	ByID(ctx context.Context, id uuid.UUID) (entity.User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, p entity.ProfilePatch) (entity.User, error)
-	SetPhoto(ctx context.Context, id uuid.UUID, key string) (entity.User, error)
+	SetPhotos(ctx context.Context, id uuid.UUID, keys []string) (entity.User, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status entity.Status) (entity.User, error)
 	SetSourceIfEmpty(ctx context.Context, id uuid.UUID, source string) error
 }
@@ -44,6 +46,11 @@ var (
 	ErrInvalidPatch  = errors.New("profile patch has invalid fields")
 	ErrInvalidSource = errors.New("source code is not a valid tracking code")
 	ErrIncomplete    = errors.New("profile is not filled in")
+
+	ErrPhotoLimit        = errors.New("profile already holds the maximum number of photos")
+	ErrLastPhoto         = errors.New("the last photo of a submitted profile cannot be removed")
+	ErrInvalidPhotoIndex = errors.New("no photo under that index")
+	ErrInvalidPhotoOrder = errors.New("photo order is not a permutation of the set")
 
 	ErrUnsupportedImage = imagetype.ErrUnsupported
 )
@@ -79,18 +86,64 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, p entity.Prof
 	return s.repo.UpdateProfile(ctx, id, p)
 }
 
-func (s *Service) SetPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error) {
+func (s *Service) AddPhoto(ctx context.Context, id uuid.UUID, file io.ReadSeeker) (entity.User, error) {
+	user, err := s.repo.ByID(ctx, id)
+	if err != nil {
+		return entity.User{}, err
+	}
+	if len(user.PhotoKeys) >= entity.MaxUserPhotos {
+		return entity.User{}, &entity.FieldsError{Err: ErrPhotoLimit, Fields: []string{"photo"}}
+	}
+
 	contentType, ext, err := imagetype.Sniff(file)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("photo of user %s: %w", id, err)
 	}
 
-	key := fmt.Sprintf("photos/%s%s", id, ext)
-
+	key := photoKey(id, ext)
 	if err := s.photos.Put(ctx, key, file, contentType); err != nil {
 		return entity.User{}, fmt.Errorf("store photo of user %s: %w", id, err)
 	}
-	return s.repo.SetPhoto(ctx, id, key)
+	return s.repo.SetPhotos(ctx, id, append(slices.Clone(user.PhotoKeys), key))
+}
+
+func (s *Service) RemovePhoto(ctx context.Context, id uuid.UUID, index int) (entity.User, error) {
+	user, err := s.repo.ByID(ctx, id)
+	if err != nil {
+		return entity.User{}, err
+	}
+
+	keys, ok := entity.RemovePhoto(user.PhotoKeys, index)
+	if !ok {
+		return entity.User{}, &entity.FieldsError{Err: ErrInvalidPhotoIndex, Fields: []string{"index"}}
+	}
+	if len(keys) == 0 && everSubmitted(user) {
+		return entity.User{}, &entity.FieldsError{Err: ErrLastPhoto, Fields: []string{"photo"}}
+	}
+
+	updated, err := s.repo.SetPhotos(ctx, id, keys)
+	if err != nil {
+		return entity.User{}, err
+	}
+
+	if err := s.photos.Delete(ctx, user.PhotoKeys[index]); err != nil {
+		logctx.From(ctx).Warn("delete a dropped photo",
+			"user_id", id, "key", user.PhotoKeys[index], "error", err)
+	}
+	return updated, nil
+}
+
+func (s *Service) ReorderPhotos(ctx context.Context, id uuid.UUID, order []int) (entity.User, error) {
+	user, err := s.repo.ByID(ctx, id)
+	if err != nil {
+		return entity.User{}, err
+	}
+
+	keys, ok := entity.ReorderPhotos(user.PhotoKeys, order)
+	if !ok {
+		return entity.User{}, &entity.FieldsError{Err: ErrInvalidPhotoOrder, Fields: []string{"order"}}
+	}
+	return s.repo.SetPhotos(ctx, id, keys)
 }
 
 func (s *Service) Submit(ctx context.Context, id uuid.UUID) (entity.User, error) {
@@ -128,15 +181,19 @@ func (s *Service) SetSource(ctx context.Context, id uuid.UUID, raw string) error
 	return s.repo.SetSourceIfEmpty(ctx, id, raw)
 }
 
-func (s *Service) PhotoURL(u entity.User) string {
+func (s *Service) PhotoURLs(u entity.User) []string {
 	if !u.PhotoApproved() {
-		return ""
+		return []string{}
 	}
-	return s.photos.URL(u.PhotoKey)
+	return s.OwnPhotoURLs(u)
 }
 
-func (s *Service) OwnPhotoURL(u entity.User) string {
-	return s.photos.URL(u.PhotoKey)
+func (s *Service) OwnPhotoURLs(u entity.User) []string {
+	out := make([]string, 0, len(u.PhotoKeys))
+	for _, key := range u.PhotoKeys {
+		out = append(out, s.photos.URL(key))
+	}
+	return out
 }
 
 func (s *Service) enqueue(ctx context.Context, u entity.User) {
@@ -145,4 +202,14 @@ func (s *Service) enqueue(ctx context.Context, u entity.User) {
 	}
 
 	s.notify.UserPending(context.WithoutCancel(ctx), u)
+}
+
+func photoKey(id uuid.UUID, ext string) string {
+	return fmt.Sprintf("photos/%s-%s%s", id, uuid.NewString()[:8], ext)
+}
+
+func everSubmitted(u entity.User) bool {
+	return u.Status != entity.StatusDraft ||
+		u.PhotoStatus != entity.ModerationPending ||
+		u.AboutStatus != entity.ModerationPending
 }

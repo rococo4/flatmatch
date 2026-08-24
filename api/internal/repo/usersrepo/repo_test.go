@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -76,8 +77,8 @@ func TestEnsureByTelegramIDCreatesAccountOnFirstLaunch(t *testing.T) {
 		t.Errorf("Username = %q, want %q", got, want)
 	}
 
-	if user.PhotoKey != "" {
-		t.Errorf("PhotoKey = %q, want it empty on a fresh account", user.PhotoKey)
+	if len(user.PhotoKeys) != 0 {
+		t.Errorf("PhotoKeys = %v, want them empty on a fresh account", user.PhotoKeys)
 	}
 
 	if got, want := user.Status, entity.StatusDraft; got != want {
@@ -247,24 +248,24 @@ func TestUpdateProfileSendsRewrittenAboutBackToModeration(t *testing.T) {
 	}
 }
 
-func TestSetPhotoQueuesTheNewFile(t *testing.T) {
+func TestSetPhotosQueuesTheNewSet(t *testing.T) {
 	pool := newTestPool(t)
 	repo := New(pool)
 	user := seedUser(t, repo)
 	ctx := t.Context()
 
 	if _, err := pool.Exec(ctx,
-		`UPDATE users SET photo_key = 'photos/old.jpg', photo_status = 'ok' WHERE id = $1`, user.ID,
+		`UPDATE users SET photo_keys = ARRAY['photos/old.jpg'], photo_status = 'ok' WHERE id = $1`, user.ID,
 	); err != nil {
 		t.Fatalf("approve photo: %v", err)
 	}
 
-	got, err := repo.SetPhoto(ctx, user.ID, "photos/new.jpg")
+	got, err := repo.SetPhotos(ctx, user.ID, []string{"photos/new.jpg", "photos/second.jpg"})
 	if err != nil {
-		t.Fatalf("SetPhoto() failed: %v", err)
+		t.Fatalf("SetPhotos() failed: %v", err)
 	}
-	if got.PhotoKey != "photos/new.jpg" {
-		t.Errorf("PhotoKey = %q, want the new one", got.PhotoKey)
+	if !slices.Equal(got.PhotoKeys, []string{"photos/new.jpg", "photos/second.jpg"}) {
+		t.Errorf("PhotoKeys = %v, want the new set in order", got.PhotoKeys)
 	}
 
 	if got.PhotoStatus != entity.ModerationPending {
@@ -280,7 +281,7 @@ func TestApprovedPhotoCannotExistWithoutAFile(t *testing.T) {
 	user := seedUser(t, New(pool))
 
 	_, err := pool.Exec(t.Context(),
-		`UPDATE users SET photo_status = 'ok', photo_key = NULL WHERE id = $1`, user.ID)
+		`UPDATE users SET photo_status = 'ok', photo_keys = '{}' WHERE id = $1`, user.ID)
 	if err == nil {
 		t.Fatal("the database accepted an approved photo with no file")
 	}

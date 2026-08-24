@@ -52,7 +52,7 @@ type personDTO struct {
 	UserID        uuid.UUID `json:"user_id"`
 	Name          string    `json:"name"`
 	Age           int       `json:"age"`
-	PhotoURL      string    `json:"photo_url"`
+	PhotoURLs     []string  `json:"photo_urls"`
 	Schedule      string    `json:"schedule"`
 	Smoking       string    `json:"smoking"`
 	PetsOwn       string    `json:"pets_own"`
@@ -116,7 +116,7 @@ func toPerson(p pools.Person) personDTO {
 		UserID:        p.User.ID,
 		Name:          p.User.Name,
 		Age:           p.User.Profile.Age,
-		PhotoURL:      p.PhotoURL,
+		PhotoURLs:     p.PhotoURLs,
 		Schedule:      string(p.User.Profile.Schedule),
 		Smoking:       string(p.User.Profile.Smoking),
 		PetsOwn:       string(p.User.Profile.PetsOwn),

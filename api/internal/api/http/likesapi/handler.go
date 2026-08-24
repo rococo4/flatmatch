@@ -26,7 +26,7 @@ type Likes interface {
 }
 
 type Photos interface {
-	PhotoURL(u entity.User) string
+	PhotoURLs(u entity.User) []string
 }
 
 type Points interface {
@@ -120,7 +120,7 @@ func (h *Handler) incoming(w http.ResponseWriter, r *http.Request) {
 			h.handleError(w, r, user.ID, err)
 			return
 		}
-		out = append(out, toIncoming(like, h.photos.PhotoURL(like.From), h.zone(like.ZoneID), point))
+		out = append(out, toIncoming(like, h.photos.PhotoURLs(like.From), h.zone(like.ZoneID), point))
 	}
 	httpx.JSON(w, r, http.StatusOK, out)
 }

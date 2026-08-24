@@ -27,6 +27,14 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	switch {
+	case errors.Is(err, users.ErrPhotoLimit):
+		httpx.BadRequest(w, r, httpx.CodePhotoLimit, "profile holds five photos already", fields.Fields, err)
+	case errors.Is(err, users.ErrLastPhoto):
+		httpx.BadRequest(w, r, httpx.CodeLastPhoto, "a profile cannot be left without a photo", fields.Fields, err)
+	case errors.Is(err, users.ErrInvalidPhotoIndex):
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "no photo under that index", fields.Fields, err)
+	case errors.Is(err, users.ErrInvalidPhotoOrder):
+		httpx.BadRequest(w, r, httpx.CodeInvalidField, "order must be a permutation of the photo set", fields.Fields, err)
 	case errors.Is(err, users.ErrInvalidPatch):
 		httpx.BadRequest(w, r, httpx.CodeInvalidField, "value outside the allowed set", fields.Fields, err)
 	case errors.Is(err, users.ErrInvalidSource):

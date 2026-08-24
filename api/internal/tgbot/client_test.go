@@ -3,6 +3,7 @@ package tgbot
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,7 @@ type apiCall struct {
 	method   string
 	body     map[string]any
 	fields   map[string]string
+	files    map[string][]byte
 	file     []byte
 	filename string
 }
@@ -57,10 +59,20 @@ func (a *botAPI) serve(w http.ResponseWriter, r *http.Request) {
 			for name, values := range r.MultipartForm.Value {
 				call.fields[name] = values[0]
 			}
-			if file, header, err := r.FormFile("photo"); err == nil {
-				defer file.Close()
-				call.filename = header.Filename
-				call.file, _ = io.ReadAll(file)
+			call.files = map[string][]byte{}
+			for name, headers := range r.MultipartForm.File {
+				file, err := headers[0].Open()
+				if err != nil {
+					a.t.Errorf("open uploaded %s: %v", name, err)
+					continue
+				}
+				call.files[name], _ = io.ReadAll(file)
+				file.Close()
+
+				if name == "photo" {
+					call.filename = headers[0].Filename
+					call.file = call.files[name]
+				}
 			}
 		}
 	} else if err := json.NewDecoder(r.Body).Decode(&call.body); err != nil {
@@ -219,5 +231,122 @@ func TestGetUpdatesSubscribesToButtonTaps(t *testing.T) {
 	}
 	if !slices.Contains(kinds, "callback_query") || !slices.Contains(kinds, "message") {
 		t.Errorf("allowed_updates = %v, want message and callback_query", kinds)
+	}
+}
+
+func TestSendMediaGroupUploadsEveryPhoto(t *testing.T) {
+	api := newBotAPI(t)
+	dir := t.TempDir()
+
+	var paths []string
+	for _, name := range []string{"a.jpg", "b.jpg"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("\xff\xd8\xff\xe0"+name), 0o600); err != nil {
+			t.Fatalf("write photo: %v", err)
+		}
+		paths = append(paths, path)
+	}
+
+	if err := api.client().SendMediaGroupFiles(t.Context(), -100500, paths); err != nil {
+		t.Fatalf("SendMediaGroupFiles() failed: %v", err)
+	}
+
+	call := api.got("sendMediaGroup")
+	if call == nil {
+		t.Fatal("sendMediaGroup was never called")
+	}
+	if got := call.fields["chat_id"]; got != "-100500" {
+		t.Errorf("chat_id = %q, want -100500", got)
+	}
+
+	var media []map[string]string
+	if err := json.Unmarshal([]byte(call.fields["media"]), &media); err != nil {
+		t.Fatalf("media %q is not an album: %v", call.fields["media"], err)
+	}
+	if len(media) != 2 {
+		t.Fatalf("album holds %d items, want 2", len(media))
+	}
+	for i, item := range media {
+		if item["type"] != "photo" {
+			t.Errorf("item %d type = %q, want photo", i, item["type"])
+		}
+		if want := fmt.Sprintf("attach://photo%d", i); item["media"] != want {
+			t.Errorf("item %d media = %q, want %q", i, item["media"], want)
+		}
+	}
+	if len(call.files) != 2 || string(call.files["photo1"]) != "\xff\xd8\xff\xe0b.jpg" {
+		t.Errorf("uploaded files = %v, want both photos attached by name", call.files)
+	}
+}
+
+func TestSendMediaGroupWithAMissingFileTouchesNothing(t *testing.T) {
+	api := newBotAPI(t)
+
+	err := api.client().SendMediaGroupFiles(t.Context(), 1, []string{filepath.Join(t.TempDir(), "gone.jpg")})
+	if err == nil {
+		t.Fatal("SendMediaGroupFiles() accepted a missing file")
+	}
+	if api.count() != 0 {
+		t.Errorf("%d calls made, want none", api.count())
+	}
+}
+
+func TestModerationSenderKeepsOneVerdictPerCard(t *testing.T) {
+	dir := t.TempDir()
+	paths := make([]string, 0, 3)
+	for _, name := range []string{"a.jpg", "b.jpg", "c.jpg"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("\xff\xd8\xff\xe0"), 0o600); err != nil {
+			t.Fatalf("write photo: %v", err)
+		}
+		paths = append(paths, path)
+	}
+	buttons := [][2]string{{"ок", "mod:u:ok:1"}, {"фото не ок", "mod:u:photo:1"}}
+
+	cases := []struct {
+		name   string
+		paths  []string
+		photos int
+		albums int
+	}{
+		{"one photo", paths[:1], 1, 0},
+		{"two photos", paths[:2], 2, 0},
+		{"three photos", paths, 1, 1},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			api := newBotAPI(t)
+			api.replies["sendPhoto"] = `{"ok":true,"result":{"message_id":777}}`
+
+			msgID, err := NewModerationSender(api.client()).
+				SendModerationPhotos(t.Context(), -100500, c.paths, "Катя, 24", buttons)
+			if err != nil {
+				t.Fatalf("SendModerationPhotos() failed: %v", err)
+			}
+			if msgID != 777 {
+				t.Errorf("message id = %d, want the card with the buttons", msgID)
+			}
+
+			var photos, albums, withButtons int
+			for _, call := range api.calls {
+				switch call.method {
+				case "sendPhoto":
+					photos++
+					if call.fields["reply_markup"] != "" {
+						withButtons++
+					}
+				case "sendMediaGroup":
+					albums++
+				}
+			}
+			if photos != c.photos || albums != c.albums {
+				t.Errorf("sent %d photos and %d albums, want %d and %d",
+					photos, albums, c.photos, c.albums)
+			}
+			if withButtons != 1 {
+				t.Errorf("%d messages carry verdict buttons, want exactly one", withButtons)
+			}
+		})
 	}
 }

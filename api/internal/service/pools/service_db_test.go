@@ -113,8 +113,8 @@ func TestZonePoolEndToEnd(t *testing.T) {
 		t.Errorf("SharedAnswers = %d, want %d (same schedule and smoking)",
 			fullCard.SharedAnswers, sharedByDefault+2)
 	}
-	if fullCard.PhotoURL != "/media/full.jpg" {
-		t.Errorf("PhotoURL = %q, want /media/full.jpg", fullCard.PhotoURL)
+	if !slices.Equal(fullCard.PhotoURLs, []string{"/media/full.jpg"}) {
+		t.Errorf("PhotoURLs = %v, want [/media/full.jpg]", fullCard.PhotoURLs)
 	}
 
 	partialCard := assertSectionHas(t, got, SectionPartial, partial.ID)
@@ -127,8 +127,8 @@ func TestZonePoolEndToEnd(t *testing.T) {
 		t.Errorf("partial card zone = %+v, want pz-line-west with declensions", partialCard.Zone)
 	}
 	noneCard := assertSectionHas(t, got, SectionNone, none.ID)
-	if noneCard.PhotoURL != "" {
-		t.Errorf("unapproved photo leaked into the pool: %q", noneCard.PhotoURL)
+	if len(noneCard.PhotoURLs) != 0 {
+		t.Errorf("unapproved photo leaked into the pool: %v", noneCard.PhotoURLs)
 	}
 
 	assertNowhere(t, got, "gender_pref cut them off", invisible.ID)
@@ -527,7 +527,7 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, spec testUser) entity.User {
 	err := pool.QueryRow(t.Context(), `
 		INSERT INTO users (tg_id, name, status, age, gender, gender_pref,
 			schedule, smoking, pets_own, pets_ok, noise, guests, cleaning,
-			alcohol, expenses, photo_key, photo_status)
+			alcohol, expenses, photo_keys, photo_status)
 		VALUES ($1, 'test', 'active', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
 			$12, $13, $14, $15)
 		RETURNING id`,
@@ -535,7 +535,7 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, spec testUser) entity.User {
 		nullable(string(profile.Schedule)), nullable(string(profile.Smoking)),
 		string(profile.PetsOwn), string(profile.PetsOK), string(profile.Noise),
 		string(profile.Guests), string(profile.Cleaning), string(profile.Alcohol),
-		string(profile.Expenses), spec.photoKey, string(photoStatus)).Scan(&id)
+		string(profile.Expenses), photoKeys(spec.photoKey), string(photoStatus)).Scan(&id)
 	if err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
@@ -544,7 +544,7 @@ func seedUser(t *testing.T, pool *pgxpool.Pool, spec testUser) entity.User {
 		ID:          id,
 		Name:        "test",
 		Profile:     profile,
-		PhotoKey:    spec.photoKey,
+		PhotoKeys:   photoKeys(spec.photoKey),
 		PhotoStatus: photoStatus,
 		Status:      entity.StatusActive,
 	}
@@ -614,4 +614,11 @@ func nullable(v string) *string {
 		return nil
 	}
 	return &v
+}
+
+func photoKeys(key string) []string {
+	if key == "" {
+		return []string{}
+	}
+	return []string{key}
 }

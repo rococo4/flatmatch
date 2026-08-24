@@ -11,13 +11,13 @@ import (
 
 const pointColumns = `id, type, stage, status, source, created_by, zone_id,
 	price_total, price_share, rooms, isolated, bathrooms, utilities,
-	restrictions, photo_keys, url_norm, move_in, deposit, close_reason,
+	restrictions, photo_keys, description, url_norm, move_in, deposit, close_reason,
 	last_seen_alive, gone_count, ping_asked_at,
 	created_at, edited_at`
 
 const joinedPointColumns = `p.id, p.type, p.stage, p.status, p.source, p.created_by,
 	p.zone_id, p.price_total, p.price_share, p.rooms, p.isolated, p.bathrooms,
-	p.utilities, p.restrictions, p.photo_keys, p.url_norm, p.move_in, p.deposit,
+	p.utilities, p.restrictions, p.photo_keys, p.description, p.url_norm, p.move_in, p.deposit,
 	p.close_reason, p.last_seen_alive, p.gone_count, p.ping_asked_at,
 	p.created_at, p.edited_at`
 
@@ -26,7 +26,7 @@ const personColumns = `u.id AS u_id, u.name AS u_name, u.age AS u_age,
 	u.schedule AS u_schedule, u.smoking AS u_smoking,
 	u.pets_own AS u_pets_own, u.pets_ok AS u_pets_ok, u.noise AS u_noise,
 	u.guests AS u_guests, u.cleaning AS u_cleaning, u.alcohol AS u_alcohol,
-	u.expenses AS u_expenses, u.photo_key AS u_photo_key,
+	u.expenses AS u_expenses, u.photo_keys AS u_photo_keys,
 	u.photo_status AS u_photo_status, u.last_seen AS u_last_seen`
 
 const memberColumns = `lp.created_at AS entered_at,
@@ -85,6 +85,7 @@ type pointRow struct {
 	Utilities    *string    `db:"utilities"`
 	Restrictions []string   `db:"restrictions"`
 	PhotoKeys    []string   `db:"photo_keys"`
+	Description  *string    `db:"description"`
 	URLNorm      *string    `db:"url_norm"`
 	MoveIn       *time.Time `db:"move_in"`
 	Deposit      *int       `db:"deposit"`
@@ -113,7 +114,7 @@ type personRow struct {
 	UCleaning    *string    `db:"u_cleaning"`
 	UAlcohol     *string    `db:"u_alcohol"`
 	UExpenses    *string    `db:"u_expenses"`
-	UPhotoKey    *string    `db:"u_photo_key"`
+	UPhotoKeys   []string   `db:"u_photo_keys"`
 	UPhotoStatus *string    `db:"u_photo_status"`
 	ULastSeen    *time.Time `db:"u_last_seen"`
 }
@@ -162,6 +163,7 @@ func (r pointRow) toEntity() entity.Point {
 		Rooms:       r.Rooms,
 		Isolated:    r.Isolated,
 		PhotoKeys:   r.PhotoKeys,
+		Description: r.Description,
 		URLNorm:     r.URLNorm,
 		MoveIn:      r.MoveIn,
 		Deposit:     r.Deposit,
@@ -211,7 +213,7 @@ func (r personRow) toEntity() *entity.User {
 			Alcohol:    entity.ParseAlcohol(pointer.Get(r.UAlcohol)),
 			Expenses:   entity.ParseExpenses(pointer.Get(r.UExpenses)),
 		},
-		PhotoKey:    pointer.Get(r.UPhotoKey),
+		PhotoKeys:   r.UPhotoKeys,
 		PhotoStatus: entity.ParseModerationStatus(pointer.Get(r.UPhotoStatus)),
 		LastSeen:    pointer.Get(r.ULastSeen),
 

@@ -25,7 +25,7 @@ func TestIncomingCarriesNoContacts(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	raw, err := json.Marshal(toIncoming(like, "/media/photos/a1b2.jpg", nil, nil))
+	raw, err := json.Marshal(toIncoming(like, []string{"/media/photos/a1b2.jpg"}, nil, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

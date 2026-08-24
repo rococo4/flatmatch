@@ -217,7 +217,7 @@ func (f *fakeLikes) Budget(context.Context, uuid.UUID) (entity.LikeBudget, error
 	return entity.LikeBudget{Remaining: entity.MaxDailyLikes}, nil
 }
 
-func (fakePhotos) PhotoURL(entity.User) string { return "" }
+func (fakePhotos) PhotoURLs(entity.User) []string { return nil }
 
 func (f fakePoints) ByID(_ context.Context, id uuid.UUID) (entity.Point, error) {
 	if f.calls != nil {

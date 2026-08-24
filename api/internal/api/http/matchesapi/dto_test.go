@@ -26,7 +26,7 @@ func TestMatchListCarriesNoContacts(t *testing.T) {
 		},
 	}
 
-	raw, err := json.Marshal(toMatchDTO(m, "/media/photos/a1b2.jpg", nil))
+	raw, err := json.Marshal(toMatchDTO(m, []string{"/media/photos/a1b2.jpg"}, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestMatchDetailTellsWhereFromOneContext(t *testing.T) {
 		ID: uuid.New(), Kind: entity.PointIntentHome, Label: "на комнату Кати · м. Сокол",
 	}
 
-	raw, err := json.Marshal(toMatchDetail(m, matches.Summary{Point: &point}, ""))
+	raw, err := json.Marshal(toMatchDetail(m, matches.Summary{Point: &point}, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestMatchDetailTellsWhereFromOneContext(t *testing.T) {
 
 	zoned, err := json.Marshal(toMatchDetail(m, matches.Summary{
 		Zone: &zones.Zone{ID: "d-khamovniki", Name: "Хамовники"},
-	}, ""))
+	}, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

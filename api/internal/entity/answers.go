@@ -29,6 +29,7 @@ const (
 	OccupationHybrid  Occupation = "hybrid"
 	OccupationRemote  Occupation = "remote"
 	OccupationShift   Occupation = "shift"
+	OccupationNone    Occupation = "none"
 )
 
 type Schedule string
@@ -125,7 +126,7 @@ func ParseGenderPref(raw string) GenderPref {
 func ParseOccupation(raw string) Occupation {
 	return parseEnum(raw,
 		OccupationStudy, OccupationOffice, OccupationHybrid,
-		OccupationRemote, OccupationShift,
+		OccupationRemote, OccupationShift, OccupationNone,
 	)
 }
 

@@ -574,3 +574,29 @@ func TestCloseBelongsToTheCreator(t *testing.T) {
 		t.Errorf("Create(intent_home) after closing failed: %v", err)
 	}
 }
+
+func TestIntentHomeCarriesItsDescription(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+	user := seedUser(t, pool, 1)
+
+	in := intentHome(user, entity.StageLive)
+	in.Description = pointer.To("Светлая комната с балконом, окна во двор.")
+
+	created, err := repo.Create(t.Context(), in)
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	if created.Description == nil || *created.Description != *in.Description {
+		t.Errorf("Description = %v, want it back from the insert", created.Description)
+	}
+
+	got, err := repo.ByID(t.Context(), created.ID)
+	if err != nil {
+		t.Fatalf("ByID() failed: %v", err)
+	}
+	if got.Description == nil || *got.Description != *in.Description {
+		t.Errorf("Description = %v, want %q", got.Description, *in.Description)
+	}
+}

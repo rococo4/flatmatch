@@ -3,6 +3,7 @@ package usersrepo
 import (
 	"bytes"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestToEntityMapsAKnownRow(t *testing.T) {
 		GenderPref:     "any",
 		Schedule:       pointer.To("owl"),
 		About:          pointer.To("Люблю тишину по утрам"),
-		PhotoKey:       pointer.To("photos/" + id.String() + ".jpg"),
+		PhotoKeys:      []string{"photos/" + id.String() + ".jpg"},
 		PhotoStatus:    "ok",
 		AboutStatus:    "ok",
 		Status:         "active",
@@ -49,7 +50,7 @@ func TestToEntityMapsAKnownRow(t *testing.T) {
 			Schedule:   entity.ScheduleOwl,
 			About:      "Люблю тишину по утрам",
 		},
-		PhotoKey:       "photos/" + id.String() + ".jpg",
+		PhotoKeys:      []string{"photos/" + id.String() + ".jpg"},
 		PhotoStatus:    entity.ModerationOK,
 		AboutStatus:    entity.ModerationOK,
 		Status:         entity.StatusActive,
@@ -57,7 +58,7 @@ func TestToEntityMapsAKnownRow(t *testing.T) {
 		LastSeen:       now,
 		CreatedAt:      now,
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("toEntity() = %+v, want %+v", got, want)
 	}
 }

@@ -68,6 +68,7 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 
 	restrictions, restrictionsOK := validRestrictions(in.Restrictions)
 	p.Restrictions = restrictions
+	p.Description = trimmedDescription(in.Description)
 
 	bad := invalidFields([]check{
 		{"stage", !known(in.Stage, entity.PointStageUnknown, entity.ParsePointStage)},
@@ -75,6 +76,7 @@ func (s *Service) validIntentHome(in CreateIntentHome) (entity.Point, error) {
 		{"move_in", in.Stage == entity.StageMovingIn && in.MoveIn == nil},
 		{"price_share", in.PriceShare < MinPrice || in.PriceShare > MaxPrice},
 		{"restrictions", !restrictionsOK},
+		{"description", !validDescription(p.Description)},
 	})
 	bad = append(bad, s.commonInvalid(in.ZoneID, in.PhotoKeys, in.Rooms, in.Deposit)...)
 	if len(bad) > 0 {
@@ -91,6 +93,21 @@ func (s *Service) commonInvalid(zoneID string, photoKeys []string, rooms, deposi
 		{"rooms", rooms != nil && (*rooms < 1 || *rooms > entity.RoomsCap)},
 		{"deposit", deposit != nil && (*deposit < 0 || *deposit > entity.PriceMaxCap)},
 	})
+}
+
+func trimmedDescription(raw *string) *string {
+	if raw == nil {
+		return nil
+	}
+	text := strings.TrimSpace(*raw)
+	if text == "" {
+		return nil
+	}
+	return pointer.To(text)
+}
+
+func validDescription(text *string) bool {
+	return text == nil || len([]rune(*text)) <= entity.PointDescriptionMaxLen
 }
 
 func validPhotoKeys(keys []string) bool {

@@ -85,6 +85,7 @@ type CreateIntentHome struct {
 	Isolated     *bool
 	Restrictions []entity.Restriction
 	PhotoKeys    []string
+	Description  *string
 	MoveIn       *time.Time
 	Deposit      *int
 }

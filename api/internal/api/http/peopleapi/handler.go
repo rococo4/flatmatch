@@ -34,7 +34,7 @@ type Likes interface {
 }
 
 type Photos interface {
-	PhotoURL(u entity.User) string
+	PhotoURLs(u entity.User) []string
 }
 
 type Searches interface {
@@ -145,7 +145,7 @@ func (h *Handler) profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, r, http.StatusOK, toProfile(viewer, target,
-		h.photos.PhotoURL(target), h.contextZone(r.URL.Query().Get("zone")), point,
+		h.photos.PhotoURLs(target), h.contextZone(r.URL.Query().Get("zone")), point,
 		myLike, likedMe, matchID, budget))
 }
 

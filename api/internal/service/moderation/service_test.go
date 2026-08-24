@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/AlekSi/pointer"
@@ -17,7 +18,7 @@ const testChat int64 = -100500
 
 type sentPhoto struct {
 	chatID  int64
-	path    string
+	paths   []string
 	caption string
 	buttons [][2]string
 }
@@ -66,8 +67,8 @@ type fakePoints struct {
 
 type fakePhotos struct{}
 
-func (f *fakeSender) SendModerationPhoto(_ context.Context, chatID int64, path, caption string, buttons [][2]string) (int, error) {
-	f.sent = append(f.sent, sentPhoto{chatID: chatID, path: path, caption: caption, buttons: buttons})
+func (f *fakeSender) SendModerationPhotos(_ context.Context, chatID int64, paths []string, caption string, buttons [][2]string) (int, error) {
+	f.sent = append(f.sent, sentPhoto{chatID: chatID, paths: paths, caption: caption, buttons: buttons})
 	return len(f.sent), f.err
 }
 
@@ -148,7 +149,7 @@ func submitted() entity.User {
 		ID:          uuid.New(),
 		Name:        "Катя",
 		Profile:     entity.Profile{Age: 24, About: "люблю тишину"},
-		PhotoKey:    "photos/katya.jpg",
+		PhotoKeys:   []string{"photos/katya.jpg", "photos/katya-2.jpg"},
 		PhotoStatus: entity.ModerationPending,
 		AboutStatus: entity.ModerationPending,
 		Status:      entity.StatusPending,
@@ -373,8 +374,9 @@ func TestUserPendingCarriesTheThreeVerdicts(t *testing.T) {
 		t.Fatalf("sent %d messages, want 1", len(bot.sent))
 	}
 	got := bot.sent[0]
-	if got.chatID != testChat || got.path != "/photos/photos/katya.jpg" {
-		t.Errorf("message went to %d with photo %q", got.chatID, got.path)
+	wantPaths := []string{"/photos/photos/katya.jpg", "/photos/photos/katya-2.jpg"}
+	if got.chatID != testChat || !slices.Equal(got.paths, wantPaths) {
+		t.Errorf("message went to %d with photos %v, want %v", got.chatID, got.paths, wantPaths)
 	}
 	if want := "Катя, 24\nлюблю тишину\nстатус: первичная анкета"; got.caption != want {
 		t.Errorf("caption = %q, want %q", got.caption, want)
@@ -484,7 +486,7 @@ func TestSendingIsBestEffort(t *testing.T) {
 		bot := &fakeSender{}
 		s := newService(t, testChat, bot, &fakeUsers{user: user}, &fakePoints{})
 		broken := user
-		broken.PhotoKey = "broken"
+		broken.PhotoKeys = []string{"broken"}
 		s.UserPending(t.Context(), broken)
 		noPhoto := point
 		noPhoto.PhotoKeys = nil

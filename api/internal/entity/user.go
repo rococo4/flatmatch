@@ -9,6 +9,8 @@ import (
 
 const OnboardingSteps = 12
 
+const MaxUserPhotos = 5
+
 type Status string
 
 const (
@@ -48,7 +50,7 @@ type User struct {
 
 	Profile Profile
 
-	PhotoKey    string
+	PhotoKeys   []string
 	PhotoStatus ModerationStatus
 	AboutStatus ModerationStatus
 
@@ -72,9 +74,36 @@ func DisplayName(firstName, lastName string) string {
 	return strings.TrimSpace(firstName + " " + lastName)
 }
 
+func ReorderPhotos(keys []string, order []int) ([]string, bool) {
+	if len(order) != len(keys) {
+		return nil, false
+	}
+
+	seen := make([]bool, len(keys))
+	out := make([]string, 0, len(keys))
+	for _, i := range order {
+		if i < 0 || i >= len(keys) || seen[i] {
+			return nil, false
+		}
+		seen[i] = true
+		out = append(out, keys[i])
+	}
+	return out, true
+}
+
+func RemovePhoto(keys []string, index int) ([]string, bool) {
+	if index < 0 || index >= len(keys) {
+		return nil, false
+	}
+
+	out := make([]string, 0, len(keys)-1)
+	out = append(out, keys[:index]...)
+	return append(out, keys[index+1:]...), true
+}
+
 func (u User) MissingFields() []string {
 	missing := u.Profile.MissingFields()
-	if u.PhotoKey == "" {
+	if len(u.PhotoKeys) == 0 {
 		missing = append(missing, "photo")
 	}
 	return missing
@@ -85,7 +114,7 @@ func (u User) Visible() bool {
 }
 
 func (u User) PhotoApproved() bool {
-	return u.PhotoStatus == ModerationOK && u.PhotoKey != ""
+	return u.PhotoStatus == ModerationOK && len(u.PhotoKeys) > 0
 }
 
 func (u User) AboutApproved() bool {

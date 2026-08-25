@@ -15,10 +15,11 @@ import {
   showBackButton,
 } from '@telegram-apps/sdk-react';
 
-import { ApiError, patchProfile, submitProfile, uploadPhoto } from '../api/client';
+import { ApiError, patchProfile, submitProfile } from '../api/client';
 import type { Profile, Questionnaire } from '../api/client';
-import { ABOUT_REJECTED, ownPhotoSrc, PHOTO_REJECTED } from '../api/format';
-import { Avatar, LimitChip, S } from '../ui/primitives';
+import { ABOUT_REJECTED, PHOTO_REJECTED } from '../api/format';
+import { PhotoGrid } from '../ui/PhotoGrid';
+import { LimitChip, S } from '../ui/primitives';
 import { AboutSheet, AgeSheet, ChoiceSheet } from './EdgeStates';
 import {
   GENDER_CHOICES,
@@ -38,8 +39,9 @@ type RowKey = 'age' | 'gender' | 'gender_pref' | 'pets_own' | 'pets_ok' | Questi
 /** Что открыто поверх экрана. Ключ строки — её же шторка; «о себе» стоит особняком. */
 type SheetKey = RowKey | 'about';
 
-/** Куда ходит запрос: у отказа должно быть место на экране, а не одно на всех. */
-type Where = 'photo' | 'sheet' | 'submit';
+/** Куда ходит запрос: у отказа должно быть место на экране, а не одно на всех.
+ *  Фото сюда не входит — набором и его отказами владеет сетка. */
+type Where = 'sheet' | 'submit';
 
 const NOT_SET = 'Не указано';
 
@@ -123,18 +125,6 @@ const L = {
     background: 'var(--card-bg)',
     border: '1px solid var(--sep)',
   } as CSSProperties,
-  photoButton: {
-    alignSelf: 'flex-start',
-    padding: '8px 12px',
-    border: 'none',
-    borderRadius: 9,
-    background: 'var(--app-bg)',
-    font: 'inherit',
-    fontSize: 14,
-    fontWeight: 590,
-    color: 'var(--tg-theme-accent-text-color)',
-    cursor: 'pointer',
-  } as CSSProperties,
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -166,19 +156,14 @@ const L = {
 export function ProfileEditScreen({
   profile,
   autoOpen,
-  photoStamp,
   onProfile,
-  onPhotoReplaced,
   onBack,
 }: {
   profile: Profile;
   /** Открыть нужное сразу: строка реджекта и кнопка пуша зовут чинить одно (§5). */
   autoOpen?: 'photo' | 'about';
-  /** Метка перезалитого фото: живёт выше экранов — своё фото рисует и профиль. */
-  photoStamp: number | null;
   /** Ответ сервера — истина: локальных правок анкеты здесь нет. */
   onProfile: (next: Profile) => void;
-  onPhotoReplaced: () => void;
   onBack: () => void;
 }) {
   const [sheet, setSheet] = useState<SheetKey | null>(autoOpen === 'about' ? 'about' : null);
@@ -194,7 +179,6 @@ export function ProfileEditScreen({
    * отправить второй раз — модератору ушла бы вторая карточка на то же фото.
    */
   const [sent, setSent] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // Свежий onBack в ref: оболочка передаёт inline-стрелку, и подписка иначе
   // пересобиралась бы на каждый рендер — то есть на каждый ответ сервера.
@@ -233,13 +217,6 @@ export function ProfileEditScreen({
     [],
   );
 
-  // Пуш «Фото не подошло» ведёт сразу к выбору файла: экран открыт ради него.
-  // У запуска по диплинку жеста ещё не было, и такой клик браузер молча
-  // проигнорирует — тогда человек видит ту же причину и кнопку под ней.
-  useEffect(() => {
-    if (autoOpen === 'photo') fileRef.current?.click();
-  }, [autoOpen]);
-
   const field = sheet && sheet !== 'about' ? FIELDS.find((f) => f.key === sheet) : undefined;
   const sheetError = fail?.at === 'sheet' ? fail.text : null;
   const about = profile.about ?? '';
@@ -249,9 +226,10 @@ export function ProfileEditScreen({
     (profile.status === 'active' || profile.status === 'draft') &&
     (profile.photo_status === 'pending' || profile.about_status === 'pending');
   // «Уйдёт» — пока карточка не в очереди; у отправленной анкеты она уже там,
-  // и обещать будущее время нельзя.
-  const reviewChip = profile.status === 'pending' || sent ? 'на проверке' : 'уйдёт на проверку';
-  const photoSrc = ownPhotoSrc(profile.photo_url, photoStamp);
+  // и обещать будущее время нельзя. У набора фото та же метка во множественном
+  // числе: проверяют его целиком.
+  const inQueue = profile.status === 'pending' || sent;
+  const reviewChip = inQueue ? 'на проверке' : 'уйдёт на проверку';
 
   return (
     <div style={L.screen}>
@@ -272,44 +250,22 @@ export function ProfileEditScreen({
 
       <div style={L.body}>
         <div style={L.block}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* Своё фото видно всегда, даже до проверки: иначе не решить, менять
-                его или нет (§5). Заглушка тут только у того, кто не грузил. */}
-            <Avatar name={profile.name} size={72} src={photoSrc} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
-              <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
-                {profile.name}
-                {profile.age ? `, ${profile.age}` : ''}
-              </span>
-              <label style={{ ...L.photoButton, cursor: busy === 'photo' ? 'progress' : 'pointer' }}>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  disabled={busy === 'photo'}
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    // Сбрасываем значение: иначе повторный выбор того же файла
-                    // после отклонённой загрузки не даст события вовсе.
-                    e.target.value = '';
-                    if (file) void upload(file);
-                  }}
-                />
-                {busy === 'photo' ? 'Загружаю…' : 'Заменить фото'}
-              </label>
-              {/* Чип шириной по тексту: в колонке он иначе растягивается в
-                  жёлтую полосу во всю карточку. */}
-              {profile.photo_status === 'pending' && (
-                <span style={{ alignSelf: 'flex-start' }}>
-                  <LimitChip small>{reviewChip}</LimitChip>
-                </span>
-              )}
-            </div>
-          </div>
+          <span style={{ fontSize: 20, fontWeight: 640, letterSpacing: '-0.4px' }}>
+            {profile.name}
+            {profile.age ? `, ${profile.age}` : ''}
+          </span>
+
+          {/* Свой набор виден всегда, даже до проверки: иначе не решить, менять
+              его или нет (§5). Отправку зовёт кнопка внизу — сетка только
+              собирает набор. */}
+          <PhotoGrid
+            profile={profile}
+            onProfile={onProfile}
+            onAdded={() => setSent(false)}
+            reviewLabel={inQueue ? 'на проверке' : 'уйдут на проверку'}
+          />
 
           {profile.photo_status === 'rejected' && <span style={L.warning}>{PHOTO_REJECTED}</span>}
-          {fail?.at === 'photo' && <span style={L.error}>{fail.text}</span>}
 
           <div style={L.sep} />
 
@@ -475,12 +431,6 @@ export function ProfileEditScreen({
     // Переписанный текст ушёл только в базу: модератору его отправляет кнопка.
     if ('about' in patch) setSent(false);
     setSheet(null);
-  }
-
-  async function upload(file: File) {
-    if (!(await call('photo', () => uploadPhoto(file)))) return;
-    onPhotoReplaced();
-    setSent(false);
   }
 
   async function send() {

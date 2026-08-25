@@ -7,6 +7,9 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { Profile } from '../api/client';
+import { PhotoGrid } from '../ui/PhotoGrid';
+
 export type Choice = { id: string; label: string };
 
 export const TOTAL_STEPS = 12;
@@ -438,79 +441,21 @@ export function AboutStep({
 
 /** Шаг 12: фото с лицом. Обязательное, проверяется глазами модератора (§4, §5).
  *  Аватар из Telegram не подставляем: он может быть скрыт настройками
- *  приватности, и путь «оставить как есть» работал бы не у всех. */
+ *  приватности, и путь «оставить как есть» работал бы не у всех.
+ *  Набор — тот же компонент, что и в правке анкеты: одна сетка на два места. */
 export function PhotoStep({
-  previewUrl,
-  uploading,
-  error,
-  onPick,
+  profile,
+  onProfile,
 }: {
-  /** Уже загруженное фото — своё человек видит всегда, даже до проверки. */
-  previewUrl: string | null;
-  uploading: boolean;
-  error: string | null;
-  onPick: (file: File) => void;
+  profile: Profile;
+  onProfile: (next: Profile) => void;
 }) {
   return (
     <div style={O.card}>
       <StepHeader step={12} total={TOTAL_STEPS} />
       <span style={O.h1}>Фото с лицом</span>
 
-      <label
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 10,
-          minHeight: 190,
-          padding: 16,
-          borderRadius: 14,
-          border: previewUrl
-            ? '1px solid var(--sep)'
-            : '1.5px dashed color-mix(in srgb, var(--tg-theme-button-color) 55%, transparent)',
-          background: 'var(--app-bg)',
-          cursor: uploading ? 'progress' : 'pointer',
-          overflow: 'hidden',
-        }}
-      >
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          disabled={uploading}
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            // Сбрасываем значение: иначе повторный выбор того же файла после
-            // отклонённой загрузки не даст события вовсе.
-            e.target.value = '';
-            if (file) onPick(file);
-          }}
-        />
-        {previewUrl ? (
-          <img
-            src={previewUrl}
-            alt="Твоё фото"
-            style={{ width: 150, height: 150, borderRadius: '50%', objectFit: 'cover' }}
-          />
-        ) : (
-          <span style={{ fontSize: 38, lineHeight: 1, color: 'var(--tg-theme-hint-color)' }}>+</span>
-        )}
-        <span
-          style={{
-            fontSize: 15,
-            fontWeight: 590,
-            color: 'var(--tg-theme-accent-text-color)',
-            textAlign: 'center',
-          }}
-        >
-          {uploading ? 'Загружаю…' : previewUrl ? 'Выбрать другое' : 'Загрузить фото'}
-        </span>
-      </label>
-
-      {error && (
-        <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>{error}</span>
-      )}
+      <PhotoGrid profile={profile} onProfile={onProfile} />
 
       <span style={O.hint}>
         Лицо должно быть видно — по фото решают, писать ли тебе. Проверим вместе с «о себе»
@@ -727,6 +672,7 @@ export const QUESTION_STEPS: {
       { id: 'hybrid', label: 'Гибрид' },
       { id: 'remote', label: 'Удалёнка' },
       { id: 'shift', label: 'Сменный график' },
+      { id: 'none', label: 'Не работаю' },
     ],
   },
   {
@@ -799,11 +745,11 @@ export const QUESTION_STEPS: {
   {
     step: 10,
     field: 'expenses',
-    title: 'Как тебе с общими тратами?',
+    title: 'Как делить общие расходы — коммуналку, бытовое?',
     why: 'Деньги — вторая причина конфликтов соседей после уборки',
     choices: [
-      { id: 'split_equally', label: 'Делю поровну и плачу сразу' },
-      { id: 'tracked', label: 'Веду учёт (Splitwise и т.п.)' },
+      { id: 'split_equally', label: 'Поровну и сразу' },
+      { id: 'tracked', label: 'Записывать траты (Splitwise и т.п.)' },
       { id: 'as_we_go', label: 'Разберёмся по ходу' },
     ],
   },

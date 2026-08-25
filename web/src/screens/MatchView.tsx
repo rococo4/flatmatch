@@ -169,7 +169,7 @@ export function MatchView({
       <MatchScreen
         name={match.peer.name}
         age={match.peer.age}
-        photoUrl={match.peer.photo_url || undefined}
+        photoUrl={match.peer.photo_urls[0]}
         // Контекст исторический: зона или точка, на которой пересеклись, даже
         // если ни поиска, ни самой точки давно нет (§2.3). Взаимоисключимы —
         // лайк несёт один контекст; у ответного нет и его. Метка точки приезжает

@@ -56,7 +56,6 @@ import {
   closeReasonLabel,
   dayMonth,
   occupationLabel,
-  ownPhotoSrc,
   paramChips,
   relativeDay,
 } from './api/format';
@@ -184,14 +183,6 @@ export function App() {
    * человека надо привести ровно туда, а не прогонять анкету заново (§5).
    */
   const [editTarget, setEditTarget] = useState<'photo' | 'about' | null>(null);
-  /**
-   * Метка перезалитого своего фото (`ownPhotoSrc`).
-   *
-   * Живёт здесь, а не в экране анкеты: адрес фото после замены прежний, и
-   * кэш браузера отдал бы старый кадр и на профиле, куда человек уходит
-   * сразу после «Заменить фото».
-   */
-  const [photoStamp, setPhotoStamp] = useState<number | null>(null);
   /**
    * Диплинк запуска: кнопка пуша или ссылка шеринга (§5 дизайна пушей).
    *
@@ -1076,7 +1067,7 @@ export function App() {
             name={profile.name}
             age={profile.age ?? 0}
             occupation={occupationLabel(profile.occupation)}
-            photoUrl={ownPhotoSrc(profile.photo_url, photoStamp)}
+            photoUrl={profile.photo_urls[0]}
             // Статус и вердикты по фото и «о себе» едут врозь: сворачивать их
             // в один — значит потерять петлю реджекта (§5).
             status={profile.status}
@@ -1266,9 +1257,7 @@ export function App() {
           <ProfileEditScreen
             profile={profile}
             autoOpen={editTarget ?? undefined}
-            photoStamp={photoStamp}
             onProfile={setProfile}
-            onPhotoReplaced={() => setPhotoStamp(Date.now())}
             // Назад — на таб «Профиль», а не «в никуда»: сюда приходят и по
             // диплинку пуша, с любого таба. Перечитываем себя: строка статуса
             // на профиле обязана знать про только что отправленное фото.
@@ -1338,7 +1327,7 @@ function toMyMatch(m: MatchDTO): MyMatch {
     id: m.match_id,
     name: m.peer.name,
     age: m.peer.age,
-    photoUrl: m.peer.photo_url || undefined,
+    photoUrl: m.peer.photo_urls[0],
     context: m.zone?.name,
     when: `мэтч ${relativeDay(m.at)}`,
   };

@@ -8,7 +8,7 @@ export interface Questionnaire {
   age?: number;
   gender?: Gender;
   gender_pref?: 'any' | 'same';
-  occupation?: 'study' | 'office' | 'hybrid' | 'remote' | 'shift';
+  occupation?: 'study' | 'office' | 'hybrid' | 'remote' | 'shift' | 'none';
   schedule?: 'owl' | 'lark' | 'floating';
   smoking?: 'no' | 'outside' | 'home';
   pets_own?: 'none' | 'cat' | 'dog' | 'other';
@@ -34,10 +34,11 @@ export interface Profile extends Questionnaire {
   name: string;
   tg_username?: string;
   /**
-   * Своё фото человек видит всегда, даже до проверки — иначе нельзя решить,
-   * менять его или нет. Гейт по photo_status касается чужих глаз (§5).
+   * Свой набор фото человек видит всегда, даже до проверки — иначе нельзя
+   * решить, менять его или нет. Гейт по photo_status касается чужих глаз (§5).
+   * Первое — главное: оно же обложка карточки в подборе.
    */
-  photo_url?: string;
+  photo_urls: string[];
   photo_status: ModerationStatus;
   about_status: ModerationStatus;
   /**
@@ -229,7 +230,7 @@ export interface DeckPerson extends HabitsFields {
   user_id: string;
   name: string;
   age: number;
-  occupation: NonNullable<Questionnaire['occupation']> | 'none';
+  occupation: NonNullable<Questionnaire['occupation']>;
   last_seen: string;
   /** Первое — главное. Пустой массив = набор не одобрен, вместо него заглушка (§5). */
   photo_urls: string[];
@@ -247,7 +248,7 @@ export interface DeckRoomAuthor extends HabitsFields {
   user_id: string;
   name: string;
   age: number;
-  occupation: NonNullable<Questionnaire['occupation']> | 'none';
+  occupation: NonNullable<Questionnaire['occupation']>;
   photo_urls: string[];
   noise: NonNullable<Questionnaire['noise']>;
 }
@@ -619,7 +620,8 @@ export interface MatchPeer {
   user_id: string;
   name: string;
   age: number;
-  photo_url: string;
+  /** Первое — главное. Пустой массив = набор не одобрен, вместо него заглушка (§5). */
+  photo_urls: string[];
 }
 
 /**
@@ -774,15 +776,41 @@ export function patchProfile(patch: Questionnaire & { onboarding_step?: number }
 }
 
 /**
- * Загружает фото анкеты.
+ * Добавляет фото в конец набора анкеты.
  *
  * Content-Type не выставляем намеренно: его должен проставить браузер, вписав
  * boundary multipart-формы. Заданный руками заголовок сломает разбор на сервере.
+ * Шестое фото отбивается кодом `photo_limit`; добавление — единственная из трёх
+ * операций, которая сбрасывает photo_status в pending (§5).
  */
-export function uploadPhoto(file: File): Promise<Profile> {
+export function addPhoto(file: File): Promise<Profile> {
   const form = new FormData();
   form.append('photo', file);
-  return request<Profile>('/api/v1/me/photo', { method: 'POST', body: form });
+  return request<Profile>('/api/v1/me/photos', { method: 'POST', body: form });
+}
+
+/**
+ * Убирает фото по его месту в наборе.
+ *
+ * Последнее фото хоть раз отправленной анкеты снять нельзя — 400 `last_photo`:
+ * фото обязательно (§4), и статус анкеты это не меняет.
+ */
+export function removePhoto(index: number): Promise<Profile> {
+  return request<Profile>(`/api/v1/me/photos/${index}`, { method: 'DELETE' });
+}
+
+/**
+ * Переставляет набор: `order` — старые индексы в новом порядке.
+ *
+ * Ровно перестановка, иначе 400: набор от неё не меняется, меняется только
+ * обложка. Одобренный набор остаётся одобренным — нового контента не появилось.
+ */
+export function reorderPhotos(order: number[]): Promise<Profile> {
+  return request<Profile>('/api/v1/me/photos/order', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order }),
+  });
 }
 
 /**

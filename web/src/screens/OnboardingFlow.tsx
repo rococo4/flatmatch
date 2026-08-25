@@ -11,7 +11,7 @@ import {
   showBackButton,
 } from '@telegram-apps/sdk-react';
 
-import { ApiError, patchProfile, submitProfile, uploadPhoto } from '../api/client';
+import { ApiError, patchProfile, submitProfile } from '../api/client';
 import type { Profile, Questionnaire } from '../api/client';
 import {
   AboutStep,
@@ -208,15 +208,12 @@ export function OnboardingFlow({
 
       {screen === 'photo' && (
         <>
-          <PhotoStep
-            previewUrl={profile.photo_url ?? null}
-            uploading={busy}
-            error={error}
-            onPick={(file) => void upload(file)}
-          />
+          {/* Загрузкой, удалением и порядком владеет сетка: она же говорит с
+              API и рассказывает о своих отказах. Шагу остаётся отправка. */}
+          <PhotoStep profile={profile} onProfile={onProfile} />
           <NextButton
             label="Отправить на проверку"
-            disabled={!profile.photo_url || busy}
+            disabled={profile.photo_urls.length === 0 || busy}
             onClick={() => void submit()}
           />
         </>
@@ -231,25 +228,13 @@ export function OnboardingFlow({
         />
       )}
 
-      {error && screen !== 'photo' && (
+      {error && (
         <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)', padding: '0 4px' }}>
           {error}
         </span>
       )}
     </Frame>
   );
-
-  async function upload(file: File) {
-    setBusy(true);
-    setError(null);
-    try {
-      onProfile(await uploadPhoto(file));
-    } catch (e) {
-      setError(messageOf(e));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function submit() {
     setBusy(true);

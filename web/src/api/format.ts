@@ -9,14 +9,18 @@
 import type {
   Bathrooms,
   CloseReason,
+  DeckOccupation,
+  DeckPets,
+  DeckSchedule,
+  DeckSmoking,
+  DeckWho,
+  HabitsFields,
+  PairChip,
   ParamOverlap,
   PointDTO,
   PointStage,
   PointStatus,
   PointType,
-  PoolChip,
-  PoolPersonDTO,
-  PoolSectionDTO,
   Questionnaire,
   ReportReason,
   Restriction,
@@ -33,7 +37,7 @@ import type { Verdict } from '../ui/primitives';
  * значение параметра («60–80к»), `none` — «не указана» (§6). Цвет один,
  * смысл разный, поэтому маппинг цвета и сборка метки разведены.
  */
-export const VERDICT_UI: Record<PoolChip['verdict'], Verdict> = {
+export const VERDICT_UI: Record<PairChip['verdict'], Verdict> = {
   green: 'ok',
   edge: 'edge',
   grey: 'no',
@@ -61,7 +65,7 @@ export function ownPhotoSrc(url: string | undefined, stamp: number | null): stri
 }
 
 /** Род слова разный — обобщать нельзя. */
-const NOT_SET: Record<PoolChip['param'], string> = {
+const NOT_SET: Record<PairChip['param'], string> = {
   price: 'цена не указана',
   rooms: 'комнатность не указана',
   move_in: 'заезд не указан',
@@ -77,19 +81,19 @@ const TERM_LABEL: Record<Term, string> = {
   open: 'бессрочно',
 };
 
-const SCHEDULE_LABEL: Record<PoolPersonDTO['schedule'], string> = {
+const SCHEDULE_LABEL: Record<HabitsFields['schedule'], string> = {
   owl: 'сова',
   lark: 'жаворонок',
   floating: 'плавает',
 };
 
-const SMOKING_LABEL: Record<PoolPersonDTO['smoking'], string> = {
+const SMOKING_LABEL: Record<HabitsFields['smoking'], string> = {
   no: 'не курю',
   outside: 'балкон',
   home: 'курю дома',
 };
 
-const PETS_OWN_LABEL: Record<PoolPersonDTO['pets_own'], string> = {
+const PETS_OWN_LABEL: Record<HabitsFields['pets_own'], string> = {
   none: 'без животных',
   cat: 'кот',
   dog: 'собака',
@@ -252,12 +256,6 @@ const RESTRICTION_LABEL: Record<PointType, Record<Restriction, string>> = {
 /** Порядок чипов ограничений в форме — он же порядок на карточке. */
 const RESTRICTIONS: Restriction[] = ['no_pets', 'no_couples', 'no_smoking'];
 
-const SECTION_LABEL: Record<PoolSectionDTO['id'], string> = {
-  all: 'СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ',
-  partial: 'ПЕРЕСЕКАЮТСЯ ЧАСТИЧНО',
-  none: 'НЕ СОВПАЛИ',
-};
-
 /** Предложный падеж для «заезд в сентябре»: Intl отдаёт только именительный. */
 const MONTHS_IN = [
   'январе',
@@ -289,7 +287,7 @@ const HOUR_MS = 3_600_000;
  * человека, потому что чип показывает ЕГО значение, а цвет говорит, как оно
  * легло на моё.
  */
-export function chipLabel(chip: PoolChip, params: SearchParamsNoZone): string {
+export function chipLabel(chip: PairChip, params: SearchParamsNoZone): string {
   if (chip.verdict === 'none') return NOT_SET[chip.param];
   switch (chip.param) {
     case 'price':
@@ -406,17 +404,17 @@ export function termsLabel(terms: Term[]): string | null {
 }
 
 /**
- * Строка привычек мини-карточки: «сова · не курю · без животных».
+ * Строка привычек карточки: «сова · не курю · без животных».
  *
- * Берёт три поля, а не человека пула целиком: ровно их же шлёт карточка
- * входящего лайка, и одна метка должна обслуживать оба экрана.
+ * Берёт три поля, а не человека целиком: ровно их же шлют карточка подбора,
+ * автор комнаты и входящий лайк, и одна метка обслуживает все три.
  */
-export function habitsLine(p: Pick<PoolPersonDTO, 'schedule' | 'smoking' | 'pets_own'>): string {
+export function habitsLine(p: HabitsFields): string {
   return habitChips(p).join(' · ');
 }
 
 /** Те же три привычки чипами — блоком «Привычки» на карточке с лицом. */
-export function habitChips(p: Pick<PoolPersonDTO, 'schedule' | 'smoking' | 'pets_own'>): string[] {
+export function habitChips(p: HabitsFields): string[] {
   return [SCHEDULE_LABEL[p.schedule], SMOKING_LABEL[p.smoking], PETS_OWN_LABEL[p.pets_own]].filter(
     Boolean,
   );
@@ -454,9 +452,44 @@ export function untilTime(iso: string): string {
   return `${h} ч ${m} мин`;
 }
 
-/** Заголовок секции пула: «СОВПАЛИ ПО ВСЕМ ПАРАМЕТРАМ · 3». */
-export function sectionTitle(id: PoolSectionDTO['id'], n: number): string {
-  return `${SECTION_LABEL[id]} · ${n}`;
+/* ── Фильтры подбора (§6, шторка «Каким должен быть сосед») ───────────────
+   Метки дословные; код едет на сервер, метка стоит на экране. Пустой набор —
+   «неважно», поэтому варианта «любой» ни в одном ряду нет. */
+
+export function deckWhoOptions(): { value: DeckWho; label: string }[] {
+  return [
+    { value: 'people', label: 'Ищут соседа' },
+    { value: 'rooms', label: 'Зовут к себе' },
+  ];
+}
+
+export function deckPetsOptions(): { value: DeckPets; label: string }[] {
+  return [
+    { value: 'none', label: 'Без животных' },
+    { value: 'ok_mine', label: 'Не против моих' },
+  ];
+}
+
+export function deckSmokingOptions(): { value: DeckSmoking; label: string }[] {
+  return [
+    { value: 'no', label: 'Не курит совсем' },
+    { value: 'outside_only', label: 'Не курит дома' },
+  ];
+}
+
+export function deckScheduleOptions(): { value: DeckSchedule; label: string }[] {
+  return [
+    { value: 'owl', label: 'Сова' },
+    { value: 'lark', label: 'Жаворонок' },
+  ];
+}
+
+export function deckOccupationOptions(): { value: DeckOccupation; label: string }[] {
+  return [
+    { value: 'study', label: 'Учится' },
+    { value: 'working', label: 'Работает' },
+    { value: 'none', label: 'Не работает' },
+  ];
 }
 
 /**
@@ -518,6 +551,11 @@ export function openOriginalLabel(url: string): string {
 /** «живёт здесь» / «заезжает · ищет со-съёмщика со старта». */
 export function stageBadge(stage: PointStage): string {
   return STAGE_BADGE[stage] ?? '';
+}
+
+/** Зелёная шапка карточки комнаты в подборе (§2.2). Стадия решает текст. */
+export function roomCardTitle(stage: PointStage): string {
+  return stage === 'moving_in' ? 'Комната · заезжает' : 'Комната · сосед уже живёт там';
 }
 
 /** «на проверке» / «похоже, сдана». У активной точки строки нет — это норма. */

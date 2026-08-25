@@ -1,32 +1,21 @@
-/* Вкладка «Мои поиски» — три блока (§6):
-   1) Мои поиски (до 3),
-   2) Присмотренные квартиры · N из 5 (точки с рынка) + вход в форму,
-   3) Зову к себе · N из 2 (зелёный акцент): точки «к себе» со стадией и откликами.
-   Отдельного экрана выбора типа нет — выбор через кнопки блоков.
-   Отклики автор смотрит в общем «Тебя лайкнули» (пометка «на твою комнату»). */
+/* Вкладка «Поиски» — два блока (§6):
+   1) Мои поиски (до 3) — параметры, счётчики, вход в подбор,
+   2) Зову к себе · N из 2 (зелёный акцент): комнаты со стадией и откликами.
+   Блока рыночных квартир нет: они выключены этапом 1 (§2.2).
+   Отклики автор смотрит во вкладке «Лайки» (пометка «на твою комнату»). */
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { PointDTO } from '../api/client';
-import {
-  addedLabel,
-  isLivePoint,
-  money,
-  plural,
-  pointStatusLabel,
-  pointTitle,
-  pricePerPerson,
-  stageBadge,
-} from '../api/format';
+import { isLivePoint, money, plural, pointStatusLabel, pointTitle, stageBadge } from '../api/format';
 import { Badge, LimitChip, PhotoPlaceholder, S } from '../ui/primitives';
 
 export type SavedSearch = {
   id: string;
   zone: string;
-  since: string; // «в пуле с 12 июля»
+  since: string; // «ищу с 12 июля»
   params: string[];
   peopleCount: number; // «6 ищут»
   fullMatchCount: number; // «с 3 полное совпадение»
-  pointsLine: string; // «4 квартиры и 1 комната под эти параметры»; пусто — строки нет
   newCount?: number; // бейдж «1 новый» / «M новых»
 };
 
@@ -191,23 +180,15 @@ export function MySearchesScreen({
   searchSlotsTotal,
   archived,
   error,
-  flats,
-  enteredFlats,
-  flatSlotsTotal,
   homes,
   homeSlotsTotal,
-  onOpenSearch,
   onOpenPool,
   onEditSearch,
   onCloseSearch,
   onAddSearch,
   onReactivate,
-  onOpenFlatPool,
   onSharePoint,
   onClosePoint,
-  onRestorePoint,
-  onLeavePool,
-  onCreateFlatPoint,
   onCreateHomePoint,
 }: {
   /** Только активные: иначе «N ИЗ 3» перестаёт быть счётчиком слотов. */
@@ -216,40 +197,24 @@ export function MySearchesScreen({
   archived: ArchivedSearch[];
   /** Отказ последнего действия с поиском — обычно «поиски заняты 3 из 3» от сервера. */
   error?: string | null;
-  /** Свои квартиры с рынка: только они и считаются в лимит пяти. */
-  flats: PointDTO[];
-  /** Чужие пулы, в которые вошёл: лимита у них нет, слоты они не занимают. */
-  enteredFlats: PointDTO[];
-  flatSlotsTotal: number;
   homes: PointDTO[];
   homeSlotsTotal: number;
-  /** → выдача поиска (лента с его параметрами) */
-  onOpenSearch?: (id: string) => void;
-  /** → зонный пул этого поиска */
+  /** → подбор по этому поиску: люди живут в «Соседях» (§6) */
   onOpenPool?: (id: string) => void;
   onEditSearch?: (id: string) => void;
   onCloseSearch?: (id: string) => void;
   onAddSearch?: () => void;
   onReactivate?: (id: string) => void;
-  /** → пул квартиры (список вошедших) */
-  onOpenFlatPool?: (id: string) => void;
-  /** «Позвать в чат» — диплинк на свою квартиру (§6, вирусная петля).
-   *  Только у одобренных: ссылка на pending/paused у получателя не откроется. */
+  /** «Позвать в чат» — диплинк на свою комнату (§6, вирусная петля).
+   *  Только у одобренных: ссылка на pending у получателя не откроется. */
   onSharePoint?: (id: string) => void;
   /** Закрытие своей точки. Причин у неё нет — в отличие от поиска (§3). */
   onClosePoint?: (id: string) => void;
-  /** «Проверил — она живая» у своей скрытой голосами квартиры (§8). */
-  onRestorePoint?: (id: string) => void;
-  /** Выход из чужого пула прямо из списка — без похода на экран пула. */
-  onLeavePool?: (id: string) => void;
-  /** → форма «Найди со-съёмщика на свою квартиру» */
-  onCreateFlatPoint?: () => void;
   /** → форма «К себе», сразу на гейте стадии */
   onCreateHomePoint?: () => void;
 }) {
   // Отклонённые, сданные и протухшие висят в списке с пометкой, но слот лимита
   // не занимают: закрытая точка приезжает своей причиной, не словом `closed`.
-  const liveFlats = flats.filter(isLivePoint).length;
   const liveHomes = homes.filter(isLivePoint).length;
   // Отказ по слотам показывается только после тапа: висящая плашка «занято»
   // над списком из трёх карточек и так очевидна, а до тапа она просто шум.
@@ -312,39 +277,8 @@ export function MySearchesScreen({
                 {s.peopleCount} ищут · с {s.fullMatchCount} полное совпадение
               </span>
               <button type="button" style={S.secondaryButton} onClick={() => onOpenPool?.(s.id)}>
-                Смотреть пул · {s.peopleCount} {plural(s.peopleCount, 'человек', 'человека', 'человек')}
+                Смотреть в „Соседях“
               </button>
-              {/* Строка точек — отдельный переход в выдачу поиска. Пустая
-                  строка = точек нет, и строки тогда нет вовсе: вести в ноль
-                  некуда. */}
-              {s.pointsLine && (
-                <div
-                  onClick={() => onOpenSearch?.(s.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '9px 11px',
-                    borderRadius: 10,
-                    background: 'var(--app-bg)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span
-                    style={{
-                      flex: '1 1 auto',
-                      fontSize: 13,
-                      color: 'var(--tg-theme-subtitle-text-color)',
-                      minWidth: 0,
-                    }}
-                  >
-                    {s.pointsLine}
-                  </span>
-                  <span style={{ flex: '0 0 auto', fontSize: 17, lineHeight: 1, color: 'var(--tg-theme-hint-color)' }}>
-                    ›
-                  </span>
-                </div>
-              )}
               <div style={L.actions}>
                 <button type="button" style={L.actionLink} onClick={() => onEditSearch?.(s.id)}>
                   Редактировать
@@ -387,46 +321,7 @@ export function MySearchesScreen({
           </div>
         )}
 
-        {/* 2. Присмотренные квартиры с рынка: свои считаются в лимит, чужие
-            пулы стоят рядом без счёта — вход в них бесплатен и безлимитен. */}
-        <div style={L.section}>
-          <span style={S.sectionTitle}>
-            ПРИСМОТРЕННЫЕ КВАРТИРЫ · {liveFlats} ИЗ {flatSlotsTotal}
-          </span>
-
-          {flats.length === 0 && enteredFlats.length === 0 ? (
-            <div style={L.emptyCard}>
-              <span style={L.emptyTitle}>Присмотрел вариант на Авито? Собери на него людей</span>
-              <CreateEntry tone="flat" onClick={onCreateFlatPoint} />
-            </div>
-          ) : (
-            <>
-              {flats.map((p) => (
-                <FlatRow
-                  key={p.id}
-                  point={p}
-                  mine
-                  onOpenPool={onOpenFlatPool}
-                  onShare={onSharePoint}
-                  onClose={onClosePoint}
-                  onRestore={onRestorePoint}
-                />
-              ))}
-              {enteredFlats.map((p) => (
-                <FlatRow
-                  key={p.id}
-                  point={p}
-                  onOpenPool={onOpenFlatPool}
-                  onShare={onSharePoint}
-                  onLeave={onLeavePool}
-                />
-              ))}
-              {liveFlats < flatSlotsTotal && <CreateEntry tone="flat" onClick={onCreateFlatPoint} />}
-            </>
-          )}
-        </div>
-
-        {/* 3. Зову к себе — точки «к себе», свой лимит слотов */}
+        {/* 2. Зову к себе — точки «к себе», свой лимит слотов */}
         <div style={L.section}>
           <span style={S.sectionTitle}>
             ЗОВУ К СЕБЕ · {liveHomes} ИЗ {homeSlotsTotal}
@@ -448,91 +343,6 @@ export function MySearchesScreen({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Строка квартиры в «Присмотренных».
- *
- * Своя и чужая различаются пометкой и действиями: у обеих один и тот же пул, но
- * звать в чат и закрывать можно только свою. Правки нет ни у той, ни у другой —
- * редактирования точек в продукте нет вовсе (§6).
- */
-function FlatRow({
-  point,
-  mine,
-  onOpenPool,
-  onShare,
-  onClose,
-  onRestore,
-  onLeave,
-}: {
-  point: PointDTO;
-  mine?: boolean;
-  onOpenPool?: (id: string) => void;
-  onShare?: (id: string) => void;
-  onClose?: (id: string) => void;
-  /** «Проверил — она живая» у своей скрытой голосами квартиры (§8). */
-  onRestore?: (id: string) => void;
-  /** Быстрый выход из чужого пула прямо из списка (§6). */
-  onLeave?: (id: string) => void;
-}) {
-  const share = pricePerPerson(point.price_total);
-  return (
-    <article style={S.card}>
-      <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>
-        <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
-          {mine ? 'Квартира с рынка' : 'Я в пуле'}
-        </span>
-        <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>
-          {addedLabel(point.created_days_ago)}
-        </span>
-      </div>
-      <div style={{ ...S.cardBody, gap: 10 }}>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <PointThumb url={point.photo_urls[0] ?? ''} label="скрин" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 590 }}>{pointTitle(point)}</span>
-            <span style={S.subtitle}>
-              {share !== null ? `${money(share)} с человека` : money(point.price_total ?? 0)}
-            </span>
-            <span style={{ fontSize: 13, fontWeight: 510 }}>
-              {mine && point.pool_count === 0 ? 'в пуле пока только ты' : `в пуле ${point.pool_count}`}
-            </span>
-          </div>
-        </div>
-        <StatusRow status={point.status} />
-        <button type="button" style={S.secondaryButton} onClick={() => onOpenPool?.(point.id)}>
-          {point.pool_count === 0
-            ? 'Смотреть пул'
-            : `Смотреть пул · ${point.pool_count} ${plural(point.pool_count, 'человек', 'человека', 'человек')}`}
-        </button>
-        {/* Закрытой карточке предлагать нечего, кроме как убрать её с глаз:
-            и отклонённой модератором, и сданной, и протухшей по TTL. Скрытую
-            голосами, наоборот, ещё можно вернуть — она не закрыта (§8). */}
-        {mine &&
-          (!isLivePoint(point) ? (
-            <PointActions id={point.id} action="Скрыть" onClose={onClose} question="Скрыть карточку?" />
-          ) : (
-            <PointActions
-              id={point.id}
-              onShare={point.status === 'active' ? onShare : undefined}
-              onRestore={point.status === 'paused' ? onRestore : undefined}
-              onClose={onClose}
-              question="Закрыть квартиру?"
-            />
-          ))}
-        {!mine && (
-          <PointActions
-            id={point.id}
-            action="Выйти из пула"
-            onShare={point.status === 'active' ? onShare : undefined}
-            onClose={onLeave}
-            question="Точно выйти?"
-          />
-        )}
-      </div>
-    </article>
   );
 }
 

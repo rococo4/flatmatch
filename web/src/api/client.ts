@@ -175,29 +175,10 @@ export interface SearchResponse extends SearchParamsNoZone {
   points_count: number;
 }
 
-/**
- * Розовый промо-блок ленты (§6) — единственное место, где сохраняется поиск.
- *
- * `avatars` — URL фотографий (до 4, вида `/media/<key>`), а НЕ имена: в стек
- * попадают только люди с одобренным фото, поэтому их бывает меньше четырёх
- * даже при большом `people`.
- * `my_search_id` есть ⇔ у смотрящего активный поиск ровно этой зоны.
- */
-export interface FeedPromo {
-  zone: ZoneRef;
-  people: number;
-  full_match: number;
-  avatars: string[];
-  my_search_id?: string;
-  slots_used: number;
-  slots_total: number;
-}
-
-export interface FeedResponse {
-  promo: FeedPromo;
-  /** Точки зоны выдачи, оба типа вперемешку: ранжирование считает сервер (§8). */
-  points: PointDTO[];
-}
+/* ── Подбор «Соседи» (§2.1, §6) ─────────────────────────────────────────────
+   Одна колода на все активные поиски смотрящего: люди и комнаты «к себе»
+   вперемешку, человек в ней один раз. Списками экрана и пулами больше никто
+   не ходит — слова «пул» в интерфейсе нет. */
 
 /**
  * Вердикт параметра против поиска смотрящего.
@@ -206,51 +187,151 @@ export interface FeedResponse {
  * цветом, но разным текстом — `grey` показывает значение параметра, `none`
  * говорит «не указана» (§6). Схлопывание живёт в api/format.ts.
  */
-export interface PoolChip {
+export interface PairChip {
   param: 'price' | 'rooms' | 'move_in' | 'term';
   verdict: 'green' | 'edge' | 'grey' | 'none';
 }
 
-/** Человек в зонном пуле. Метки чипов собирает клиент из `params`. */
-export interface PoolPersonDTO {
-  user_id: string;
-  name: string;
-  age: number;
-  /** Пустая строка = фото не одобрено: вместо него заглушка с инициалами (§5). */
-  photo_url: string;
-  /** Три поля анкеты для строки привычек — те же значения, что в Questionnaire. */
+/**
+ * Три поля анкеты, из которых собирается строка привычек.
+ *
+ * Отдельный тип, а не Pick с чьей-то карточки: одну и ту же строку рисуют
+ * карточка подбора, автор комнаты и входящий лайк, и общий предок у них
+ * только этот.
+ */
+export interface HabitsFields {
   schedule: NonNullable<Questionnaire['schedule']>;
   smoking: NonNullable<Questionnaire['smoking']>;
   pets_own: NonNullable<Questionnaire['pets_own']>;
-  shared_answers: number;
-  /** Нет вовсе в unranked-пуле: сравнивать не с чем. */
-  chips?: PoolChip[];
-  params: SearchParamsNoZone;
-  /** Зона его поиска — «где именно он ищет». */
-  zone: ZoneRef;
-  /** Полная территориальная совместимость с поиском смотрящего. */
-  zone_match: boolean;
-}
-
-export interface PoolSectionDTO {
-  id: 'all' | 'partial' | 'none';
-  people: PoolPersonDTO[];
 }
 
 /**
- * Зонный пул. Пул виртуален: жёсткая граница — только зона (§2.1).
+ * Лучшая пара «мой поиск × его поиск» — вся карточка подбора про неё (§2.1).
  *
- * `sections` и `people` всегда массивы; какой из них несёт пул — говорит
- * `ranked`, второй пуст. `my_search_id` — отдельный флаг: ранжирование
- * довольствуется поиском соседней пересекающейся зоны, поэтому `ranked`
- * бывает true без подписки именно сюда, и плашка «Ты в пуле» тогда соврала бы.
+ * Выбор пары считает сервер: выше секция → больше зелёных чипов → мой более
+ * свежий поиск. `chips` и `params` приезжают только у человека: у комнаты
+ * сравнивать нечего, кроме цены доли, и она уже в секции.
  */
-export interface PoolResponse {
+export interface DeckPair {
   zone: ZoneRef;
-  my_search_id?: string;
-  ranked: boolean;
-  sections: PoolSectionDTO[];
-  people: PoolPersonDTO[];
+  /** Зоны равны или вложены — «твоя зона» на бейдже. */
+  zone_match: boolean;
+  section: 'all' | 'partial' | 'none';
+  chips?: PairChip[];
+  params?: SearchParamsNoZone;
+}
+
+/** Человек в подборе: анкета целиком, кроме контактов (они живут в мэтче). */
+export interface DeckPerson extends HabitsFields {
+  user_id: string;
+  name: string;
+  age: number;
+  occupation: NonNullable<Questionnaire['occupation']> | 'none';
+  last_seen: string;
+  /** Первое — главное. Пустой массив = набор не одобрен, вместо него заглушка (§5). */
+  photo_urls: string[];
+  pets_ok: NonNullable<Questionnaire['pets_ok']>;
+  noise: NonNullable<Questionnaire['noise']>;
+  guests: NonNullable<Questionnaire['guests']>;
+  cleaning: NonNullable<Questionnaire['cleaning']>;
+  alcohol: NonNullable<Questionnaire['alcohol']>;
+  /** Пусто, пока «о себе» не одобрено (§5). */
+  about: string;
+}
+
+/** Автор комнаты — строка внизу её карточки; тап по ней ведёт в его анкету. */
+export interface DeckRoomAuthor extends HabitsFields {
+  user_id: string;
+  name: string;
+  age: number;
+  occupation: NonNullable<Questionnaire['occupation']> | 'none';
+  photo_urls: string[];
+  noise: NonNullable<Questionnaire['noise']>;
+}
+
+/** Комната «к себе» в подборе (§2.2). Рыночных квартир в колоде нет вовсе. */
+export interface DeckRoom {
+  id: string;
+  stage: PointStage;
+  zone: ZoneRef;
+  price_share?: number;
+  utilities?: Utilities;
+  isolated?: boolean;
+  rooms?: number;
+  bathrooms?: Bathrooms;
+  deposit?: number;
+  /** День заезда, «2026-09-15»: у точки это дата, а не месяц как у поиска. */
+  move_in?: string;
+  description?: string;
+  restrictions: Restriction[];
+  photo_urls: string[];
+  responses: number;
+  author: DeckRoomAuthor;
+}
+
+export type DeckCard =
+  | { kind: 'person'; person: DeckPerson; pair: DeckPair }
+  | { kind: 'room'; room: DeckRoom; pair: DeckPair };
+
+export interface DeckResponse {
+  /** До 50 карточек в порядке подбора: секция пары, внутри — свежие вперёд. */
+  cards: DeckCard[];
+  /** Активного поиска нет — колоды не существует (§2.1), экран зовёт в форму. */
+  no_search: boolean;
+  /** Сколько всего подошло: шапка «Соседи · N в твоих зонах». */
+  total: number;
+  /** Сколько пропущенных ждут возврата: «Показать пропущенных · N». */
+  passed: number;
+}
+
+/** Кого показывать. Пустой набор = обоих: «пусто = неважно» (§6). */
+export type DeckWho = 'people' | 'rooms';
+
+export type DeckPets = 'none' | 'ok_mine';
+
+export type DeckSmoking = 'no' | 'outside_only';
+
+export type DeckSchedule = 'owl' | 'lark';
+
+export type DeckOccupation = 'study' | 'working' | 'none';
+
+/**
+ * Фильтры подбора (§6, шторка «Каким должен быть сосед»).
+ *
+ * Правилом видимости они НЕ являются (§4 — это только пол и блоки): сужают
+ * колоду по анкете и живут на клиенте, уходя параметрами запроса.
+ */
+export interface DeckFilters {
+  who: DeckWho[];
+  age_min: number | null;
+  age_max: number | null;
+  pets: DeckPets[];
+  smoking: DeckSmoking[];
+  schedule: DeckSchedule[];
+  occupation: DeckOccupation[];
+}
+
+export const NO_DECK_FILTERS: DeckFilters = {
+  who: [],
+  age_min: null,
+  age_max: null,
+  pets: [],
+  smoking: [],
+  schedule: [],
+  occupation: [],
+};
+
+/** Хоть одно сужение задано: синяя точка на иконке фильтров. */
+export function hasDeckFilters(f: DeckFilters): boolean {
+  return (
+    f.who.length > 0 ||
+    f.age_min != null ||
+    f.age_max != null ||
+    f.pets.length > 0 ||
+    f.smoking.length > 0 ||
+    f.schedule.length > 0 ||
+    f.occupation.length > 0
+  );
 }
 
 /* ── Точки: квартиры с рынка и «сосед к себе» (§2.2, §6) ────────────────────
@@ -411,42 +492,6 @@ export interface MyPointsResponse {
   created: PointDTO[];
   /** Чужие квартиры, в чьи пулы я вошёл. Лимита у них нет. */
   entered: PointDTO[];
-}
-
-/**
- * Участник пула квартиры (§6): совпадения анкеты и вердикт-чипы.
- *
- * Поиска у него может не быть вовсе — вход в пул его не требует (§2.2), — и
- * тогда не приезжают ни `params`, ни `chips`, ни `zone`. Чипов нет и когда
- * поиска нет у СМОТРЯЩЕГО: сравнивать не с чем.
- */
-export interface PointPoolMemberDTO {
-  user_id: string;
-  name: string;
-  age: number;
-  /** Пустая строка = фото не одобрено: вместо него заглушка с инициалами (§5). */
-  photo_url: string;
-  schedule: NonNullable<Questionnaire['schedule']>;
-  smoking: NonNullable<Questionnaire['smoking']>;
-  pets_own: NonNullable<Questionnaire['pets_own']>;
-  shared_answers: number;
-  chips?: PoolChip[];
-  params?: SearchParamsNoZone;
-  /** Зона его поиска — «ищет на красной ветке». */
-  zone?: ZoneRef;
-  entered_at: string;
-  /** Вы уже в мэтче: карточка остаётся (пошли смотреть вместе), лайкать нечего. */
-  matched?: boolean;
-}
-
-/**
- * Пул квартиры — только список вошедших.
- *
- * Шапка-карточка сюда не едет: её отдаёт `GET /points/{id}`, и дублировать
- * двадцать полей во втором ответе незачем.
- */
-export interface PointPoolResponse {
-  members: PointPoolMemberDTO[];
 }
 
 /**
@@ -811,21 +856,43 @@ export function fetchZones(): Promise<ZoneDirectory> {
 }
 
 /**
- * Выдача по параметрам просмотра (§6 шаг 3).
+ * Колода подбора по всем активным поискам смотрящего (§2.1).
  *
- * Смотреть — не подписываться: этот вызов ничего не сохраняет, поиск создаёт
- * только кнопка внутри промо-блока. Пустые ключи опускаются — сервер считает
- * отсутствующий параметр «неважно», а `rooms=` разобрал бы как ошибку.
- * Наборы едут повторяющимися ключами (`rooms=2&rooms=3`).
- * `has_stuff` не отправляется вовсе: сервер их из query не читает.
+ * Наборы едут одним ключом через запятую (`pets=none,ok_mine`), пустые —
+ * не едут вовсе: отсутствующий параметр сервер считает «неважно», а
+ * `pets=` разобрал бы как неизвестное значение.
  */
-export function fetchFeed(p: SearchParams): Promise<FeedResponse> {
-  const q = new URLSearchParams({ zone_id: p.zone_id, price_max: String(p.price_max) });
-  if (p.price_min != null) q.set('price_min', String(p.price_min));
-  for (const r of p.rooms) q.append('rooms', String(r));
-  for (const t of p.terms) q.append('terms', t);
-  for (const m of p.move_in) q.append('move_in', m);
-  return request<FeedResponse>(`/api/v1/feed?${q.toString()}`);
+export function fetchDeck(f: DeckFilters): Promise<DeckResponse> {
+  const q = new URLSearchParams();
+  const list = (name: string, values: string[]) => {
+    if (values.length > 0) q.set(name, values.join(','));
+  };
+  list('who', f.who);
+  if (f.age_min != null) q.set('age_min', String(f.age_min));
+  if (f.age_max != null) q.set('age_max', String(f.age_max));
+  list('pets', f.pets);
+  list('smoking', f.smoking);
+  list('schedule', f.schedule);
+  list('occupation', f.occupation);
+  const query = q.toString();
+  return request<DeckResponse>(`/api/v1/deck${query ? `?${query}` : ''}`);
+}
+
+/** Пропуск человека — свайп влево: уходит из подбора на 7 дней (§2.1). */
+export function passPerson(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/people/${encodeURIComponent(id)}/pass`, { method: 'POST' });
+}
+
+/** Пропуск комнаты. Тот же жест и тот же срок, что у человека. */
+export function passPoint(id: string): Promise<void> {
+  return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/pass`, { method: 'POST' });
+}
+
+/** «Показать пропущенных»: стирает все пропуски разом, отвечает их числом. */
+export function clearPasses(): Promise<number> {
+  return request<{ restored: number }>('/api/v1/me/passes', { method: 'DELETE' }).then(
+    (r) => r.restored,
+  );
 }
 
 /**
@@ -877,17 +944,6 @@ export function reactivateSearch(id: string): Promise<SearchResponse> {
 }
 
 /**
- * Зонный пул.
- *
- * ПОБОЧНЫЙ ЭФФЕКТ: сдвигает `pool_seen_at` активного поиска смотрящего в этой
- * зоне, то есть гасит бейдж «M новых». Звать только при явном переходе на
- * экран пула — никаких префетчей и refetch-on-focus.
- */
-export function fetchZonePool(zoneId: string): Promise<PoolResponse> {
-  return request<PoolResponse>(`/api/v1/pools/zone/${encodeURIComponent(zoneId)}`);
-}
-
-/**
  * Создаёт точку: обе формы §6 ходят одним вызовом, тип решает тело.
  *
  * Отказы приходят кодами: 400 `invalid_field` — в `fields` ровно те поля,
@@ -927,57 +983,11 @@ export function fetchPointsMine(): Promise<MyPointsResponse> {
 }
 
 /**
- * Список вошедших в пул квартиры.
- *
- * Не вошедшему отвечает 403 `need_enter` — это не поломка, а состояние экрана:
- * карточка видна всем, список — только тем, кто в пуле (§6).
- */
-export function fetchPointPool(id: string): Promise<PointPoolResponse> {
-  return request<PointPoolResponse>(`/api/v1/points/${encodeURIComponent(id)}/pool`);
-}
-
-/**
  * Закрывает свою точку. Причин у точки нет — в отличие от поиска, где
  * «нашёл здесь» и есть метрика продукта (§3).
  */
 export function closePoint(id: string): Promise<void> {
   return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/close`, { method: 'POST' });
-}
-
-/** «Интересно — войти в пул»: бесплатно, безлимитно, повторный тап не ошибка. */
-export function enterPointPool(id: string): Promise<void> {
-  return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/enter`, { method: 'POST' });
-}
-
-/** «Выйти из пула». Дорогие лайки при этом не сгорают (§2.3) — говорить о них нечего. */
-export function leavePointPool(id: string): Promise<void> {
-  return requestNoContent(`/api/v1/points/${encodeURIComponent(id)}/enter`, { method: 'DELETE' });
-}
-
-/**
- * Голос свежести: «Объявление ещё живое?» после перехода по ссылке (§8).
- *
- * Отвечает карточкой, а не 204: голос может скрыть точку прямо сейчас
- * (порог набран), и экран обязан перерисоваться из ответа, а не из своих
- * догадок. Отказы: 409 `point_not_active`, 422 `not_votable` (не квартира
- * с рынка или без ссылки).
- */
-export function votePoint(id: string, alive: boolean): Promise<PointDTO> {
-  return request<PointDTO>(`/api/v1/points/${encodeURIComponent(id)}/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ alive }),
-  });
-}
-
-/**
- * «Проверил — она живая»: снимает паузу со своей квартиры и стирает голоса.
- *
- * Только у создателя и только у paused: чужая — 404, не на паузе — 409
- * `point_not_paused`. Второе скрытие голосами будет финальным (§8).
- */
-export function restorePoint(id: string): Promise<PointDTO> {
-  return request<PointDTO>(`/api/v1/points/${encodeURIComponent(id)}/restore`, { method: 'POST' });
 }
 
 /**

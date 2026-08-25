@@ -1,9 +1,8 @@
-/* Экран карточки «к себе» — §6, вход по диплинку `point_<id>`.
+/* Экран комнаты «к себе» — §6, вход по диплинку `point_<id>` и тапом по
+   карточке подбора.
 
-   Своего вида у экрана нет намеренно: это ровно та же карточка, что в ленте
-   (HomePointCard), с тем же откликом. Пул у «к себе» отсутствует (§2.2),
-   поэтому смотреть здесь больше не на что — только витрина автора и «Хочу эту
-   комнату».
+   Пул у «к себе» отсутствует (§2.2), поэтому смотреть здесь больше не на
+   что — только витрина автора и «Хочу эту комнату».
 
    Лайк ставит оболочка: остаток бюджета, список уже отправленных откликов и
    мэтчи живут выше экранов, и второй их владелец разошёлся бы с первым. */
@@ -11,8 +10,28 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import { ApiError, fetchPoint, type PointDTO } from '../api/client';
-import { pointTitle } from '../api/format';
-import { HomePointCard } from './FeedScreen';
+import {
+  dayMonth,
+  habitChips,
+  lastSeenLabel,
+  money,
+  occupationLabel,
+  plural,
+  pointTitle,
+  restrictionLabels,
+  roomCardTitle,
+} from '../api/format';
+import {
+  FactsBlock,
+  GreyChips,
+  HabitsBlock,
+  LimitChip,
+  PerPerson,
+  PersonRow,
+  PhotoPlaceholder,
+  S,
+  type Fact,
+} from '../ui/primitives';
 
 const V = {
   screen: {
@@ -146,6 +165,167 @@ export function HomePointView({
       )}
     </div>
   );
+}
+
+/**
+ * Карточка комнаты целиком: витрина автора, факты, отклик.
+ *
+ * Живёт здесь, а не в подборе: в колоде карточка своя — без блока привычек и
+ * без кнопки, её место занимает сердце под колодой (§6).
+ */
+function HomePointCard({
+  point,
+  likesRemaining,
+  mine,
+  responded,
+  matched,
+  onWantRoom,
+  onOpenProfile,
+}: {
+  point: PointDTO;
+  likesRemaining?: number;
+  /** Своя точка: откликаться самому себе не на что, кнопки нет. */
+  mine?: boolean;
+  responded?: boolean;
+  matched?: boolean;
+  onWantRoom?: (point: PointDTO) => void;
+  onOpenProfile?: (point: PointDTO) => void;
+}) {
+  const author = point.author;
+  // Витрина «к себе» — это автор: без него карточке нечего показывать (§2.2).
+  if (!author) return null;
+
+  return (
+    <article style={S.card}>
+      <div style={{ ...S.cardHeadBase, background: 'var(--type-home-bg)', color: 'var(--type-home-fg)' }}>
+        <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>
+          {roomCardTitle(point.stage ?? 'live')}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 510, opacity: 0.82 }}>
+          {lastSeenLabel(author.last_seen)}
+        </span>
+      </div>
+      <div style={S.cardBody}>
+        <div
+          onClick={onOpenProfile ? () => onOpenProfile(point) : undefined}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: 8,
+            margin: -8,
+            borderRadius: 11,
+            cursor: onOpenProfile ? 'pointer' : 'default',
+          }}
+        >
+          <PersonRow
+            name={author.name}
+            age={author.age}
+            occupation={occupationLabel(author.occupation)}
+            photoUrl={author.photo_url || undefined}
+          />
+          {onOpenProfile && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                flex: '0 0 auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 13,
+                fontWeight: 510,
+                color: 'var(--tg-theme-accent-text-color)',
+              }}
+            >
+              Анкета<span style={{ fontSize: 17, lineHeight: 1 }}>›</span>
+            </span>
+          )}
+        </div>
+        <FactsBlock title={`Комната у ${author.name}`} facts={homeFacts(point)}>
+          <RoomPhoto url={point.photo_urls[0] ?? ''} />
+          <GreyChips items={restrictionLabels(point.restrictions, 'intent_home')} />
+        </FactsBlock>
+        <HabitsBlock items={habitChips(author)} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 13,
+            color: 'var(--tg-theme-subtitle-text-color)',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--type-home-fg)',
+              flex: '0 0 auto',
+            }}
+          />
+          <span style={{ color: 'var(--tg-theme-text-color)', fontWeight: 510 }}>
+            {point.responses} {plural(point.responses, 'отклик', 'отклика', 'откликов')}
+          </span>
+        </div>
+        {/* Своя точка кнопки не несёт: отклик самому себе бессмыслен, и сервер
+            его всё равно отобьёт. Остаток показываем, только когда он известен:
+            своего запроса за бюджетом у экрана нет. */}
+        {onWantRoom && !mine && matched && (
+          <div
+            style={{
+              ...S.secondaryButton,
+              background: 'var(--verdict-ok-bg)',
+              color: 'var(--verdict-ok-fg)',
+              textAlign: 'center',
+            }}
+          >
+            ✓ У вас мэтч — контакты в «Моих мэтчах»
+          </div>
+        )}
+        {onWantRoom && !mine && !matched && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <button
+              type="button"
+              style={responded ? S.secondaryButton : S.filledButton}
+              disabled={responded}
+              onClick={() => onWantRoom(point)}
+            >
+              {responded ? 'Отклик отправлен' : 'Хочу эту комнату'}
+            </button>
+            {!responded && likesRemaining != null && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <LimitChip small>{likesRemaining} из 5</LimitChip>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/** Фото комнаты. Пустой адрес — заглушка: карточка без фото всё равно карточка. */
+function RoomPhoto({ url }: { url: string }) {
+  const style: CSSProperties = { aspectRatio: '16/9', borderRadius: 8 };
+  if (!url) return <PhotoPlaceholder inCard label="фото комнаты" style={style} />;
+  return (
+    <img src={url} alt="" style={{ ...style, width: '100%', objectFit: 'cover', display: 'block' }} />
+  );
+}
+
+function homeFacts(p: PointDTO): Fact[] {
+  const facts: Fact[] = [];
+  if (p.price_share) {
+    facts.push({ label: 'Твоя доля', value: <PerPerson>{money(p.price_share)}</PerPerson> });
+  }
+  if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
+  if (p.isolated != null) {
+    facts.push({ label: 'Комната', value: p.isolated ? 'изолированная' : 'проходная' });
+  }
+  if (p.deposit) facts.push({ label: 'Депозит', value: money(p.deposit) });
+  if (p.move_in) facts.push({ label: 'Заезд', value: `с ${dayMonth(p.move_in)}` });
+  return facts;
 }
 
 function message(e: unknown): string {

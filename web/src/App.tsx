@@ -1,27 +1,26 @@
 /* Оболочка приложения: тема, табы §6 и переходы между экранами.
 
-   Живыми данными питаются анкета (§12 шаг 2), зоны, поиски, лента и зонный
-   пул (§12 шаг 3), профиль человека, лайки и мэтчи (§12 шаг 4), точки, их
-   формы, квартирные пулы и отклики (§12 шаг 5). DEMO-экранов не осталось.
+   Живыми данными питаются анкета (§12 шаг 2), зоны и поиски (§12 шаг 3),
+   профиль человека, лайки и мэтчи (§12 шаг 4), комнаты «к себе» (§12 шаг 5),
+   подбор «Соседи» (§12 шаг 11). DEMO-экранов не осталось.
 
-   Здесь же живёт состояние ленты — намеренно выше экранов: переключение табов
-   не должно ронять выдачу и перезапрашивать её. И здесь единственный владелец
-   списка поисков: после любой мутации он перечитывается с сервера целиком,
-   локальных «оптимистичных» правок нет — счётчики и номера слотов считает
-   только сервер. Входящие лайки и мэтчи — по тому же правилу: бейдж на табе
-   считается по одному списку, который перечитывается после каждого лайка,
-   откуда бы его ни поставили. */
+   Здесь же живёт колода подбора — намеренно выше экранов: переключение табов
+   не должно ронять её и терять место, на котором человек остановился. И здесь
+   единственный владелец списка поисков: после любой мутации он перечитывается
+   с сервера целиком, локальных «оптимистичных» правок нет — счётчики и номера
+   слотов считает только сервер. Входящие лайки и мэтчи — по тому же правилу:
+   бейдж на табе считается по одному списку, который перечитывается после
+   каждого лайка, откуда бы его ни поставили. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isMiniAppDark, openTelegramLink, useSignal } from '@telegram-apps/sdk-react';
 
 import {
   ApiError,
+  clearPasses,
   closePoint,
   closeSearch,
   createSearch,
-  enterPointPool,
-  leavePointPool,
-  fetchFeed,
+  fetchDeck,
   fetchIncoming,
   fetchMatches,
   fetchMe,
@@ -30,16 +29,18 @@ import {
   fetchSearches,
   fetchTopZones,
   fetchZones,
+  hasDeckFilters,
+  passPerson,
+  passPoint,
   pointShareUrl,
   postLike,
   postSource,
   reactivateSearch,
-  restorePoint,
   startParam,
   updateSearch,
   type CloseReason,
-  type FeedPromo,
-  type FeedResponse,
+  type DeckCard,
+  type DeckFilters,
   type IncomingLikeDTO,
   type MatchDTO,
   type MyPointsResponse,
@@ -54,21 +55,16 @@ import {
   closeReasonLabel,
   dayMonth,
   habitsLine,
-  money,
   occupationLabel,
   ownPhotoSrc,
   paramChips,
-  plural,
-  pointTitle,
-  pricePerPerson,
   relativeDay,
 } from './api/format';
 import { launchedByTelegram } from './telegram/mockEnv';
 import { TabBar, type Tab } from './ui/TabBar';
-import type { PromoState } from './ui/PoolPromoBlock';
 import { OnboardingFlow } from './screens/OnboardingFlow';
-import { FeedScreen } from './screens/FeedScreen';
-import { FeedEntryScreen } from './screens/FeedEntryScreen';
+import { DeckScreen } from './screens/DeckScreen';
+import { FiltersSheet, loadDeckFilters, saveDeckFilters } from './screens/FiltersSheet';
 import {
   draftToParams,
   EMPTY_DRAFT,
@@ -77,32 +73,17 @@ import {
   SearchParamsScreen,
   type SearchDraft,
 } from './screens/SearchParamsScreen';
-import { ZonePoolView } from './screens/ZonePoolView';
 import { PersonProfileView } from './screens/PersonProfileView';
 import { MatchView } from './screens/MatchView';
-import { FlatPoolView } from './screens/FlatPoolView';
 import { HomePointView } from './screens/HomePointView';
 import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
 import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
 import { MyProfileScreen, type FixTarget, type MyMatch } from './screens/MyProfileScreen';
 import { ProfileEditScreen } from './screens/ProfileEditScreen';
-import { FlatLinkFormScreen, HomePointFormScreen } from './screens/PointFormScreens';
-import { PointCreatedScreen } from './screens/PointCreatedScreen';
+import { HomePointFormScreen } from './screens/PointFormScreens';
 import { CloseSearchSheet } from './screens/EdgeStates';
 
-type View =
-  | 'tab'
-  | 'searchForm'
-  | 'zonePool'
-  | 'person'
-  | 'match'
-  | 'flatPool'
-  | 'homePoint'
-  | 'incoming'
-  | 'flatForm'
-  | 'homeForm'
-  | 'pointCreated'
-  | 'editProfile';
+type View = 'tab' | 'searchForm' | 'person' | 'match' | 'homePoint' | 'homeForm' | 'editProfile';
 
 type Loading =
   | { kind: 'loading' }
@@ -120,44 +101,38 @@ type Loading =
 type PersonTarget = { userId: string; zoneId?: string; pointId?: string; back: View };
 
 /**
- * Состояние ленты.
+ * Колода подбора.
  *
- * `mode` — что показывает таб «Лента»: экран входа, форму параметров или
- * выдачу. `data` переживает уход на другие табы, поэтому возврат в ленту
- * ничего не перезапрашивает.
+ * `index` — курсор, а не вырезание из массива: карточки не переставляются, и
+ * возврат на вкладку не должен начинать колоду заново. `loaded` отличает
+ * «ещё не грузили» от «пусто»: в первом случае экран говорит «Секунду…», во
+ * втором — «Пока все».
  */
-type FeedState = {
-  mode: 'entry' | 'form' | 'results';
-  draft: SearchDraft;
-  /**
-   * Черновик показанной выдачи, снятый на время открытой формы просмотра.
-   *
-   * Форма правит `draft` на каждую нажатую цифру, а брошенная форма не должна
-   * оставлять после себя чужие параметры: чипы над выдачей и кнопка «Войти в
-   * пул» обязаны описывать именно то, что на экране. У правки поиска своя
-   * копия черновика, а у просмотра — этот снимок.
-   */
-  shownDraft: SearchDraft | null;
-  data: FeedResponse | null;
-  busy: boolean;
+type DeckState = {
+  cards: DeckCard[];
+  index: number;
+  total: number;
+  passed: number;
+  noSearch: boolean;
+  loaded: boolean;
+  /** Отказ последнего действия (лимит лайков, анкета на проверке) — словами сервера. */
   error: string | null;
-  invalidFields: string[];
-  /**
-   * Сервер отказал по слотам. Отдельный флаг, а не вывод из `data`: отказ
-   * приходит на POST, а цифры в ленте — из последнего GET, и до его обновления
-   * блок иначе продолжал бы предлагать кнопку, которая уже не сработает.
-   */
-  slotsFull: boolean;
 };
 
 /**
- * Открытая форма параметров.
+ * Открытая форма поиска.
  *
- * У правки свой черновик: она не должна переписывать фильтры просмотра —
- * иначе после «Сохранить» чипы над выдачей рассказывали бы про чужой поиск.
+ * У правки свой черновик и запертая зона (§3), у создания — свой: две формы
+ * не должны переписывать друг другу параметры.
  */
 type FormMode =
-  | { kind: 'look' }
+  | {
+      kind: 'create';
+      draft: SearchDraft;
+      busy: boolean;
+      error: string | null;
+      invalidFields: string[];
+    }
   | {
       kind: 'edit';
       searchId: string;
@@ -169,24 +144,29 @@ type FormMode =
       invalidFields: string[];
     };
 
-const EMPTY_FEED: FeedState = {
-  mode: 'entry',
-  draft: EMPTY_DRAFT,
-  shownDraft: null,
-  data: null,
-  busy: false,
+const EMPTY_DECK: DeckState = {
+  cards: [],
+  index: 0,
+  total: 0,
+  passed: 0,
+  noSearch: false,
+  loaded: false,
   error: null,
-  invalidFields: [],
-  slotsFull: false,
 };
+
+/** Слотов поисков на человека (§2.1). Потолок знает спека, сервер его же и держит. */
+const SEARCH_SLOTS = 3;
+
+/** Слотов дорогих лайков на окне 24 ч (§2.3): столько точек под колодой. */
+const LIKE_SLOTS = 5;
 
 export function App() {
   const isDark = useSignal(isMiniAppDark);
   const [state, setState] = useState<Loading>({ kind: 'loading' });
-  const [tab, setTab] = useState<Tab>('feed');
+  const [tab, setTab] = useState<Tab>('deck');
   const [view, setView] = useState<View>('tab');
   // Держит финальную развилку §4 на экране после отправки: статус к этому
-  // моменту уже не draft, и без флага оболочка увела бы в ленту сразу.
+  // моменту уже не draft, и без флага оболочка увела бы в подбор сразу.
   const [finishing, setFinishing] = useState(false);
   /**
    * Что открыть на экране анкеты сразу. Пусто — просто список.
@@ -214,34 +194,32 @@ export function App() {
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [searches, setSearches] = useState<SearchResponse[] | null>(null);
   /**
-   * Мои точки и чужие пулы, в которые я вошёл: блоки 2–3 «Моих поисков».
+   * Мои точки: блоки «Поисков».
    *
    * Как и поиски, живут выше экранов и перечитываются целиком после каждой
-   * мутации — счётчики пулов и статусы модерации считает только сервер.
+   * мутации — счётчики откликов и статусы модерации считает только сервер.
    */
   const [myPoints, setMyPoints] = useState<MyPointsResponse>({ created: [], entered: [] });
-  /** Только что созданная точка — её показывает экран успеха. */
-  const [createdPoint, setCreatedPoint] = useState<PointDTO | null>(null);
-  const [feed, setFeed] = useState<FeedState>(EMPTY_FEED);
+  const [deck, setDeck] = useState<DeckState>(EMPTY_DECK);
+  /** Фильтры подбора: сервер их не помнит, а человек между заходами — да (§6). */
+  const [filters, setFilters] = useState<DeckFilters>(() => loadDeckFilters());
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
-  const [poolZone, setPoolZone] = useState<string | null>(null);
-  /** Открытая квартира: её карточка и пул грузит FlatPoolView. */
-  const [flatPoint, setFlatPoint] = useState<string | null>(null);
-  /** Открытая карточка «к себе»: пула у неё нет, только витрина и отклик (§2.2). */
+  /** Открытая комната «к себе»: пула у неё нет, только витрина и отклик (§2.2). */
   const [homePoint, setHomePoint] = useState<string | null>(null);
   /**
-   * «Где уже ищут» для пустой ленты (§6).
+   * «Где уже ищут» для подбора без поиска (§6).
    *
-   * Грузится один раз и только когда пусто: топ зон одинаков для всей выдачи,
-   * а тратить запрос на каждую непустую ленту незачем.
+   * Грузится один раз и только когда поиска нет: топ зон одинаков для всех, а
+   * тратить запрос на каждый заход в непустую колоду незачем.
    */
   const [topZones, setTopZones] = useState<TopZoneDTO[] | null>(null);
   /**
-   * Остаток дорогих лайков для подписи на карточке «к себе».
+   * Остаток дорогих лайков: точки под колодой и подпись на карточке комнаты.
    *
-   * Своей ручки у бюджета нет: он приезжает ответом на лайк и с профилем
-   * человека, поэтому до первого лайка в сессии на ленте остаток не пишем —
-   * выдуманная цифра хуже её отсутствия.
+   * Своей ручки у бюджета нет — он приезжает ответом на лайк и с профилем
+   * человека, поэтому до первого лайка в сессии точки показывают полный
+   * запас: окно скользящее (§2.3), и чаще всего он и правда полон.
    */
   const [likesRemaining, setLikesRemaining] = useState<number | null>(null);
   /**
@@ -275,6 +253,14 @@ export function App() {
   const [closing, setClosing] = useState<string | null>(null);
   const [searchesError, setSearchesError] = useState<string | null>(null);
 
+  // Свежие колода и фильтры в ref: их читают стабильные колбэки (первый
+  // запрос, обновление вкладки), а пересобирать те на каждую пролистанную
+  // карточку — значит пересобирать и подписки, которые на них висят.
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
   // Токены дизайна переключают тему по data-theme на <html>, а не по классу на
   // корне приложения: под ними живут и шторки, которые рисуются выше по дереву.
   useEffect(() => {
@@ -297,11 +283,37 @@ export function App() {
       .catch(() => undefined);
   }, []);
 
-  /** Перечитывает блоки 2–3 «Моих поисков». Отказ переживаем молча. */
+  /** Перечитывает блок «Зову к себе». Отказ переживаем молча. */
   const reloadPoints = useCallback(() => {
     void fetchPointsMine()
       .then(setMyPoints)
       .catch(() => undefined);
+  }, []);
+
+  /**
+   * Загружает колоду заново — с начала.
+   *
+   * Курсор всегда обнуляется: колода приезжает целиком и в своём порядке, а
+   * «продолжить с шестой карточки» после смены фильтров значило бы пропустить
+   * пять новых.
+   */
+  const loadDeck = useCallback(async (f: DeckFilters) => {
+    try {
+      const data = await fetchDeck(f);
+      setDeck({
+        cards: data.cards,
+        index: 0,
+        total: data.total,
+        passed: data.passed,
+        noSearch: data.no_search,
+        loaded: true,
+        error: null,
+      });
+    } catch (e: unknown) {
+      // `loaded` не трогаем: неудачная первая загрузка — это не пустая колода,
+      // и «Пока все» на ней было бы неправдой. Экран покажет отказ строкой.
+      setDeck((d) => ({ ...d, error: asApiError(e).message }));
+    }
   }, []);
 
   useEffect(() => {
@@ -322,33 +334,21 @@ export function App() {
             // Молча: без справочника работает всё, кроме выбора зоны.
           });
 
-        // Список поисков решает, с чего начинается лента: с выдачи активного
-        // поиска или с экрана входа (§6 шаг 1).
+        // Поиски нужны не подбору (его колоду сервер собирает сам), а счётчику
+        // слотов и вкладке «Поиски».
         void fetchSearches()
           .then((list) => {
-            if (cancelled) return;
-            setSearches(list);
-            // Активные идут первыми и внутри — новые первыми, так что первый
-            // активный и есть самый свежий.
-            const active = list.find((s) => s.status === 'active');
-            if (!active) return;
-            const draft = paramsToDraft(active);
-            setFeed((f) => ({ ...f, draft }));
-            // На 'results' переключаемся вместе с данными, а не заранее: иначе
-            // на входе мигает экран «С кем и где будешь жить?».
-            void fetchFeed(draftToParams(draft))
-              .then((data) => {
-                if (!cancelled) setFeed((f) => ({ ...f, mode: 'results', data }));
-              })
-              .catch(() => {
-                // Выдача не приехала — остаёмся на экране входа.
-              });
+            if (!cancelled) setSearches(list);
           })
           .catch(() => {
-            // Лента остаётся на экране входа — оттуда всё доступно.
+            // Молча: колода приедет и без списка, слоты покажет следующий заход.
           });
 
-        // Бейдж входящих на табе «Профиль» нужен с первого экрана — иначе о
+        // Колода — первое, что человек видит: «no_search» в её ответе и есть
+        // развилка «с поиском / без поиска» (§6).
+        void loadDeck(filtersRef.current);
+
+        // Бейдж входящих на табе «Лайки» нужен с первого экрана — иначе о
         // лайке узнают только те, кто сам зашёл в раздел.
         reloadLikes();
         reloadPoints();
@@ -363,7 +363,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [reloadLikes, reloadPoints]);
+  }, [reloadLikes, reloadPoints, loadDeck]);
 
   const setProfile = useCallback((profile: Profile) => setState({ kind: 'ready', profile }), []);
 
@@ -377,42 +377,14 @@ export function App() {
   const reloadSearches = useCallback(async (): Promise<SearchResponse[]> => {
     const list = await fetchSearches();
     setSearches(list);
-    // Слот освободился (закрыли поиск) — снимаем отказ, иначе промо-блок
-    // продолжал бы врать «поиски заняты» до следующего запроса ленты.
-    setFeed((f) => {
-      const total = f.data?.promo.slots_total ?? 3;
-      const used = list.filter((s) => s.status === 'active').length;
-      return f.slotsFull && used < total ? { ...f, slotsFull: false } : f;
-    });
     return list;
   }, []);
 
-  /** Форма параметров просмотра: «Найти» с входа, «Изменить» с выдачи, диплинк пула. */
-  const openLookForm = useCallback((draft: SearchDraft) => {
-    setFeed((f) => ({
-      ...f,
-      mode: 'form',
-      draft,
-      // Снимок на случай, если форму бросят: «+ поиск» и «Найти» приходят с
-      // пустым черновиком, а выдача на экране осталась прежней.
-      shownDraft: f.draft,
-      error: null,
-      invalidFields: [],
-    }));
-    setFormMode({ kind: 'look' });
-    setTab('feed');
+  /** Форма поиска: «Найти», «ГДЕ УЖЕ ИЩУТ», «Создать ещё», диплинк без поиска. */
+  const openSearchForm = useCallback((draft: SearchDraft) => {
+    setFormMode({ kind: 'create', draft, busy: false, error: null, invalidFields: [] });
+    setTab('deck');
     setView('searchForm');
-  }, []);
-
-  const feedRef = useRef(feed);
-  feedRef.current = feed;
-
-  /** Перечитывает выдачу по текущим параметрам просмотра; входа и формы не трогает. */
-  const refreshFeed = useCallback(async () => {
-    const f = feedRef.current;
-    if (!f.data) return;
-    const data = await fetchFeed(draftToParams(f.draft)).catch(() => null);
-    if (data) setFeed((s) => ({ ...s, data }));
   }, []);
 
   /**
@@ -428,15 +400,23 @@ export function App() {
         reloadPoints();
         void reloadSearches().catch(() => undefined);
       }
-      if (which === 'profile') {
+      if (which === 'likes' || which === 'profile') {
         reloadLikes();
+      }
+      if (which === 'profile') {
         void fetchMe()
           .then(setProfile)
           .catch(() => undefined);
       }
-      if (which === 'feed') void refreshFeed();
+      // Колоду перечитываем, только когда терять нечего: недосмотренная
+      // колода — это место, на котором человек остановился, и обновление
+      // вернуло бы его к первой карточке.
+      if (which === 'deck') {
+        const d = deckRef.current;
+        if (!d.loaded || d.index >= d.cards.length) void loadDeck(filtersRef.current);
+      }
     },
-    [reloadPoints, reloadSearches, reloadLikes, setProfile, refreshFeed],
+    [reloadPoints, reloadSearches, reloadLikes, setProfile, loadDeck],
   );
 
   const toTab = useCallback(
@@ -463,26 +443,13 @@ export function App() {
     // Форму бросили — ждать возврата к профилю больше нечему: иначе поиск,
     // сохранённый через неделю совсем по другому поводу, унёс бы туда.
     setLikeReturn(null);
-    setFeed((f) => ({
-      ...f,
-      // Форму бросили — возвращаем черновик показанной выдачи. Иначе чипы
-      // рассказывали бы про ненабранные параметры, а «Войти в пул» молча
-      // сохранил бы поиск, которого человек не видел.
-      draft: f.shownDraft ?? f.draft,
-      shownDraft: null,
-      mode: f.data ? 'results' : 'entry',
-      busy: false,
-      error: null,
-      invalidFields: [],
-    }));
   }, []);
 
   /**
    * Диплинк запуска: куда открыть приложение (§5 дизайна пушей).
    *
-   * Переход откладывается до данных, от которых он зависит: пул зоны ждёт
-   * списка поисков — без него не решить, свой ли это пул. Сработавшая цель
-   * гасится, второй раз она увела бы человека с экрана, куда он ушёл сам.
+   * Сработавшая цель гасится: второй раз она увела бы человека с экрана, куда
+   * он ушёл сам.
    *
    * Эффект живёт выше ранних возвратов оболочки и потому ходит только через
    * setState и стабильные колбэки — тела экранов ниже в этом рендере может и
@@ -516,77 +483,52 @@ export function App() {
 
     switch (startTarget.kind) {
       case 'point': {
-        // Тип решает, куда вести: у квартиры экран с пулом, у «к себе» — та же
-        // карточка, что в ленте, без пула (§2.2). Отказ переживаем молча —
-        // точку могли закрыть или она ещё на проверке, и приложение всё равно
-        // открывается, просто с обычного входа.
-        const pointId = startTarget.id;
-        void fetchPoint(pointId)
+        // Живая точка теперь одна — комната «к себе» (§2.2): её экран и
+        // открываем. Отказ переживаем молча: точку могли закрыть или она ещё
+        // на проверке, и приложение всё равно открывается, просто с подбора.
+        void fetchPoint(startTarget.id)
           .then((point) => {
-            if (point.type === 'flat') {
-              setFlatPoint(point.id);
-              setView('flatPool');
-              return;
-            }
-            setFeed((f) => ({ ...f, error: null }));
+            if (point.type !== 'intent_home') return;
             setHomePoint(point.id);
             setView('homePoint');
           })
           .catch(() => undefined);
         break;
       }
-      case 'pool': {
-        // Пул отдаётся только со своим активным поиском этой зоны (§2.3):
-        // ждём список, иначе решение было бы гаданием.
-        if (!searches) return;
-        const zoneId = startTarget.zoneId;
-        if (searches.some((s) => s.status === 'active' && s.zone.id === zoneId)) {
-          setPoolZone(zoneId);
-          setView('zonePool');
-          break;
-        }
-        // Поиска на эту зону больше нет (закрыл, пока пуш шёл) — ведём в ленту
-        // с предзаполненной зоной: отказом на кнопку пуша отвечать нечем.
-        openLookForm({ ...EMPTY_DRAFT, zoneId });
+      // Пуш «в твоей зоне ищут ещё» ведёт в подбор: отдельного экрана зоны
+      // больше нет, а колода и так собрана по всем активным поискам (§2.1).
+      case 'pool':
+      case 'feed':
+        toTab('deck');
         break;
-      }
       case 'match':
         setMatchId(startTarget.id);
         setView('match');
         break;
       case 'incoming':
         setIncomingError(null);
-        setView('incoming');
+        toTab('likes');
         break;
       case 'mine':
         toTab('searches');
         break;
-      case 'feed':
-        toTab('feed');
-        break;
     }
     setStartTarget(null);
-  }, [startTarget, state, searches, openLookForm, toTab]);
+  }, [startTarget, state, toTab]);
 
   /**
-   * Пустая зона (§6): ни людей в промо, ни точек — тогда и только тогда ленте
-   * нужен топ живых зон. Считается прямо здесь, а не в экране: от него зависит
-   * запрос, а экран о запросах не знает.
+   * Топ живых зон нужен ровно одному состоянию — подбору без поиска (§6).
+   * Считается здесь, а не в экране: от него зависит запрос, а экран о
+   * запросах не знает.
    */
-  const emptyZone =
-    feed.mode === 'results' &&
-    feed.data !== null &&
-    feed.data.points.length === 0 &&
-    feed.data.promo.people === 0;
-
   useEffect(() => {
-    if (!emptyZone || topZones) return;
+    if (!deck.noSearch || topZones) return;
     void fetchTopZones(5)
       .then(setTopZones)
       .catch(() => {
-        // Без топа пустая лента остаётся с промо-блоком — этого хватает.
+        // Без топа состояние остаётся с вопросом и кнопкой «Найти» — хватает.
       });
-  }, [emptyZone, topZones]);
+  }, [deck.noSearch, topZones]);
 
   if (state.kind === 'loading') return <Centered>Секунду…</Centered>;
   if (state.kind === 'failed') return <Failure error={state.error} />;
@@ -611,7 +553,7 @@ export function App() {
         onFinished={() => {
           setFinishing(false);
           setView('tab');
-          setTab('feed');
+          setTab('deck');
         }}
       />
     );
@@ -624,80 +566,28 @@ export function App() {
   const archived = (searches ?? []).filter((s) => s.status !== 'active');
   const hasNewInSearches = active.some((s) => s.new_count > 0);
 
-  /** Перечитывает выдачу текущих параметров: счётчики пулов считает сервер. */
   /**
-   * «Интересно — войти в пул» (§2.2): вход бесплатный и в один тап, поэтому
-   * карточка меняется сразу — держать её мёртвой на время запроса не за что.
-   * Отказ снимает отметку и говорит словами сервера.
+   * «Сохранить и смотреть» (§3): просмотра без подписки не существует, поэтому
+   * форма всегда сохраняет — и уводит в подбор.
+   *
+   * На зону с уже существующим активным поиском это правка, а не второй
+   * поиск: дубль зоны съел бы слот и раздвоил счётчики (§2.1).
    */
-  const enterFlatPool = async (id: string) => {
-    setFeed((f) => ({ ...f, data: withPoolMark(f.data, id, true), error: null }));
+  const saveSearch = async (form: Extract<FormMode, { kind: 'create' }>) => {
+    if (form.busy) return;
+    setFormMode({ ...form, busy: true, error: null, invalidFields: [] });
+    const params = draftToParams(form.draft);
     try {
-      await enterPointPool(id);
-      reloadPoints();
-    } catch (e: unknown) {
-      setFeed((f) => ({
-        ...f,
-        data: withPoolMark(f.data, id, false),
-        error: asApiError(e).message,
-      }));
-    }
-  };
-
-  /** «Показать» — просмотр выдачи. Поиск этим НЕ создаётся (§3). */
-  const showFeed = async (draft: SearchDraft) => {
-    setFeed((f) => ({ ...f, busy: true, error: null, invalidFields: [] }));
-    try {
-      const params = draftToParams(draft);
-      // На зону с активным поиском форма — редактор подписки, не просмотр:
-      // иначе счётчик считался бы по форме, пул — по подписке, и они врали
-      // бы друг другу (§6, решение 2026-08-11).
-      const owned = (searches ?? []).find((s) => s.status === 'active' && s.zone.id === params.zone_id);
-      if (owned) {
-        await updateSearch(owned.id, params);
-        void reloadSearches().catch(() => undefined);
-      }
-      const data = await fetchFeed(params);
-      setFeed((f) => ({
-        ...f,
-        mode: 'results',
-        data,
-        // Показали — этот черновик и есть теперь черновик выдачи, откатывать
-        // больше не к чему.
-        shownDraft: null,
-        busy: false,
-        error: null,
-        invalidFields: [],
-        slotsFull: false,
-      }));
+      const owned = (searches ?? []).find(
+        (s) => s.status === 'active' && s.zone.id === params.zone_id,
+      );
+      if (owned) await updateSearch(owned.id, params);
+      else await createSearch(params);
+      await reloadSearches().catch(() => undefined);
       setFormMode(null);
-      setTab('feed');
+      setTab('deck');
       setView('tab');
-    } catch (e: unknown) {
-      const err = asApiError(e);
-      setFeed((f) => ({
-        ...f,
-        busy: false,
-        error: err.message,
-        invalidFields: err.code === 'invalid_field' ? err.fields : [],
-      }));
-    }
-  };
-
-  /** «Войти в пул {зоны} — сохранить поиск»: единственное место подписки (§6). */
-  const joinPool = async () => {
-    // Кнопка внутри блока не гаснет на время запроса, а второй тап создал бы
-    // второй поиск и съел бы ещё один слот.
-    if (feed.busy) return;
-    const params = draftToParams(feed.draft);
-    setFeed((f) => ({ ...f, busy: true, error: null }));
-    try {
-      await createSearch(params);
-      // Счётчики и номера слотов — серверные, поэтому список перечитываем
-      // целиком, а ленту следом: в ней появится my_search_id, и блок позеленеет.
-      await reloadSearches();
-      const data = await fetchFeed(params);
-      setFeed((f) => ({ ...f, data, busy: false, error: null, slotsFull: false }));
+      await loadDeck(filters);
       // Поиск сохранён — «и лайк улетит» из подписи формы обязано быть
       // правдой: выстреливаем лайк сами и ведём человека к результату.
       if (likeReturn) {
@@ -723,46 +613,92 @@ export function App() {
       }
     } catch (e: unknown) {
       const err = asApiError(e);
-      if (err.code === 'search_limit') {
-        await reloadSearches().catch(() => undefined);
-        const data = await fetchFeed(params).catch(() => null);
-        setFeed((f) => ({ ...f, data: data ?? f.data, busy: false, error: null, slotsFull: true }));
-        return;
-      }
-      if (err.code === 'invalid_field') {
-        setFeed((f) => ({
-          ...f,
-          mode: 'form',
-          // Форма открылась не сама — снимок нужен ей так же: правки в ней
-          // могут кончиться кнопкой «назад».
-          shownDraft: f.shownDraft ?? f.draft,
-          busy: false,
-          error: err.message,
-          invalidFields: err.fields,
-        }));
-        setFormMode({ kind: 'look' });
-        setView('searchForm');
-        return;
-      }
-      setFeed((f) => ({ ...f, busy: false, error: err.message }));
+      setFormMode({
+        ...form,
+        busy: false,
+        error: err.message,
+        invalidFields: err.code === 'invalid_field' ? err.fields : [],
+      });
     }
   };
 
-  const openZonePool = (zoneId: string) => {
-    setPoolZone(zoneId);
-    setView('zonePool');
+  /** Свайп влево: цель уходит из подбора на 7 дней (§2.1). Курсор — сразу. */
+  const passCard = async (card: DeckCard) => {
+    setDeck((d) => ({ ...d, index: d.index + 1, error: null }));
+    try {
+      if (card.kind === 'person') await passPerson(card.person.user_id);
+      else await passPoint(card.room.id);
+      // Счётчик пропущенных считает сервер: конец колоды обязан звать
+      // «Показать пропущенных · N» с настоящим числом.
+      setDeck((d) => ({ ...d, passed: d.passed + 1 }));
+    } catch (e: unknown) {
+      // Карточка уже улетела — возвращать её обратно значит спорить с жестом;
+      // говорим словами сервера, а сама цель вернётся следующей колодой.
+      setDeck((d) => ({ ...d, error: asApiError(e).message }));
+    }
   };
 
-  const openFlatPool = (pointId: string) => {
-    setFlatPoint(pointId);
-    setView('flatPool');
+  /**
+   * Свайп вправо: дорогой лайк с контекстом карточки (§2.3).
+   *
+   * Курсор двигается только после ответа: отказ по лимиту или непроверенной
+   * анкете не должен съедать карточку — человек вернётся к ней, когда слот
+   * освободится. Отсюда и `true`/`false` в ответе: по нему экран решает,
+   * улетела карточка совсем или возвращается на место.
+   */
+  const likeCard = async (card: DeckCard): Promise<boolean> => {
+    const target =
+      card.kind === 'person'
+        ? { userId: card.person.user_id, zoneId: card.pair.zone.id }
+        : { userId: card.room.author.user_id, pointId: card.room.id };
+    setDeck((d) => ({ ...d, error: null }));
+    try {
+      const res = await postLike(target.userId, {
+        zoneId: target.zoneId,
+        pointId: target.pointId,
+      });
+      setLikesRemaining(res.budget.remaining);
+      if (target.pointId) setRespondedPoints((list) => [...list, target.pointId]);
+      reloadLikes();
+      setDeck((d) => ({ ...d, index: d.index + 1 }));
+      if (res.matched && res.match_id) openMatch(res.match_id);
+      return true;
+    } catch (e: unknown) {
+      const err = asApiError(e);
+      // Гонка «поиск умер, пока смотрел карточку» (§2.3): вместо отказа —
+      // мини-форма с предзаполненной зоной, лайк уйдёт сам после сохранения.
+      if (err.code === 'need_search') {
+        askSearchForLike({ ...target, back: 'tab' }, err.message);
+        return true;
+      }
+      setDeck((d) => ({ ...d, error: err.message }));
+      return false;
+    }
   };
 
-  /** «Позвать в пул — поделиться в чат»: диплинк на точку уходит в чат (§6). */
+  /** «Показать пропущенных · N»: стирает все пропуски и собирает колоду заново. */
+  const restorePassed = async () => {
+    try {
+      await clearPasses();
+    } catch (e: unknown) {
+      setDeck((d) => ({ ...d, error: asApiError(e).message }));
+      return;
+    }
+    await loadDeck(filters);
+  };
+
+  const applyFilters = (next: DeckFilters) => {
+    setFilters(next);
+    saveDeckFilters(next);
+    setFiltersOpen(false);
+    void loadDeck(next);
+  };
+
+  /** «Позвать в чат»: диплинк на комнату уходит в чат (§6). */
   const sharePoint = (pointId: string) => openShare(pointShareUrl(pointId));
 
   /**
-   * «Хочу эту комнату» (§2.2): дорогой лайк автору прямо с карточки.
+   * «Хочу эту комнату» с экрана комнаты (§2.2): дорогой лайк автору.
    *
    * Поиска этот лайк не требует — отношение несёт сама карточка-витрина, —
    * поэтому ветки need_search тут нет: отказать могут только лимит и
@@ -772,34 +708,17 @@ export function App() {
     const author = point.author;
     if (!author || respondedPoints.includes(point.id)) return;
     // Кнопка отвечает до сервера, и она же держит второй тап: повторный лайк
-    // сервер бы простил, но человеку в ленте нужен ответ сразу.
+    // сервер бы простил, но человеку нужен ответ сразу.
     setRespondedPoints((list) => [...list, point.id]);
-    setFeed((f) => ({ ...f, error: null }));
+    setDeck((d) => ({ ...d, error: null }));
     try {
       const res = await postLike(author.user_id, { pointId: point.id });
       setLikesRemaining(res.budget.remaining);
       reloadLikes();
-      if (res.matched && res.match_id) {
-        openMatch(res.match_id);
-        return;
-      }
-      // Счётчик откликов считает сервер — перечитываем выдачу целиком.
-      void refreshFeed();
+      if (res.matched && res.match_id) openMatch(res.match_id);
     } catch (e: unknown) {
       setRespondedPoints((list) => list.filter((id) => id !== point.id));
-      setFeed((f) => ({ ...f, error: asApiError(e).message }));
-    }
-  };
-
-  /** Выход из чужого пула прямо из «Присмотренных» — лайки не трогает (§2.3). */
-  const leaveFromList = async (pointId: string) => {
-    setSearchesError(null);
-    try {
-      await leavePointPool(pointId);
-      reloadPoints();
-      void refreshFeed();
-    } catch (e: unknown) {
-      setSearchesError(asApiError(e).message);
+      setDeck((d) => ({ ...d, error: asApiError(e).message }));
     }
   };
 
@@ -809,19 +728,6 @@ export function App() {
     try {
       await closePoint(pointId);
       reloadPoints();
-      void refreshFeed();
-    } catch (e: unknown) {
-      setSearchesError(asApiError(e).message);
-    }
-  };
-
-  /** «Проверил — она живая»: своя скрытая голосами квартира возвращается в ленту (§8). */
-  const restoreMyPoint = async (pointId: string) => {
-    setSearchesError(null);
-    try {
-      await restorePoint(pointId);
-      reloadPoints();
-      void refreshFeed();
     } catch (e: unknown) {
       setSearchesError(asApiError(e).message);
     }
@@ -845,14 +751,8 @@ export function App() {
   const fixProfile = (target: FixTarget) =>
     openEditor(target === 'draft' ? undefined : target);
 
-  const openIncoming = () => {
-    // Отказ прошлого ответа не должен встречать на входе: он уже рассказан.
-    setIncomingError(null);
-    setView('incoming');
-  };
-
   /**
-   * «Ответить» из «Тебя лайкнули»: тот же дорогой лайк, но бесплатный (§2.3).
+   * «Ответить» из «Лайков»: тот же дорогой лайк, но бесплатный (§2.3).
    *
    * Контекст берётся из самого входящего — пул, в котором пересеклись, а не
    * тот, где мы сейчас стоим. Взаимность гарантирована (в списке ровно те, кто
@@ -885,10 +785,12 @@ export function App() {
   /** Лайк без поиска: §2.3 просит мини-форму «укажи, где ищешь», а не отказ. */
   const askSearchForLike = (target: PersonTarget, serverMessage: string) => {
     setLikeReturn(target);
-    // Зона пула предзаполнена: там они и пересеклись, и поиск скорее всего
-    // нужен именно на неё.
-    openLookForm(target.zoneId ? { ...EMPTY_DRAFT, zoneId: target.zoneId } : EMPTY_DRAFT);
-    setFeed((f) => ({ ...f, error: serverMessage }));
+    // Зона контекста предзаполнена: там они и пересеклись, и поиск скорее
+    // всего нужен именно на неё.
+    const draft = target.zoneId ? { ...EMPTY_DRAFT, zoneId: target.zoneId } : EMPTY_DRAFT;
+    setFormMode({ kind: 'create', draft, busy: false, error: serverMessage, invalidFields: [] });
+    setTab('deck');
+    setView('searchForm');
   };
 
   const openEditForm = (id: string) => {
@@ -954,29 +856,15 @@ export function App() {
     }
   };
 
-  /** Выдача точек под параметры сохранённого поиска (строка «M квартир…»). */
-  const openSearchFeed = (id: string) => {
-    const s = active.find((x) => x.id === id);
-    if (!s) return;
-    const draft = paramsToDraft(s);
-    setFeed((f) => ({ ...f, draft }));
-    setTab('feed');
-    setView('tab');
-    void showFeed(draft);
-  };
-
   const savedSearches: SavedSearch[] = active.map((s) => ({
     id: s.id,
     zone: s.zone.name,
-    since: `в пуле с ${dayMonth(s.created_at)}`,
+    since: `ищу с ${dayMonth(s.created_at)}`,
     // Зона уже в заголовке карточки — в чипах она была бы повтором.
     params: paramChips(s),
     peopleCount: s.people,
     fullMatchCount: s.full_match,
     newCount: s.new_count || undefined,
-    pointsLine: s.points_count
-      ? `${s.points_count} ${plural(s.points_count, 'квартира', 'квартиры', 'квартир')} под эти параметры`
-      : '',
   }));
 
   const archivedSearches: ArchivedSearch[] = archived.map((s) => ({
@@ -988,69 +876,88 @@ export function App() {
 
   const tabScreen = () => {
     switch (tab) {
-      case 'feed': {
-        if (feed.mode !== 'results' || !feed.data) {
-          return <FeedEntryScreen onSearch={() => openLookForm(EMPTY_DRAFT)} />;
-        }
-        const promo = feed.data.promo;
+      case 'deck': {
+        const card = deck.cards[deck.index];
         return (
-          <FeedScreen
-            zone={promo.zone.name}
-            params={paramChips(draftToParams(feed.draft), { zoneName: promo.zone.name })}
-            promo={buildPromo(promo, active, feed.slotsFull)}
-            points={feed.data.points}
-            error={feed.error}
-            likesRemaining={likesRemaining ?? undefined}
-            myUserId={profile.id}
-            respondedPoints={respondedPoints}
+          <DeckScreen
+            card={card}
+            total={deck.total}
+            passed={deck.passed}
+            loading={!deck.loaded && !deck.error}
+            noSearch={deck.noSearch}
+            ended={deck.loaded && !deck.noSearch && !card}
+            error={deck.error}
+            // Бюджет своей ручки не имеет: до первого лайка в сессии
+            // показываем полный запас (§2.3, окно скользящее).
+            likesRemaining={likesRemaining ?? LIKE_SLOTS}
+            pending={profile.status === 'pending'}
+            likeLocked={profile.status !== 'active'}
+            filtersActive={hasDeckFilters(filters)}
             topZones={topZones ?? undefined}
-            onEditParams={() => openLookForm(feed.draft)}
-            onJoinPool={() => void joinPool()}
-            onOpenPool={() => openZonePool(promo.zone.id)}
-            onFreeSlot={() => toTab('searches')}
-            onEnterFlatPool={(id) => void enterFlatPool(id)}
-            onOpenFlat={(point) => openFlatPool(point.id)}
-            matchedAuthors={matches.map((m) => m.peer.user_id)}
-            onWantRoom={(point) => void wantRoom(point)}
-            // Профиль автора «к себе» открывается только с точкой: отношение
-            // по ней сервер проверяет по этому параметру, без него — 404.
-            onOpenProfile={(point) =>
-              point.author &&
-              openPerson({ userId: point.author.user_id, pointId: point.id, back: 'tab' })
+            slotsUsed={active.length}
+            slotsTotal={SEARCH_SLOTS}
+            onOpenFilters={() => setFiltersOpen(true)}
+            onPass={(c) => void passCard(c)}
+            onLike={likeCard}
+            onOpenCard={(c) => {
+              if (c.kind === 'room') {
+                setHomePoint(c.room.id);
+                setView('homePoint');
+                return;
+              }
+              openPerson({ userId: c.person.user_id, zoneId: c.pair.zone.id, back: 'tab' });
+            }}
+            // Анкета автора комнаты открывается только с точкой: отношение по
+            // ней сервер проверяет по этому параметру, без него — 404 (§2.3).
+            onOpenAuthor={(room) =>
+              openPerson({ userId: room.author.user_id, pointId: room.id, back: 'tab' })
             }
-            // «Где уже ищут» из пустой ленты: форма просмотра с этой зоной —
-            // подписки тап не создаёт, смотреть можно без неё (§3).
-            onPickZone={(zoneId) => openLookForm({ ...EMPTY_DRAFT, zoneId })}
+            onFind={() => openSearchForm(EMPTY_DRAFT)}
+            onPickZone={(zoneId) => openSearchForm({ ...EMPTY_DRAFT, zoneId })}
+            onRestorePassed={() => void restorePassed()}
+            onAddSearch={() => openSearchForm(EMPTY_DRAFT)}
           />
         );
       }
+      // Плитки «Лайков» — задача шага 11.5; пока вкладку держит прежний
+      // список входящих, чтобы петля лайк → мэтч не ломалась на пересадке.
+      case 'likes':
+        return (
+          <IncomingLikesScreen
+            likes={incoming.map(toIncomingRow)}
+            replyingId={replying}
+            error={incomingError}
+            onBack={() => toTab('deck')}
+            onOpenProfile={(id) => {
+              const like = incoming.find((l) => l.user_id === id);
+              openPerson({
+                userId: id,
+                zoneId: like?.point ? undefined : like?.zone?.id,
+                pointId: like?.point?.id,
+                back: 'tab',
+              });
+            }}
+            onReply={(id) => void replyLike(id)}
+            onToFeed={() => toTab('deck')}
+          />
+        );
       case 'searches':
         return (
           <MySearchesScreen
             searches={savedSearches}
-            searchSlotsTotal={3}
+            searchSlotsTotal={SEARCH_SLOTS}
             archived={archivedSearches}
             error={searchesError}
-            flats={myPoints.created.filter((p) => p.type === 'flat')}
-            enteredFlats={myPoints.entered}
-            flatSlotsTotal={5}
             homes={myPoints.created.filter((p) => p.type === 'intent_home')}
             homeSlotsTotal={2}
-            onOpenPool={(id) => {
-              const s = active.find((x) => x.id === id);
-              if (s) openZonePool(s.zone.id);
-            }}
-            onOpenSearch={openSearchFeed}
+            // Отдельного экрана зоны больше нет: люди живут в подборе (§6).
+            onOpenPool={() => toTab('deck')}
             onEditSearch={openEditForm}
             onCloseSearch={setClosing}
-            onAddSearch={() => openLookForm(EMPTY_DRAFT)}
+            onAddSearch={() => openSearchForm(EMPTY_DRAFT)}
             onReactivate={(id) => void reactivate(id)}
-            onOpenFlatPool={openFlatPool}
             onSharePoint={sharePoint}
             onClosePoint={(id) => void closeMyPoint(id)}
-            onRestorePoint={(id) => void restoreMyPoint(id)}
-            onLeavePool={(id) => void leaveFromList(id)}
-            onCreateFlatPoint={() => setView('flatForm')}
             onCreateHomePoint={() => setView('homeForm')}
           />
         );
@@ -1071,7 +978,7 @@ export function App() {
             matches={matches.map(toMyMatch)}
             onEdit={() => openEditor()}
             onFix={fixProfile}
-            onOpenIncomingLikes={openIncoming}
+            onOpenIncomingLikes={() => toTab('likes')}
             onOpenMatch={openMatch}
           />
         );
@@ -1101,41 +1008,28 @@ export function App() {
             />
           );
         }
+        const form = formMode;
         return (
           <SearchParamsScreen
-            mode="look"
+            mode="create"
             zones={zones}
             updatesSearch={(searches ?? []).some(
-              (s) => s.status === 'active' && s.zone.id === feed.draft.zoneId,
+              (s) => s.status === 'active' && s.zone.id === form.draft.zoneId,
             )}
-            value={feed.draft}
-            onChange={(draft) => setFeed((f) => ({ ...f, draft }))}
+            value={form.draft}
+            onChange={(draft) =>
+              setFormMode((f) => (f?.kind === 'create' ? { ...f, draft } : f))
+            }
             onSubmit={() => {
-              if (isDraftReady(feed.draft)) void showFeed(feed.draft);
+              if (isDraftReady(form.draft)) void saveSearch(form);
             }}
             onBack={closeForm}
-            busy={feed.busy}
-            error={feed.error}
-            invalidFields={feed.invalidFields}
+            busy={form.busy}
+            error={form.error}
+            invalidFields={form.invalidFields}
           />
         );
       }
-      case 'zonePool':
-        if (!poolZone) return tabScreen();
-        return (
-          <ZonePoolView
-            zoneId={poolZone}
-            pointsCount={active.find((s) => s.zone.id === poolZone)?.points_count ?? 0}
-            // Бейдж «M новых» сервер только что погасил — перечитываем список,
-            // чтобы клиент не показывал сгоревшую цифру.
-            onLoaded={() => void reloadSearches().catch(() => undefined)}
-            onBack={back}
-            onOpenPerson={(id) =>
-              openPerson({ userId: id, zoneId: poolZone ?? undefined, back: 'zonePool' })
-            }
-            onOpenPoints={() => toTab('feed')}
-          />
-        );
       case 'person': {
         if (!person) return tabScreen();
         const target = person;
@@ -1147,8 +1041,8 @@ export function App() {
             onBack={() => setView(target.back)}
             onLiked={(remaining) => {
               setLikesRemaining(remaining);
-              // Лайк с точки-контекста — тот же отклик: карточка в ленте
-              // обязана про него знать.
+              // Лайк с точки-контекста — тот же отклик: экран комнаты обязан
+              // про него знать.
               const responded = target.pointId;
               if (responded) setRespondedPoints((list) => [...list, responded]);
               reloadLikes();
@@ -1156,15 +1050,15 @@ export function App() {
             onMatched={openMatch}
             onNeedSearch={(serverMessage) => askSearchForLike(target, serverMessage)}
             // Заблокированный стал невидимым: профиль по нему ответил бы 404,
-            // а списки, где он стоял, обязаны перечитаться (§5). Карточка «к
-            // себе» уходит вместе с автором, поэтому назад в неё не возвращаем:
+            // а списки, где он стоял, обязаны перечитаться (§5). Комната
+            // уходит вместе с автором, поэтому назад в неё не возвращаем:
             // экран показал бы отказ сервера вместо результата блокировки.
             onBlocked={() => {
-              if (target.back === 'homePoint') toTab('feed');
+              if (target.back === 'homePoint') toTab('deck');
               else setView(target.back);
               reloadLikes();
               reloadPoints();
-              void refreshFeed();
+              void loadDeck(filters);
             }}
           />
         );
@@ -1182,37 +1076,18 @@ export function App() {
             // ответил бы 404 — уводим туда, откуда пришли, обычно в «Мои
             // мэтчи». Перечитывается всё, что мэтч прятал: сам список,
             // входящие (лайк второго перестал быть входящим вместе с ним) и
-            // счётчики пулов — пара снова видит друг друга (§2.3), а после
-            // блока, наоборот, пропадает отовсюду (§5).
+            // колода — пара снова видит друг друга (§2.3), а после блока,
+            // наоборот, пропадает отовсюду (§5).
             onRemoved={() => {
               back();
               reloadLikes();
               reloadPoints();
               void reloadSearches().catch(() => undefined);
-              void refreshFeed();
+              void loadDeck(filters);
             }}
-            onToFeed={() => toTab('feed')}
+            onToFeed={() => toTab('deck')}
           />
         );
-      case 'flatPool': {
-        if (!flatPoint) return tabScreen();
-        const pointId = flatPoint;
-        return (
-          <FlatPoolView
-            key={pointId}
-            pointId={pointId}
-            mine={myPoints.created.some((p) => p.id === pointId)}
-            onBack={back}
-            onOpenPerson={(userId) => openPerson({ userId, pointId, back: 'flatPool' })}
-            onChanged={() => {
-              reloadPoints();
-              void refreshFeed();
-            }}
-            onLeft={back}
-            onShare={sharePoint}
-          />
-        );
-      }
       case 'homePoint': {
         if (!homePoint) return tabScreen();
         const pointId = homePoint;
@@ -1224,9 +1099,9 @@ export function App() {
             myUserId={profile.id}
             respondedPoints={respondedPoints}
             matchedAuthors={matches.map((m) => m.peer.user_id)}
-            // Отказ отклика оболочка кладёт в состояние ленты — тем же путём,
-            // что и с карточки в выдаче: жест и обработчик у них один.
-            error={feed.error}
+            // Отказ отклика оболочка кладёт в состояние подбора — тем же
+            // путём, что и с карточки колоды: жест и обработчик у них один.
+            error={deck.error}
             onBack={back}
             onWantRoom={(point) => void wantRoom(point)}
             onOpenProfile={(point) =>
@@ -1236,63 +1111,6 @@ export function App() {
           />
         );
       }
-      case 'incoming':
-        return (
-          <IncomingLikesScreen
-            likes={incoming.map(toIncomingRow)}
-            replyingId={replying}
-            error={incomingError}
-            onBack={back}
-            // Контекст лайка тапабелен, но зонный пул открывается только со
-            // своим поиском этой зоны — чужой пул сервер больше не отдаёт
-            // (§2.3 «мы увиделись»). Иначе тап ведёт сразу в профиль
-            // лайкнувшего. У квартиры такого условия нет: её карточку видят
-            // все, а список — только вошедшие, и это состояние экрана.
-            onOpenContext={(id) => {
-              const like = incoming.find((l) => l.user_id === id);
-              if (like?.point?.kind === 'flat') {
-                openFlatPool(like.point.id);
-                return;
-              }
-              const zone = like?.zone;
-              if (zone && active.some((s) => s.zone.id === zone.id)) {
-                openZonePool(zone.id);
-              } else {
-                openPerson({ userId: id, zoneId: zone?.id, back: 'incoming' });
-              }
-            }}
-            onOpenProfile={(id) => {
-              const like = incoming.find((l) => l.user_id === id);
-              openPerson({
-                userId: id,
-                zoneId: like?.point ? undefined : like?.zone?.id,
-                pointId: like?.point?.id,
-                back: 'incoming',
-              });
-            }}
-            onReply={(id) => void replyLike(id)}
-            onToFeed={() => toTab('feed')}
-          />
-        );
-      case 'flatForm':
-        return (
-          <FlatLinkFormScreen
-            zones={zones}
-            onBack={back}
-            onCreated={(point) => {
-              setCreatedPoint(point);
-              reloadPoints();
-              setView('pointCreated');
-            }}
-            // Дубль: своей точки не появилось, зато человек в чужом пуле —
-            // ведём в ленту, где карточка уже зелёная.
-            onEnteredPool={() => {
-              reloadPoints();
-              void refreshFeed();
-              toTab('feed');
-            }}
-          />
-        );
       case 'homeForm':
         return (
           <HomePointFormScreen
@@ -1324,21 +1142,6 @@ export function App() {
             }}
           />
         );
-      case 'pointCreated': {
-        if (!createdPoint) return tabScreen();
-        const share = pricePerPerson(createdPoint.price_total);
-        return (
-          <PointCreatedScreen
-            title={pointTitle(createdPoint)}
-            pricePerPerson={
-              share !== null
-                ? `${money(share)} с человека`
-                : money(createdPoint.price_total ?? 0)
-            }
-            onToSearches={() => toTab('searches')}
-          />
-        );
-      }
       default:
         return tabScreen();
     }
@@ -1346,16 +1149,27 @@ export function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <div style={{ flex: '1 1 auto', minHeight: 0 }}>{screen()}</div>
+      {/* Колонка, а не просто блок: экранам с прижатым низом (кнопки подбора)
+          нужна определённая высота, а не «сколько получилось по содержимому». */}
+      <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {screen()}
+      </div>
       {/* Таб-бар рисует только оболочка: у экранов своего нет, иначе на табах
-          их два и внутренний — мёртвый, без onChange. Пул тоже с табами:
-          из него уходят обратно в свой таб, а не «в никуда». */}
-      {(view === 'tab' || view === 'zonePool') && (
+          их два и внутренний — мёртвый, без onChange. */}
+      {view === 'tab' && (
         <TabBar
           active={tab}
           unreadLikes={unreadLikes}
           hasNewInSearches={hasNewInSearches}
           onChange={toTab}
+        />
+      )}
+
+      {filtersOpen && (
+        <FiltersSheet
+          value={filters}
+          onApply={applyFilters}
+          onClose={() => setFiltersOpen(false)}
         />
       )}
 
@@ -1382,86 +1196,21 @@ function openShare(url: string): void {
 }
 
 /**
- * Промо-блок из ответа ленты (§6, четыре состояния).
- *
- * Порядок проверок важен: подписка на эту зону главнее занятых слотов
- * (подписавшемуся кнопка уже не нужна), занятые слоты — главнее пустоты
- * (звать «войди первым» некуда, если войти нельзя).
- */
-function buildPromo(p: FeedPromo, active: SearchResponse[], slotsFull: boolean): PromoState {
-  const zone = { zone: p.zone.name, zoneIn: p.zone.name_in, zoneGen: p.zone.name_gen };
-  if (p.my_search_id) {
-    // Слот — номер этого поиска среди активных по старшинству, а не позиция в
-    // списке: сервер отдаёт новые первыми, и по нему каждый только что
-    // сохранённый поиск оказывался бы «слотом 1». Первым занят тот слот,
-    // который заняли раньше.
-    const at = [...active]
-      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
-      .findIndex((s) => s.id === p.my_search_id);
-    return {
-      state: 'saved',
-      ...zone,
-      peopleCount: p.people,
-      fullMatchCount: p.full_match,
-      avatars: p.avatars,
-      slot: at >= 0 ? at + 1 : p.slots_used,
-      slotsTotal: p.slots_total,
-    };
-  }
-  if (slotsFull || p.slots_used >= p.slots_total) {
-    return {
-      state: 'full',
-      ...zone,
-      peopleCount: p.people,
-      fullMatchCount: p.full_match,
-      avatars: p.avatars,
-      slotsTotal: p.slots_total,
-    };
-  }
-  if (p.people === 0) {
-    return { state: 'empty', ...zone, peopleCount: 0, slot: p.slots_used + 1, slotsTotal: p.slots_total };
-  }
-  return {
-    state: 'offer',
-    ...zone,
-    peopleCount: p.people,
-    fullMatchCount: p.full_match,
-    avatars: p.avatars,
-    slot: p.slots_used + 1,
-    slotsTotal: p.slots_total,
-  };
-}
-
-/**
- * Отмечает вход в пул точки в уже показанной выдаче — до ответа сервера.
- *
- * Счётчик при этом не трогаем: он персональный и смотрящего не считает
- * (visible_people его не возвращает), так что «+1» врал бы до следующей выдачи.
- */
-function withPoolMark(data: FeedResponse | null, id: string, entered: boolean): FeedResponse | null {
-  if (!data) return data;
-  return {
-    ...data,
-    points: data.points.map((p) => (p.id === id ? { ...p, in_pool: entered } : p)),
-  };
-}
-
-/**
  * Карточка входящего лайка (§6).
  *
  * Контекста может не быть: зона выпала из справочника или лайк пришёл ответом,
- * у которого пула нет. Тогда мини-карточки просто нет — выдумывать ей место
+ * у которого зоны нет. Тогда мини-карточки просто нет — выдумывать ей место
  * пересечения нельзя.
  *
- * Метка точки приезжает готовой и уже от лица адресата: отклик на «к себе»
+ * Метка точки приезжает готовой и уже от лица адресата: отклик на комнату
  * сервер подписывает «на твою комнату» (§2.2), и переписывать её здесь нечем.
- * Тапабельна она только у квартиры — у «к себе» пула нет, вести некуда.
+ * Тапабельной она больше не бывает: отдельных экранов зоны и квартиры нет.
  */
 function toIncomingRow(l: IncomingLikeDTO): IncomingLike {
   const context = l.point
-    ? { label: l.point.label, tappable: l.point.kind === 'flat' }
+    ? { label: l.point.label }
     : l.zone
-      ? { label: `из пула ${l.zone.name_gen}`, tappable: true }
+      ? { label: `ищет ${l.zone.name_in}` }
       : undefined;
   return {
     id: l.user_id,

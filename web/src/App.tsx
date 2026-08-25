@@ -208,6 +208,13 @@ export function App() {
   /** Открытая комната «к себе»: пула у неё нет, только витрина и отклик (§2.2). */
   const [homePoint, setHomePoint] = useState<string | null>(null);
   /**
+   * Отказ отклика на экране комнаты — своя строка, не общая с подбором.
+   *
+   * Иначе «лимит исчерпан» из колоды встречал бы человека на карточке
+   * комнаты, куда он зашёл совсем за другим, и наоборот.
+   */
+  const [roomError, setRoomError] = useState<string | null>(null);
+  /**
    * «Где уже ищут» для подбора без поиска (§6).
    *
    * Грузится один раз и только когда поиска нет: топ зон одинаков для всех, а
@@ -489,6 +496,7 @@ export function App() {
         void fetchPoint(startTarget.id)
           .then((point) => {
             if (point.type !== 'intent_home') return;
+            setRoomError(null);
             setHomePoint(point.id);
             setView('homePoint');
           })
@@ -530,6 +538,28 @@ export function App() {
       });
   }, [deck.noSearch, topZones]);
 
+  /**
+   * Колода приезжает пачкой до 50 карточек, а `total` считает всех подошедших.
+   *
+   * Досмотрел пачку, а подошедших больше — дозапрашиваем следующую: иначе на
+   * сотне совпавших человек упирался бы в «Пока все» после пятидесятого
+   * свайпа, а шапка над этим писала бы «137 в твоих зонах». Загрузка обычная,
+   * с начала: пропущенных и лайкнутых сервер уже исключил, и повторов не
+   * будет. Циклиться не на чем — `total` считается той же выборкой, и вместе
+   * с карточками он доходит до нуля.
+   */
+  const needsMore =
+    deck.loaded &&
+    !deck.noSearch &&
+    !deck.error &&
+    deck.index >= deck.cards.length &&
+    deck.cards.length < deck.total;
+
+  useEffect(() => {
+    if (!needsMore) return;
+    void loadDeck(filtersRef.current);
+  }, [needsMore, loadDeck]);
+
   if (state.kind === 'loading') return <Centered>Секунду…</Centered>;
   if (state.kind === 'failed') return <Failure error={state.error} />;
 
@@ -543,8 +573,15 @@ export function App() {
   // Открытый экран анкеты главнее: у чинящего фото реджект снимается самой
   // загрузкой нового, и без этой оговорки человека уносило бы в двенадцать
   // шагов ровно в тот момент, когда осталось нажать «Отправить на проверку».
-  const rejected = profile.photo_status === 'rejected' || profile.about_status === 'rejected';
-  if (view !== 'editProfile' && ((profile.status === 'draft' && !rejected) || finishing)) {
+  // Что именно отклонил модератор: плашка подбора и экран анкеты ведут в один
+  // и тот же кусок правки, а фото главнее — без него человека не видно (§4).
+  const fixTarget: 'photo' | 'about' | null =
+    profile.photo_status === 'rejected'
+      ? 'photo'
+      : profile.about_status === 'rejected'
+        ? 'about'
+        : null;
+  if (view !== 'editProfile' && ((profile.status === 'draft' && !fixTarget) || finishing)) {
     return (
       <OnboardingFlow
         profile={profile}
@@ -671,6 +708,9 @@ export function App() {
         askSearchForLike({ ...target, back: 'tab' }, err.message);
         return true;
       }
+      // Слотов не осталось — точки под колодой обязаны это показать: своей
+      // ручки у бюджета нет, а отказ по лимиту и есть его настоящий ноль.
+      if (err.code === 'like_limit') setLikesRemaining(0);
       setDeck((d) => ({ ...d, error: err.message }));
       return false;
     }
@@ -710,15 +750,17 @@ export function App() {
     // Кнопка отвечает до сервера, и она же держит второй тап: повторный лайк
     // сервер бы простил, но человеку нужен ответ сразу.
     setRespondedPoints((list) => [...list, point.id]);
-    setDeck((d) => ({ ...d, error: null }));
+    setRoomError(null);
     try {
       const res = await postLike(author.user_id, { pointId: point.id });
       setLikesRemaining(res.budget.remaining);
       reloadLikes();
       if (res.matched && res.match_id) openMatch(res.match_id);
     } catch (e: unknown) {
+      const err = asApiError(e);
       setRespondedPoints((list) => list.filter((id) => id !== point.id));
-      setDeck((d) => ({ ...d, error: asApiError(e).message }));
+      if (err.code === 'like_limit') setLikesRemaining(0);
+      setRoomError(err.message);
     }
   };
 
@@ -883,14 +925,17 @@ export function App() {
             card={card}
             total={deck.total}
             passed={deck.passed}
-            loading={!deck.loaded && !deck.error}
+            // Пока едет следующая пачка — «Секунду…», а не «Пока все»: конец
+            // подбора наступает только когда кончились и карточки, и счётчик.
+            loading={(!deck.loaded && !deck.error) || needsMore}
             noSearch={deck.noSearch}
-            ended={deck.loaded && !deck.noSearch && !card}
+            ended={deck.loaded && !deck.noSearch && !card && !needsMore}
             error={deck.error}
             // Бюджет своей ручки не имеет: до первого лайка в сессии
             // показываем полный запас (§2.3, окно скользящее).
             likesRemaining={likesRemaining ?? LIKE_SLOTS}
             pending={profile.status === 'pending'}
+            rejected={fixTarget}
             likeLocked={profile.status !== 'active'}
             filtersActive={hasDeckFilters(filters)}
             topZones={topZones ?? undefined}
@@ -901,6 +946,9 @@ export function App() {
             onLike={likeCard}
             onOpenCard={(c) => {
               if (c.kind === 'room') {
+                // Прошлый отказ отклика уже рассказан — встречать им на входе
+                // в другую комнату нечего.
+                setRoomError(null);
                 setHomePoint(c.room.id);
                 setView('homePoint');
                 return;
@@ -912,6 +960,7 @@ export function App() {
             onOpenAuthor={(room) =>
               openPerson({ userId: room.author.user_id, pointId: room.id, back: 'tab' })
             }
+            onFixProfile={() => openEditor(fixTarget ?? undefined)}
             onFind={() => openSearchForm(EMPTY_DRAFT)}
             onPickZone={(zoneId) => openSearchForm({ ...EMPTY_DRAFT, zoneId })}
             onRestorePassed={() => void restorePassed()}
@@ -1099,9 +1148,7 @@ export function App() {
             myUserId={profile.id}
             respondedPoints={respondedPoints}
             matchedAuthors={matches.map((m) => m.peer.user_id)}
-            // Отказ отклика оболочка кладёт в состояние подбора — тем же
-            // путём, что и с карточки колоды: жест и обработчик у них один.
-            error={deck.error}
+            error={roomError}
             onBack={back}
             onWantRoom={(point) => void wantRoom(point)}
             onOpenProfile={(point) =>
@@ -1168,6 +1215,7 @@ export function App() {
       {filtersOpen && (
         <FiltersSheet
           value={filters}
+          total={deck.total}
           onApply={applyFilters}
           onClose={() => setFiltersOpen(false)}
         />

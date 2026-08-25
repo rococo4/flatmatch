@@ -12,11 +12,14 @@ import type { CSSProperties, ReactNode } from 'react';
 
 import type { DeckCard, DeckRoom, TopZoneDTO } from '../api/client';
 import {
+  ABOUT_REJECTED,
   chipLabel,
+  dayMonth,
   habitsLine,
   lastSeenLabel,
   money,
   occupationLabel,
+  PHOTO_REJECTED,
   plural,
   restrictionLabels,
   roomCardTitle,
@@ -174,6 +177,7 @@ export function DeckScreen({
   error,
   likesRemaining,
   pending,
+  rejected,
   likeLocked,
   filtersActive,
   topZones,
@@ -184,6 +188,7 @@ export function DeckScreen({
   onLike,
   onOpenCard,
   onOpenAuthor,
+  onFixProfile,
   onFind,
   onPickZone,
   onRestorePassed,
@@ -205,6 +210,11 @@ export function DeckScreen({
   likesRemaining: number;
   /** Анкета на проверке: жёлтая плашка сверху (§5). */
   pending?: boolean;
+  /**
+   * Модератор что-то отклонил — плашка вместо «на проверке» и путь починить:
+   * серое сердце без объяснения выглядело бы поломкой (§5).
+   */
+  rejected?: 'photo' | 'about' | null;
   /** Лайк недоступен до одобрения анкеты: сердце серое, стрелка работает. */
   likeLocked?: boolean;
   /** Хоть один фильтр задан — синяя точка на иконке. */
@@ -224,6 +234,8 @@ export function DeckScreen({
   onOpenCard?: (card: DeckCard) => void;
   /** Тап по строке автора комнаты — его анкета. */
   onOpenAuthor?: (room: DeckRoom) => void;
+  /** Тап по плашке реджекта — на экран анкеты, к отклонённому куску (§5). */
+  onFixProfile?: () => void;
   /** «Найти» из состояния без поиска. */
   onFind?: () => void;
   /** Строка «ГДЕ УЖЕ ИЩУТ»: форма поиска с этой зоной. */
@@ -276,7 +288,8 @@ export function DeckScreen({
         <span style={{ fontSize: 17, fontWeight: 590, letterSpacing: '-0.2px' }}>
           Соседи{total > 0 ? ` · ${total} в твоих зонах` : ''}
         </span>
-        <FiltersButton active={filtersActive} onClick={onOpenFilters} />
+        {/* Без поиска колоды нет — сужать нечего, и иконка звала бы в пустое. */}
+        {!noSearch && <FiltersButton active={filtersActive} onClick={onOpenFilters} />}
       </div>
 
       {loading ? (
@@ -286,7 +299,11 @@ export function DeckScreen({
       ) : (
         <>
           <div style={D.body}>
-            {pending && <PendingBanner />}
+            {rejected ? (
+              <RejectedBanner target={rejected} onFix={onFixProfile} />
+            ) : (
+              pending && <PendingBanner />
+            )}
             {error && <span style={D.error}>{error}</span>}
             {card ? (
               <SwipeCard
@@ -401,22 +418,49 @@ function FiltersButton({ active, onClick }: { active?: boolean; onClick?: () => 
   );
 }
 
+const banner: CSSProperties = {
+  padding: '10px 12px',
+  borderRadius: 12,
+  background: 'var(--warning-bg)',
+  color: 'var(--warning-fg)',
+  fontSize: 13,
+  lineHeight: 1.4,
+  textWrap: 'pretty',
+};
+
 /** Анкета ещё на проверке: смотреть можно, лайкать — нет (§5). */
 function PendingBanner() {
   return (
-    <div
-      style={{
-        padding: '10px 12px',
-        borderRadius: 12,
-        background: 'var(--warning-bg)',
-        color: 'var(--warning-fg)',
-        fontSize: 13,
-        lineHeight: 1.4,
-        textWrap: 'pretty',
-      }}
-    >
+    <div style={banner}>
       Анкета на быстрой проверке — смотреть и пропускать можно уже сейчас. Лайк откроется после
       одобрения — тебя тоже станет видно
+    </div>
+  );
+}
+
+/**
+ * Модератор отклонил фото или «о себе» (§5).
+ *
+ * Тексты — те же, что в пуше и в строке своего профиля: человек читает одно и
+ * то же везде, иначе это выглядит как разные новости. Плашка тапабельна
+ * целиком: серое сердце без пути починить — тупик.
+ */
+function RejectedBanner({ target, onFix }: { target: 'photo' | 'about'; onFix?: () => void }) {
+  return (
+    <div
+      onClick={onFix}
+      style={{
+        ...banner,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        cursor: onFix ? 'pointer' : 'default',
+      }}
+    >
+      <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+        {target === 'photo' ? PHOTO_REJECTED : ABOUT_REJECTED}
+      </span>
+      {onFix && <span style={{ flex: '0 0 auto', fontSize: 17, lineHeight: 1 }}>›</span>}
     </div>
   );
 }
@@ -1008,5 +1052,10 @@ function roomFacts(room: DeckRoom): { label: string; value: ReactNode }[] {
     facts.push({ label: 'Комната', value: room.isolated ? 'изолированная' : 'проходная' });
   }
   if (room.deposit) facts.push({ label: 'Депозит', value: money(room.deposit) });
+  // Заезд — только у стадии «заезжает»: у живущего там даты нет и быть не
+  // должно, комната свободна сейчас (§2.2).
+  if (room.stage === 'moving_in' && room.move_in) {
+    facts.push({ label: 'Заезд', value: `с ${dayMonth(room.move_in)}` });
+  }
   return facts;
 }

@@ -113,15 +113,18 @@ type Draft = Omit<DeckFilters, 'age_min' | 'age_max'> & { ageMin: string; ageMax
 
 export function FiltersSheet({
   value,
+  total,
   onApply,
   onClose,
 }: {
   value: DeckFilters;
+  /** Сколько сейчас в колоде: цифра на кнопке до первой правки — уже известна. */
+  total: number;
   onApply: (next: DeckFilters) => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(value));
-  const [count, setCount] = useState<number | null>(null);
+  const [count, setCount] = useState<number | null>(total);
 
   const filters = fromDraft(draft);
   // Свежий черновик в ref: эффект пересобирается по его СОДЕРЖИМОМУ, а не по
@@ -132,7 +135,14 @@ export function FiltersSheet({
   // Счётчик считает сервер тем же запросом колоды. Ответ на устаревший
   // черновик выбрасываем: пока летел запрос, чипы могли перещёлкнуть.
   const query = JSON.stringify(filters);
+  // Черновик, с которым шторку открыли: на нём колода уже посчитана, и
+  // спрашивать сервер о том же самом — лишний запрос на каждое открытие.
+  const opened = useRef(query);
   useEffect(() => {
+    if (query === opened.current) {
+      setCount(total);
+      return undefined;
+    }
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void fetchDeck(filtersRef.current)
@@ -148,7 +158,7 @@ export function FiltersSheet({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, total]);
 
   const digits = (raw: string) => raw.replace(/\D/g, '').slice(0, 2);
 

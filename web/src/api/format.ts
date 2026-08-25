@@ -521,33 +521,6 @@ export function pointTitle(p: Pick<PointDTO, 'type' | 'rooms' | 'zone'>): string
   return p.zone.name ? `${kind} · м. ${p.zone.name}` : kind;
 }
 
-/**
- * Название точки в родительном: «2-комнатной у м. Фрунзенская».
- *
- * Нужно ровно одной строке — вопросу шторки «Выйти из пула {чего}?»: там
- * именительный из pointTitle читался бы поломанным.
- */
-export function pointTitleGen(p: Pick<PointDTO, 'type' | 'rooms' | 'zone'>): string {
-  const kind =
-    p.type === 'intent_home' ? 'комнаты' : p.rooms ? `${p.rooms}-комнатной` : 'квартиры';
-  return p.zone.name ? `${kind} у м. ${p.zone.name}` : kind;
-}
-
-/**
- * Подпись ссылки на оригинал: «Открыть на Авито».
- *
- * Источник берётся из самой ссылки, а не из поля: хостов известно три — авито
- * и циан у пользовательских подач (§5) и t.me у постов парсера (§8), — а
- * отдельного `source` карточка не несёт. Незнакомый хост — «Открыть оригинал»:
- * врать про площадку хуже, чем не называть её.
- */
-export function openOriginalLabel(url: string): string {
-  if (url.includes('avito.')) return 'Открыть на Авито';
-  if (url.includes('cian.')) return 'Открыть на Циан';
-  if (url.includes('t.me/')) return 'Открыть пост в Telegram';
-  return 'Открыть оригинал';
-}
-
 /** «живёт здесь» / «заезжает · ищет со-съёмщика со старта». */
 export function stageBadge(stage: PointStage): string {
   return STAGE_BADGE[stage] ?? '';
@@ -574,44 +547,6 @@ export function isLivePoint(p: Pick<PointDTO, 'status'>): boolean {
   return !DEAD_POINT_STATUSES.includes(p.status);
 }
 
-/** «добавлена вчера» / «добавлена 5 дней назад». Точность до дня (§8). */
-export function addedLabel(daysAgo: number): string {
-  if (daysAgo <= 0) return 'добавлена сегодня';
-  if (daysAgo === 1) return 'добавлена вчера';
-  return `добавлена ${daysAgo} ${plural(daysAgo, 'день', 'дня', 'дней')} назад`;
-}
-
-/**
- * Строка свежести квартиры вместо «добавлена вчера» (§8).
- *
- * Была ли проверка вообще — решает сервер: `confirmed_at` приезжает только
- * тогда, когда точку подтвердили после создания (у только что поданной
- * квартиры last_seen_alive = created_at, и «подтверждена сегодня» на ней было
- * бы обещанием проверки, которой не было). Один голос «сдана» точку не
- * скрывает, но молчать о нём тоже нельзя.
- */
-export function freshnessLabel(
-  p: Pick<PointDTO, 'confirmed_at' | 'created_days_ago' | 'gone_votes' | 'status'>,
-): string {
-  let line: string;
-  if (p.confirmed_at) {
-    const confirmed = daysSince(p.confirmed_at);
-    if (confirmed <= 0) line = 'подтверждена сегодня';
-    else if (confirmed === 1) line = 'подтверждена вчера';
-    else line = `подтверждена ${confirmed} ${plural(confirmed, 'день', 'дня', 'дней')} назад`;
-  } else {
-    line = `${addedLabel(p.created_days_ago)}, не проверялась`;
-  }
-  if (p.status === 'active' && p.gone_votes >= 1) return `${line} · кто-то отметил как сданную`;
-  return line;
-}
-
-/** Плашка паузы: «похоже, сдана — 2 человека отметили» (§8). */
-export function goneBanner(goneVotes: number): string {
-  const who = plural(goneVotes, 'человек', 'человека', 'человек');
-  return `похоже, сдана — ${goneVotes} ${who} ${goneVotes === 1 ? 'отметил' : 'отметили'}`;
-}
-
 /**
  * Когда автор «к себе» заходил: «в сети вчера».
  *
@@ -633,28 +568,6 @@ export function pricePerPerson(total?: number): number | null {
   // Всегда на двоих: пул собирает минимум пару, а сколько их въедет в 3к —
   // неизвестно; половина — честный ориентир и для однушки, и для трёшки.
   return Math.round(total / 2 / 1000) * 1000;
-}
-
-/**
- * Факты квартиры с рынка — одни и те же в ленте и на карточке в пуле.
- *
- * Неназванное объявлением просто отсутствует: строка «Санузлы — не указано»
- * рассказывает про наши поля, а не про квартиру.
- */
-export function flatFacts(p: PointDTO): { label: string; value: string }[] {
-  const facts: { label: string; value: string }[] = [];
-  if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
-  if (p.rooms) {
-    facts.push({
-      label: 'Комнаты',
-      value:
-        p.isolated == null ? String(p.rooms) : `${p.rooms}, ${p.isolated ? 'изолированные' : 'проходные'}`,
-    });
-  }
-  if (p.bathrooms) facts.push({ label: 'Санузлы', value: bathroomsLabel(p.bathrooms) });
-  if (p.utilities) facts.push({ label: 'Коммуналка', value: utilitiesLabel(p.utilities) });
-  if (p.deposit) facts.push({ label: 'Депозит', value: money(p.deposit) });
-  return facts;
 }
 
 export function bathroomsLabel(value: Bathrooms): string {
@@ -738,15 +651,6 @@ export function monthOptions(count = 6): { value: string; label: string }[] {
     out.push({ value: `${d.getFullYear()}-${month}`, label: withYear(MONTH_FMT.format(d), d) });
   }
   return out;
-}
-
-/** Сколько календарных дней прошло с момента: от полуночи. Точность до дня (§8). */
-function daysSince(iso: string): number {
-  const then = new Date(iso);
-  then.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.round((today.getTime() - then.getTime()) / DAY_MS));
 }
 
 /** «35–45к» или «до 45к»: снизу вилка открыта чаще, чем сверху. */

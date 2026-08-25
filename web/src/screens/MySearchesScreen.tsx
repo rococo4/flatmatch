@@ -114,24 +114,8 @@ const L = {
   emptyTitle: { fontSize: 15, fontWeight: 590, textWrap: 'pretty' } as CSSProperties,
 };
 
-const ENTRY = {
-  flat: {
-    title: 'Присмотрел квартиру? Найди, с кем её снять',
-    hint: 'ссылка на Авито или Циан — соберём пул',
-  },
-  home: {
-    title: 'Ищу соседа к себе',
-    hint: 'уже живёшь или заезжаешь — комната свободна',
-  },
-};
-
-/** Вход в форму создания. Цвет квадрата — тип будущей точки. */
-function CreateEntry({ tone, onClick }: { tone: 'flat' | 'home'; onClick?: () => void }) {
-  const accent = tone === 'flat' ? 'var(--tg-theme-button-color)' : 'var(--type-home-fg)';
-  const titleColor = tone === 'flat' ? 'var(--tg-theme-accent-text-color)' : 'var(--type-home-fg)';
-  const badgeBg = tone === 'flat' ? 'var(--type-flat-bg)' : 'var(--type-home-bg)';
-  const badgeFg = tone === 'flat' ? 'var(--type-flat-fg)' : 'var(--type-home-fg)';
-  const { title, hint } = ENTRY[tone];
+/** Вход в форму «к себе» — единственная точка, которую создают руками (§2.2). */
+function CreateEntry({ onClick }: { onClick?: () => void }) {
   return (
     <button
       type="button"
@@ -142,7 +126,7 @@ function CreateEntry({ tone, onClick }: { tone: 'flat' | 'home'; onClick?: () =>
         gap: 11,
         width: '100%',
         padding: '13px 12px',
-        border: `1px dashed color-mix(in srgb, ${accent} 55%, transparent)`,
+        border: '1px dashed color-mix(in srgb, var(--type-home-fg) 55%, transparent)',
         borderRadius: 12,
         background: 'transparent',
         font: 'inherit',
@@ -156,8 +140,8 @@ function CreateEntry({ tone, onClick }: { tone: 'flat' | 'home'; onClick?: () =>
           width: 30,
           height: 30,
           borderRadius: 9,
-          background: badgeBg,
-          color: badgeFg,
+          background: 'var(--type-home-bg)',
+          color: 'var(--type-home-fg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -168,8 +152,12 @@ function CreateEntry({ tone, onClick }: { tone: 'flat' | 'home'; onClick?: () =>
         ＋
       </span>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-        <span style={{ fontSize: 15, fontWeight: 590, color: titleColor }}>{title}</span>
-        <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>{hint}</span>
+        <span style={{ fontSize: 15, fontWeight: 590, color: 'var(--type-home-fg)' }}>
+          Ищу соседа к себе
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
+          уже живёшь или заезжаешь — комната свободна
+        </span>
       </span>
     </button>
   );
@@ -330,14 +318,14 @@ export function MySearchesScreen({
           {homes.length === 0 ? (
             <div style={L.emptyCard}>
               <span style={L.emptyTitle}>Живёшь в квартире или заезжаешь — найди соседа</span>
-              <CreateEntry tone="home" onClick={onCreateHomePoint} />
+              <CreateEntry onClick={onCreateHomePoint} />
             </div>
           ) : (
             <>
               {homes.map((h) => (
                 <HomeRow key={h.id} point={h} onShare={onSharePoint} onClose={onClosePoint} />
               ))}
-              {liveHomes < homeSlotsTotal && <CreateEntry tone="home" onClick={onCreateHomePoint} />}
+              {liveHomes < homeSlotsTotal && <CreateEntry onClick={onCreateHomePoint} />}
             </>
           )}
         </div>

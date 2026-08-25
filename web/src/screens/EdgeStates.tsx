@@ -1,16 +1,13 @@
 /* Пограничные состояния — §6 / §2.3.
-   1) шторка выхода из квартирного пула (лайки не сгорают — про лимит молчим)
-   2) шторки блокировки, удаления мэтча и жалобы (§5, §2.3)
-   3) шторка закрытия поиска с причиной
-   4) свежесть точки (спит до шага 7)
-   5) гейт второго «живу» в форме «к себе»
-   6) шторки правки анкеты: ответ вопроса, «о себе», возраст (§6, экран «Анкета») */
+   1) шторки блокировки, удаления мэтча и жалобы (§5, §2.3)
+   2) шторка закрытия поиска с причиной
+   3) гейт второго «живу» в форме «к себе»
+   4) шторки правки анкеты: ответ вопроса, «о себе», возраст (§6, экран «Анкета») */
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { CloseReason, ReportReason } from '../api/client';
 import { reportReasonOptions } from '../api/format';
 import { ABOUT_HINT, choiceRowStyle, type Choice } from './OnboardingScreens';
-import { S } from '../ui/primitives';
 
 const E = {
   scrim: {
@@ -150,35 +147,6 @@ function SheetShell({ onDismiss, children }: { onDismiss?: () => void; children:
         {children}
       </div>
     </div>
-  );
-}
-
-/** Выход из квартирного пула. Лайки не сгорают — про лимит здесь ничего не говорим. */
-export function LeavePoolSheet({
-  pointTitle,
-  onStay,
-  onLeave,
-}: {
-  /** «Двушки на Соколе» — в родительном падеже */
-  pointTitle: string;
-  onStay?: () => void;
-  onLeave?: () => void;
-}) {
-  return (
-    <SheetShell onDismiss={onStay}>
-      <span style={E.grabber} />
-      <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px', textWrap: 'pretty' }}>
-        Выйти из пула {pointTitle}?
-      </span>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" style={E.stay} onClick={onStay}>
-          Остаться
-        </button>
-        <button type="button" style={E.leave} onClick={onLeave}>
-          Выйти
-        </button>
-      </div>
-    </SheetShell>
   );
 }
 
@@ -612,146 +580,6 @@ export function AgeSheet({
         </button>
       </div>
     </SheetShell>
-  );
-}
-
-/** Свежесть точки: спрашиваем один раз на точку на человека, после возврата
- *  из ссылки на оригинал. Закрывается свайпом — отказ ответить нормален. */
-export function StillLiveSheet({
-  onYes,
-  onRented,
-  onDismiss,
-}: {
-  onYes?: () => void;
-  onRented?: () => void;
-  /** Тап мимо шторки: не ответить — нормальный исход, спрашиваем один раз. */
-  onDismiss?: () => void;
-}) {
-  return (
-    <SheetShell onDismiss={onDismiss}>
-      <span style={E.grabber} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px' }}>
-          Объявление ещё живое?
-        </span>
-        <span
-          style={{
-            fontSize: 13,
-            color: 'var(--tg-theme-subtitle-text-color)',
-            textWrap: 'pretty',
-          }}
-        >
-          Спросим один раз — чтобы пул не собирался на сданную квартиру
-        </span>
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          type="button"
-          onClick={onYes}
-          style={{
-            flex: '1 1 0',
-            padding: 13,
-            border: 'none',
-            borderRadius: 11,
-            background: 'var(--verdict-ok-bg)',
-            font: 'inherit',
-            fontSize: 15,
-            fontWeight: 590,
-            color: 'var(--verdict-ok-fg)',
-            cursor: 'pointer',
-          }}
-        >
-          Да
-        </button>
-        <button
-          type="button"
-          onClick={onRented}
-          style={{
-            flex: '1 1 0',
-            padding: 13,
-            border: 'none',
-            borderRadius: 11,
-            background: 'var(--warning-bg)',
-            font: 'inherit',
-            fontSize: 15,
-            fontWeight: 590,
-            color: 'var(--warning-fg)',
-            cursor: 'pointer',
-          }}
-        >
-          Уже сдана
-        </button>
-      </div>
-    </SheetShell>
-  );
-}
-
-export type Freshness =
-  | { kind: 'confirmed'; label: string } // «подтверждена вчера»
-  | { kind: 'stale'; label: string } // «добавлена 5 дней назад, не проверялась»
-  | { kind: 'doubt'; label: string }; // «1 участник считает, что сдана»
-
-/** Строка свежести под ссылкой на оригинал. Жёлтый — только сомнение. */
-export function FreshnessRow({ freshness }: { freshness: Freshness }) {
-  const dot =
-    freshness.kind === 'confirmed'
-      ? 'var(--verdict-ok-fg)'
-      : freshness.kind === 'doubt'
-        ? 'var(--warning-fg)'
-        : 'var(--tg-theme-hint-color)';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-      <span style={{ flex: '0 0 auto', width: 6, height: 6, borderRadius: '50%', background: dot }} />
-      <span style={{ fontSize: 13, color: 'var(--tg-theme-subtitle-text-color)' }}>{freshness.label}</span>
-    </div>
-  );
-}
-
-/** «Похоже, сдана»: карточка приглушена, вход в пул заменён похожими рядом. */
-export function LikelyRentedCard({
-  title,
-  pricePerPerson,
-  reportedBy,
-  onSimilar,
-}: {
-  title: string;
-  pricePerPerson: string;
-  reportedBy: string; // «3 участника отметили, что сдана»
-  onSimilar?: () => void;
-}) {
-  return (
-    <article style={{ ...S.card, opacity: 0.62 }}>
-      <div style={{ ...S.cardHeadBase, background: 'var(--type-flat-bg)', color: 'var(--type-flat-fg)' }}>
-        <span style={{ fontSize: 13, fontWeight: 640, letterSpacing: '-0.1px' }}>Квартира с рынка</span>
-        <span
-          style={{
-            padding: '2px 8px',
-            borderRadius: 7,
-            background: 'var(--warning-bg)',
-            color: 'var(--warning-fg)',
-            fontSize: 12,
-            fontWeight: 640,
-          }}
-        >
-          похоже, сдана
-        </span>
-      </div>
-      <div style={{ ...S.cardBody, gap: 10 }}>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div className="ph-photo" style={{ flex: '0 0 72px', height: 54, borderRadius: 8 }}>
-            <span>скрин</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 590 }}>{title}</span>
-            <span style={S.subtitle}>{pricePerPerson}</span>
-            <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{reportedBy}</span>
-          </div>
-        </div>
-        <button type="button" style={S.secondaryButton} onClick={onSimilar}>
-          Похожие квартиры рядом
-        </button>
-      </div>
-    </article>
   );
 }
 

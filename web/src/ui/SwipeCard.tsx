@@ -67,15 +67,27 @@ export function SwipeCard({
     setDx(shift);
   };
 
-  const up = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const from = start.current;
-    if (!from) return;
+  /** Общий хвост жеста: карточка возвращается на место, захват отпускается. */
+  const release = (e: ReactPointerEvent<HTMLDivElement>) => {
     start.current = null;
     setDragging(false);
     setDx(0);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+  };
+
+  // Жест отменила система (звонок, шторка, второй палец) — это НЕ бросок,
+  // сколько бы карточку ни утащили: отменённый жест обязан вернуться.
+  const cancel = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!start.current) return;
+    release(e);
+  };
+
+  const up = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const from = start.current;
+    if (!from) return;
+    release(e);
 
     const shift = e.clientX - from.x;
     const threshold = width() * THROW_RATIO;
@@ -119,7 +131,7 @@ export function SwipeCard({
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
-      onPointerCancel={up}
+      onPointerCancel={cancel}
     >
       {children}
     </div>

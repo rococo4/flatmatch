@@ -455,21 +455,6 @@ export interface PointDTO {
   author?: PointAuthorDTO;
 }
 
-/** Тело формы «Найди, с кем снять эту квартиру» (§6). */
-export interface CreateFlatPoint {
-  type: 'flat';
-  url: string;
-  zone_id: string;
-  price_total: number;
-  rooms?: number | null;
-  isolated?: boolean | null;
-  bathrooms?: Bathrooms | null;
-  utilities?: Utilities | null;
-  restrictions?: Restriction[];
-  /** До 10; первый ключ — обложка. */
-  photo_keys: string[];
-}
-
 /** Тело формы «Зову соседа к себе» (§2.2). Заезд обязателен у `moving_in`. */
 export interface CreateHomePoint {
   type: 'intent_home';
@@ -485,7 +470,8 @@ export interface CreateHomePoint {
   deposit?: number | null;
 }
 
-export type CreatePointBody = CreateFlatPoint | CreateHomePoint;
+/** Тип один: рыночные квартиры выключены, и сервер их тело отбивает (§2.2). */
+export type CreatePointBody = CreateHomePoint;
 
 export interface MyPointsResponse {
   /** Мои точки во всех статусах, кроме закрытых: они и считаются в лимит. */
@@ -653,13 +639,6 @@ export interface ApiErrorBody {
   error: { code: string; message: string; fields?: string[] };
 }
 
-/** 409 на ссылку, которая в продукте уже есть: всё для кнопки «Войти» — в теле. */
-interface DuplicateBody extends ApiErrorBody {
-  point_id: string;
-  pool_count: number;
-  status: PointStatus;
-}
-
 /**
  * Неудачный вызов API. `code` — стабильный идентификатор, по которому ветвимся;
  * `status` — HTTP-статус, он отличает «не вошёл» от «сервер лежит»;
@@ -676,27 +655,6 @@ export class ApiError extends Error {
     this.status = status;
     this.code = code;
     this.fields = fields;
-  }
-}
-
-/**
- * Ссылку уже приносили: 409 `duplicate_url`.
- *
- * Отдельный класс, потому что форме мало текста — ей нужна сама точка: у
- * активной есть пул, в который зовут войти, а точка на проверке ещё ничья, и
- * входить в неё некуда (§5). Ветвиться по `pointStatus`, не по сообщению.
- */
-export class DuplicatePointError extends ApiError {
-  readonly pointId: string;
-  readonly poolCount: number;
-  readonly pointStatus: PointStatus;
-
-  constructor(status: number, message: string, body: DuplicateBody) {
-    super(status, body.error.code, message);
-    this.name = 'DuplicatePointError';
-    this.pointId = body.point_id;
-    this.poolCount = body.pool_count;
-    this.pointStatus = body.status;
   }
 }
 
@@ -752,12 +710,9 @@ async function call(path: string, init?: RequestInit): Promise<Response> {
  */
 async function readError(response: Response): Promise<ApiError> {
   try {
-    const body = (await response.json()) as Partial<DuplicateBody>;
+    const body = (await response.json()) as Partial<ApiErrorBody>;
     if (body.error?.code) {
       const message = body.error.message ?? response.statusText;
-      if (body.error.code === 'duplicate_url' && body.point_id) {
-        return new DuplicatePointError(response.status, message, body as DuplicateBody);
-      }
       return new ApiError(response.status, body.error.code, message, body.error.fields ?? []);
     }
   } catch {
@@ -944,12 +899,11 @@ export function reactivateSearch(id: string): Promise<SearchResponse> {
 }
 
 /**
- * Создаёт точку: обе формы §6 ходят одним вызовом, тип решает тело.
+ * Создаёт комнату «к себе» — единственную точку, которую заводят руками (§2.2).
  *
  * Отказы приходят кодами: 400 `invalid_field` — в `fields` ровно те поля,
  * которые не понравились; 400 `point_limit` — слоты заняты (сообщение сервера
- * уже названо по типу формы); 409 `duplicate_url` — ссылку уже приносили,
- * и тогда это DuplicatePointError с самой точкой.
+ * уже названо по типу формы).
  */
 export function postPoint(body: CreatePointBody): Promise<PointDTO> {
   return request<PointDTO>('/api/v1/points', {

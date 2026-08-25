@@ -68,21 +68,6 @@ func (h *Handler) Routes() chi.Router {
 	return r
 }
 
-func (h *Handler) budget(w http.ResponseWriter, r *http.Request) {
-	user, ok := authmw.FromContext(r.Context())
-	if !ok {
-		httpx.Internal(w, r, errNoUserInContext)
-		return
-	}
-
-	budget, err := h.likes.Budget(r.Context(), user.ID)
-	if err != nil {
-		h.handleError(w, r, user.ID, err)
-		return
-	}
-	httpx.JSON(w, r, http.StatusOK, toBudget(budget))
-}
-
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	user, ok := authmw.FromContext(r.Context())
 	if !ok {
@@ -121,6 +106,21 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, toLikeResponse(result))
+}
+
+func (h *Handler) budget(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	budget, err := h.likes.Budget(r.Context(), user.ID)
+	if err != nil {
+		h.handleError(w, r, user.ID, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, toBudget(budget))
 }
 
 func (h *Handler) incoming(w http.ResponseWriter, r *http.Request) {

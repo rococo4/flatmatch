@@ -12,6 +12,10 @@ import type { IncomingLikeDTO } from '../api/client';
 import { paramName } from '../api/format';
 import { Badge, PhotoPlaceholder, VerdictChip } from '../ui/primitives';
 
+/** Светлые `--type-home-fg` / `--type-search-fg`: подложка бейджа темы не знает. */
+const BADGE_HOME_FG = '#1D6330';
+const BADGE_SEARCH_FG = '#8E2456';
+
 const L = {
   screen: {
     display: 'flex',
@@ -45,7 +49,12 @@ const L = {
     background: 'var(--chip-bg)',
     overflow: 'hidden',
   } as CSSProperties,
-  /** Подложка белёсая в обеих темах: под ней фото, а не поверхность приложения. */
+  /**
+   * Подложка белёсая в обеих темах: под ней фото, а не поверхность приложения.
+   *
+   * Отсюда и цвета текста — светлые токены, вписанные числами: в тёмной теме
+   * `--type-*-fg` становятся пастельными и на белом плитке не читаются вовсе.
+   */
   badge: {
     position: 'absolute',
     left: 8,
@@ -176,7 +185,7 @@ function LikeTile({
           <span
             style={{
               ...L.badge,
-              color: room ? 'var(--type-home-fg)' : 'var(--type-search-fg)',
+              color: room ? BADGE_HOME_FG : BADGE_SEARCH_FG,
             }}
           >
             {room ? 'на твою комнату' : `ищет: ${zone}`}

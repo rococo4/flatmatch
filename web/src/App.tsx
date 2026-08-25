@@ -999,8 +999,8 @@ export function App() {
             noSearch={deck.noSearch}
             ended={deck.loaded && !deck.noSearch && !card && !needsMore}
             error={deck.error}
-            // Бюджет своей ручки не имеет: до первого лайка в сессии
-            // показываем полный запас (§2.3, окно скользящее).
+            // Полный запас — только на кадр до ответа `GET /likes/budget`:
+            // окно скользящее (§2.3), и чаще всего он и правда полон.
             likesRemaining={likesRemaining ?? LIKE_SLOTS}
             pending={profile.status === 'pending'}
             rejected={fixTarget}
@@ -1183,10 +1183,21 @@ export function App() {
             zoneId={like?.point ? undefined : like?.zone?.id}
             pointId={like?.point?.id}
             busy={likesBusy === userId}
+            // Ответный лайк лимита не тратит, но одобренной анкеты требует
+            // так же, как любой другой (§5).
+            likeLocked={profile.status !== 'active'}
             error={incomingError}
             onBack={closeLiker}
             onDecline={(id) => void declineLike(id)}
             onReply={(id) => void replyLike(id)}
+            // Заблокированный стал невидимым: его анкета ответила бы 404, а
+            // списки, где он стоял, обязаны перечитаться (§5).
+            onBlocked={() => {
+              closeLiker();
+              reloadLikes();
+              reloadPoints();
+              void loadDeck(filters);
+            }}
           />
         );
       }

@@ -16,19 +16,11 @@ import {
   setMainButtonParams,
 } from '@telegram-apps/sdk-react';
 
-import {
-  ApiError,
-  blockPerson,
-  fetchPerson,
-  postLike,
-  reportPerson,
-  type PersonProfileDTO,
-  type ReportReason,
-} from '../api/client';
+import { ApiError, fetchPerson, postLike, type PersonProfileDTO } from '../api/client';
 import { occupationLabel, seenLabel, untilTime } from '../api/format';
 import { launchedByTelegram } from '../telegram/mockEnv';
-import { BlockPersonSheet, ReportPersonSheet } from './EdgeStates';
 import { PersonProfileScreen, sharedRows, type LikeAction } from './PersonProfileScreen';
+import { SafetySheets, type SafetySheet } from './SafetySheets';
 
 /** Слотов дорогих лайков на окне 24ч (§2.3). Сервер шлёт остаток, потолок знает спека. */
 const LIKE_SLOTS = 5;
@@ -115,13 +107,8 @@ export function PersonProfileView({
   /** Отказ сервера под кнопкой: лимит, непроверенная анкета, сеть. */
   const [refusal, setRefusal] = useState<string | null>(null);
   const [native, setNative] = useState(false);
-  /** Открытая шторка жалобы или блока (§5). */
-  const [sheet, setSheet] = useState<'report' | 'block' | null>(null);
-  /** Жалоба ушла: шторка меняется на «Спасибо, разберёмся». */
-  const [reported, setReported] = useState(false);
-  const [sheetBusy, setSheetBusy] = useState(false);
-  /** Отказ жалобы или блока: он живёт в шторке, а не под кнопкой лайка. */
-  const [sheetError, setSheetError] = useState<string | null>(null);
+  /** Открытая шторка жалобы или блока (§5): под ней прячется MainButton. */
+  const [sheet, setSheet] = useState<SafetySheet | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,46 +161,6 @@ export function PersonProfileView({
     } finally {
       setBusy(false);
     }
-  };
-
-  /**
-   * Жалоба (§5). Контекст — то место, откуда открыт профиль: модератору без
-   * него непонятно, где эти двое встретились. Нет контекста — уходит без него.
-   */
-  const report = async (reason: ReportReason) => {
-    if (sheetBusy) return;
-    setSheetBusy(true);
-    setSheetError(null);
-    try {
-      await reportPerson(userId, reason, { zoneId, pointId });
-      setReported(true);
-    } catch (e: unknown) {
-      setSheetError(message(e));
-    } finally {
-      setSheetBusy(false);
-    }
-  };
-
-  /** Блокировка (§5): обоюдная невидимость, отменить её нечем. */
-  const block = async () => {
-    if (sheetBusy) return;
-    setSheetBusy(true);
-    setSheetError(null);
-    try {
-      await blockPerson(userId);
-      setSheet(null);
-      onBlocked?.();
-    } catch (e: unknown) {
-      setSheetError(message(e));
-    } finally {
-      setSheetBusy(false);
-    }
-  };
-
-  const openSheet = (which: 'report' | 'block') => {
-    setSheetError(null);
-    if (which === 'report') setReported(false);
-    setSheet(which);
   };
 
   // Свежий обработчик в ref: подписка на MainButton ставится один раз, а like
@@ -296,31 +243,19 @@ export function PersonProfileView({
         like={action}
         onBack={onBack}
         onLike={() => void like()}
-        onReport={() => openSheet('report')}
-        onBlock={() => openSheet('block')}
+        onReport={() => setSheet('report')}
+        onBlock={() => setSheet('block')}
       />
-      {sheet === 'report' && (
-        <ReportPersonSheet
-          name={person.name}
-          sent={reported}
-          busy={sheetBusy}
-          error={sheetError}
-          onSend={(reason) => void report(reason)}
-          // «Заблокировать» после жалобы ведёт в ту же шторку с
-          // подтверждением: невидимость необратима, и спросить надо один раз.
-          onBlock={() => openSheet('block')}
-          onClose={() => setSheet(null)}
-        />
-      )}
-      {sheet === 'block' && (
-        <BlockPersonSheet
-          name={person.name}
-          busy={sheetBusy}
-          error={sheetError}
-          onCancel={() => setSheet(null)}
-          onBlock={() => void block()}
-        />
-      )}
+      <SafetySheets
+        userId={userId}
+        name={person.name}
+        zoneId={zoneId}
+        pointId={pointId}
+        open={sheet}
+        onOpen={setSheet}
+        onClose={() => setSheet(null)}
+        onBlocked={onBlocked}
+      />
     </>
   );
 }

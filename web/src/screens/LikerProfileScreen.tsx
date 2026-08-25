@@ -13,6 +13,7 @@ import { likedYouLabel, occupationLabel, seenLabel } from '../api/format';
 import { ActionPills } from '../ui/ActionPills';
 import { S } from '../ui/primitives';
 import { PersonProfileScreen, sharedRows } from './PersonProfileScreen';
+import { SafetySheets, type SafetySheet } from './SafetySheets';
 
 /** Знаменатель «6 ИЗ 9»: девять привычек анкеты, по которым считаются совпадения (§4). */
 const HABIT_FIELDS = 9;
@@ -63,10 +64,12 @@ export function LikerProfileScreen({
   zoneId,
   pointId,
   busy,
+  likeLocked,
   error,
   onBack,
   onDecline,
   onReply,
+  onBlocked,
 }: {
   userId: string;
   /** Контекст лайка: и строка «пересеклись», и пропуск к самой анкете (§2.3). */
@@ -74,14 +77,23 @@ export function LikerProfileScreen({
   pointId?: string;
   /** Ответ или отклонение в полёте: кнопки гаснут, второй тап не уходит вторым запросом. */
   busy?: boolean;
+  /**
+   * Своя анкета не одобрена: ответить нечем — сервер отобьёт лайк 403 (§5).
+   * Серое сердце честнее внезапного отказа, стрелка при этом работает.
+   */
+  likeLocked?: boolean;
   /** Отказ сервера — словами сервера: «анкета на проверке» и подобное. */
   error?: string | null;
   onBack?: () => void;
   onDecline?: (userId: string) => void;
   onReply?: (userId: string) => void;
+  /** Заблокирован (§5): экран покидают, списки перечитываются — решает оболочка. */
+  onBlocked?: () => void;
 }) {
   const [person, setPerson] = useState<PersonProfileDTO | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /** Открытая шторка жалобы или блока (§5). */
+  const [sheet, setSheet] = useState<SafetySheet | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,39 +126,53 @@ export function LikerProfileScreen({
   }
 
   return (
-    <PersonProfileScreen
-      name={person.name}
-      age={person.age}
-      occupation={occupationLabel(person.occupation)}
-      photoUrls={person.photo_urls}
-      lastSeen={seenLabel(person.last_seen, person.gender)}
-      note={likedYouLabel(person.gender)}
-      zone={person.context_zone?.name}
-      point={person.context_point?.label}
-      matches={sharedRows(person.shared)}
-      matchesTotal={HABIT_FIELDS}
-      about={person.about}
-      bottom={
-        <div style={V.bottom}>
-          <ActionPills
-            likeLabel="Взаимно"
-            likeLocked={busy}
-            onPass={() => onDecline?.(person.user_id)}
-            onLike={() => onReply?.(person.user_id)}
-          />
-          {error ? (
-            <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>
-              {error}
-            </span>
-          ) : (
-            <span style={S.caption}>
-              Сердце — взаимный лайк: не тратит лимит и открывает контакты
-            </span>
-          )}
-        </div>
-      }
-      onBack={onBack}
-    />
+    <>
+      <PersonProfileScreen
+        name={person.name}
+        age={person.age}
+        occupation={occupationLabel(person.occupation)}
+        photoUrls={person.photo_urls}
+        lastSeen={seenLabel(person.last_seen, person.gender)}
+        note={likedYouLabel(person.gender)}
+        zone={person.context_zone?.name}
+        point={person.context_point?.label}
+        matches={sharedRows(person.shared)}
+        matchesTotal={HABIT_FIELDS}
+        about={person.about}
+        bottom={
+          <div style={V.bottom}>
+            <ActionPills
+              likeLabel="Взаимно"
+              likeLocked={likeLocked || busy}
+              onPass={() => onDecline?.(person.user_id)}
+              onLike={() => onReply?.(person.user_id)}
+            />
+            {error ? (
+              <span style={{ fontSize: 13, color: 'var(--tg-theme-destructive-text-color)' }}>
+                {error}
+              </span>
+            ) : (
+              <span style={S.caption}>
+                Сердце — взаимный лайк: не тратит лимит и открывает контакты
+              </span>
+            )}
+          </div>
+        }
+        onBack={onBack}
+        onReport={() => setSheet('report')}
+        onBlock={() => setSheet('block')}
+      />
+      <SafetySheets
+        userId={userId}
+        name={person.name}
+        zoneId={zoneId}
+        pointId={pointId}
+        open={sheet}
+        onOpen={setSheet}
+        onClose={() => setSheet(null)}
+        onBlocked={onBlocked}
+      />
+    </>
   );
 }
 

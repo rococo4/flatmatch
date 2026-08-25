@@ -6,7 +6,7 @@
    держит оболочка — здесь вёрстка, жест и три состояния колоды (без поиска,
    анкета на проверке, конец подбора).
 
-   Слова «пул» на экране нет: механика называется подбором (§2.1). */
+   Механика зовётся подбором (§2.1) — старого её имени на экране нет. */
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
@@ -25,7 +25,9 @@ import {
   roomCardTitle,
   VERDICT_UI,
 } from '../api/format';
-import { GreyChips, PhotoPlaceholder, S, VerdictChip } from '../ui/primitives';
+import { ActionPills } from '../ui/ActionPills';
+import { PhotoPager } from '../ui/PhotoPager';
+import { GreyChips, S, VerdictChip } from '../ui/primitives';
 import { SwipeCard, type SwipeDir } from '../ui/SwipeCard';
 
 /** Слотов дорогих лайков на окне 24 ч (§2.3): столько точек под кнопками. */
@@ -33,9 +35,6 @@ const LIKE_SLOTS = 5;
 
 /** Сколько длится полёт карточки: столько же, сколько транзишн в SwipeCard. */
 const FLIGHT_MS = 220;
-
-/** Доля ширины фото, отданная под тап-листалку с каждого края. */
-const PAGER_ZONE = '26%';
 
 const D = {
   screen: {
@@ -80,17 +79,6 @@ const D = {
     border: '1px solid var(--sep)',
     boxShadow: '0 6px 20px rgba(0, 0, 0, 0.08)',
   } as CSSProperties,
-  photo: {
-    position: 'relative',
-    flex: '0 0 auto',
-    width: '100%',
-    aspectRatio: '4/5',
-    // На низком экране фото ужимается, а не выдавливает всё остальное:
-    // object-fit кадрирует, и лицо остаётся в кадре.
-    maxHeight: '54vh',
-    background: 'var(--chip-bg)',
-    overflow: 'hidden',
-  } as CSSProperties,
   gradient: {
     position: 'absolute',
     left: 0,
@@ -102,15 +90,6 @@ const D = {
     padding: '34px 14px 12px',
     background: 'linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0))',
     color: '#fff',
-  } as CSSProperties,
-  photoBadges: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    top: 18,
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 6,
   } as CSSProperties,
   photoBadge: {
     padding: '4px 9px',
@@ -138,16 +117,6 @@ const D = {
     alignItems: 'center',
     gap: 10,
     padding: '10px 12px 16px',
-  } as CSSProperties,
-  pill: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 54,
-    borderRadius: 16,
-    border: 'none',
-    font: 'inherit',
-    cursor: 'pointer',
   } as CSSProperties,
   h1: {
     fontSize: 23,
@@ -639,95 +608,6 @@ function Face({ name, url }: { name: string; url?: string }) {
 }
 
 /**
- * Фото карточки с пейджером.
- *
- * Листалка — два узких края поверх фото: они гасят pointerdown, поэтому
- * тянуть карточку с середины фото жест не мешает. Сегменты сверху
- * показывают, сколько кадров и какой открыт.
- */
-function PhotoPager({
-  urls,
-  emptyLabel,
-  ratio,
-  maxHeight,
-  badges,
-  children,
-}: {
-  urls: string[];
-  emptyLabel: string;
-  ratio?: string;
-  maxHeight?: string;
-  badges?: ReactNode;
-  children?: ReactNode;
-}) {
-  const [at, setAt] = useState(0);
-  const shown = Math.min(at, Math.max(urls.length - 1, 0));
-  const many = urls.length > 1;
-  const step = (delta: number) =>
-    setAt((i) => Math.min(urls.length - 1, Math.max(0, i + delta)));
-
-  return (
-    <div
-      style={{
-        ...D.photo,
-        aspectRatio: ratio ?? D.photo.aspectRatio,
-        maxHeight: maxHeight ?? D.photo.maxHeight,
-      }}
-    >
-      {urls.length > 0 ? (
-        <img
-          src={urls[shown]}
-          alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
-      ) : (
-        <PhotoPlaceholder label={emptyLabel} style={{ width: '100%', height: '100%' }} />
-      )}
-
-      {many && (
-        <>
-          <div
-            style={{
-              position: 'absolute',
-              top: 8,
-              left: 10,
-              right: 10,
-              display: 'flex',
-              gap: 4,
-            }}
-          >
-            {urls.map((url, i) => (
-              <span
-                key={`${url}:${i}`}
-                style={{
-                  flex: '1 1 0',
-                  height: 3,
-                  borderRadius: 2,
-                  background: i === shown ? '#fff' : 'rgba(255,255,255,.4)',
-                }}
-              />
-            ))}
-          </div>
-          <div
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => step(-1)}
-            style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: PAGER_ZONE }}
-          />
-          <div
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => step(1)}
-            style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: PAGER_ZONE }}
-          />
-        </>
-      )}
-
-      {badges && <div style={D.photoBadges}>{badges}</div>}
-      {children}
-    </div>
-  );
-}
-
-/**
  * Две кнопки-иконки и остаток лайков точками.
  *
  * Точки без текста: цифра «3 из 5» под каждой карточкой превращает подбор в
@@ -748,40 +628,12 @@ function Actions({
 }) {
   return (
     <div style={D.actions}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <button
-          type="button"
-          aria-label="Пропустить"
-          onClick={onPass}
-          style={{
-            ...D.pill,
-            width: 88,
-            background: 'var(--card-bg)',
-            border: '1px solid var(--sep)',
-            color: 'var(--tg-theme-subtitle-text-color)',
-          }}
-        >
-          <ArrowIcon />
-        </button>
-        <button
-          type="button"
-          aria-label={room ? 'Хочу эту комнату' : 'Хочу жить вместе'}
-          disabled={likeLocked}
-          onClick={onLike}
-          style={{
-            ...D.pill,
-            width: 132,
-            background: likeLocked ? 'var(--chip-bg)' : 'var(--tg-theme-button-color)',
-            color: likeLocked ? 'var(--tg-theme-hint-color)' : 'var(--tg-theme-button-text-color)',
-            boxShadow: likeLocked
-              ? 'none'
-              : '0 6px 16px color-mix(in srgb, var(--tg-theme-button-color) 35%, transparent)',
-            cursor: likeLocked ? 'default' : 'pointer',
-          }}
-        >
-          <HeartIcon />
-        </button>
-      </div>
+      <ActionPills
+        likeLabel={room ? 'Хочу эту комнату' : 'Хочу жить вместе'}
+        likeLocked={likeLocked}
+        onPass={onPass}
+        onLike={onLike}
+      />
       <div style={{ display: 'flex', gap: 6 }}>
         {Array.from({ length: LIKE_SLOTS }, (_, i) => (
           <span
@@ -797,55 +649,6 @@ function Actions({
         ))}
       </div>
     </div>
-  );
-}
-
-/** Стрелка вправо: «пропустить, дальше». Та же линия, что у жеста влево. */
-function ArrowIcon() {
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', width: 24, height: 10 }}>
-      <span style={{ flex: '1 1 auto', height: 2, borderRadius: 1, background: 'currentColor' }} />
-      <span
-        style={{
-          flex: '0 0 auto',
-          width: 9,
-          height: 9,
-          marginLeft: -7,
-          borderTop: '2px solid currentColor',
-          borderRight: '2px solid currentColor',
-          transform: 'rotate(45deg)',
-        }}
-      />
-    </span>
-  );
-}
-
-function HeartIcon() {
-  const lobe: CSSProperties = {
-    position: 'absolute',
-    width: 13,
-    height: 13,
-    borderRadius: '50%',
-    background: 'currentColor',
-  };
-  return (
-    <span style={{ position: 'relative', width: 24, height: 22, display: 'block' }}>
-      <span style={{ ...lobe, left: 0, top: 1 }} />
-      <span style={{ ...lobe, right: 0, top: 1 }} />
-      <span
-        style={{
-          position: 'absolute',
-          left: 3,
-          top: 5,
-          width: 18,
-          height: 18,
-          background: 'currentColor',
-          borderRadius: '3px 0 4px 0',
-          transform: 'rotate(45deg)',
-          transformOrigin: '50% 50%',
-        }}
-      />
-    </span>
   );
 }
 

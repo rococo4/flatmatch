@@ -38,6 +38,8 @@ type profileResponse struct {
 	UserID    uuid.UUID `json:"user_id"`
 	Name      string    `json:"name"`
 	Age       int       `json:"age"`
+	Gender    string    `json:"gender,omitempty"`
+	LastSeen  time.Time `json:"last_seen"`
 	PhotoURLs []string  `json:"photo_urls"`
 
 	Occupation string `json:"occupation"`
@@ -103,6 +105,8 @@ func toProfile(
 		UserID:    target.ID,
 		Name:      target.Name,
 		Age:       p.Age,
+		Gender:    string(p.Gender),
+		LastSeen:  target.LastSeen,
 		PhotoURLs: photoURLs,
 
 		Occupation: string(p.Occupation),

@@ -38,10 +38,6 @@
   --type-home-bg: #D8EDD9;   --type-home-fg: #1D6330;   /* сосед к себе */
   --type-search-bg: #F9DCE8; --type-search-fg: #8E2456; /* люди / поиск */
 
-  /* Промо-блок пула людей — единственная цветная подложка карточки:
-     розовая — предложение войти, зелёная — уже в пуле. */
-  --search-card-bg: #FDF1F6; --search-card-border: #F2CFDF;
-  --saved-card-bg: #F0F8F1;  --saved-card-border: #CDE7D0;
 
   /* Вердикт-чипы параметров и совпадения анкет.
      Красного в сравнении людей не существует: «не совпали» — серое. */
@@ -79,8 +75,6 @@
   --type-home-bg: #16351E;   --type-home-fg: #8CD59A;
   --type-search-bg: #40182B; --type-search-fg: #F0A5C4;
 
-  --search-card-bg: #2A1D25; --search-card-border: #4A2839;
-  --saved-card-bg: #1B2A21;  --saved-card-border: #2C4A34;
 
   --verdict-ok-bg: #16351E;   --verdict-ok-fg: #8CD59A;
   --verdict-edge-bg: #3D3116; --verdict-edge-fg: #F5C462;

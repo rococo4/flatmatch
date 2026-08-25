@@ -1,9 +1,9 @@
 /* Презентация ответов API: склейка меток, плюрализация, схлопывание вердиктов.
 
    Отдельно от client.ts намеренно: там транспорт и типы провода, без единой
-   русской строки. И один модуль на обоих потребителей — ленту и пул: иначе
-   метки чипов разъедутся между экранами. Ни один экран не маппит вердикты
-   у себя.
+   русской строки. И один модуль на всех потребителей — подбор, «Лайки» и
+   анкеты: иначе метки чипов разъедутся между экранами. Ни один экран не
+   маппит вердикты у себя.
 
    Чистые функции, React здесь не живёт. */
 import type {
@@ -14,6 +14,7 @@ import type {
   DeckSchedule,
   DeckSmoking,
   DeckWho,
+  Gender,
   HabitsFields,
   PairChip,
   ParamOverlap,
@@ -63,6 +64,19 @@ export const ABOUT_REJECTED = 'Текст „о себе" не подошёл �
 export function ownPhotoSrc(url: string | undefined, stamp: number | null): string | undefined {
   return url && stamp ? `${url}?v=${stamp}` : url;
 }
+
+/**
+ * Короткое имя параметра — для чипа, у которого нет значения.
+ *
+ * Плитка лайка мелкая, и значений чужого поиска сервер ей не шлёт: чип говорит,
+ * ЧТО совпало, а сами цифры человек увидит в анкете (§6).
+ */
+const PARAM_SHORT: Record<PairChip['param'], string> = {
+  price: 'цена',
+  rooms: 'комнаты',
+  move_in: 'заезд',
+  term: 'срок',
+};
 
 /** Род слова разный — обобщать нельзя. */
 const NOT_SET: Record<PairChip['param'], string> = {
@@ -140,8 +154,9 @@ const EXPENSES_LABEL: Record<NonNullable<Questionnaire['expenses']>, string> = {
 /**
  * Девять привычек анкеты (§4) по ключам полей, как их шлёт сервер в `shared`.
  *
- * Первые три карты — те же, что рисуют строку привычек в пуле: одна метка на
- * все экраны, иначе один и тот же человек в пуле «сова», а в профиле «ночной».
+ * Первые три карты — те же, что рисуют строку привычек в подборе: одна метка
+ * на все экраны, иначе один и тот же человек в подборе «сова», а в анкете
+ * «ночной».
  */
 const FIELD_LABEL: Record<string, Record<string, string>> = {
   schedule: SCHEDULE_LABEL,
@@ -281,7 +296,7 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 
 /**
- * Метка чипа параметра у человека в пуле.
+ * Метка чипа параметра у человека в подборе.
  *
  * Сервер шлёт только вердикт — текст собирается здесь из параметров самого
  * человека, потому что чип показывает ЕГО значение, а цвет говорит, как оно
@@ -299,6 +314,11 @@ export function chipLabel(chip: PairChip, params: SearchParamsNoZone): string {
     case 'term':
       return termsLabel(params.terms) ?? NOT_SET.term;
   }
+}
+
+/** Имя параметра для чипа без значения: «цена», «заезд» (плитки «Лайков»). */
+export function paramName(param: PairChip['param']): string {
+  return PARAM_SHORT[param];
 }
 
 /**
@@ -329,7 +349,7 @@ export function paramChips(p: SearchParamsNoZone, opts?: { zoneName?: string }):
  * ветки «не указано» здесь нет: нечего сказать — строки не будет вовсе (null).
  * Вырожденная вилка цены печатается одним числом («у обоих 45к»); у наборов
  * пересечение приходит списком значений и печатается тем же лейблом, что и
- * в чипах пула.
+ * в чипах подбора.
  */
 export function overlapRow(o: ParamOverlap): { label: string; value: string } | null {
   const values = o.values ?? [];
@@ -550,11 +570,26 @@ export function isLivePoint(p: Pick<PointDTO, 'status'>): boolean {
 /**
  * Когда автор «к себе» заходил: «в сети вчера».
  *
- * Без рода: «была вчера» из §6 — про Иру из макета, а пол автора карточка не
- * знает и знать не должна (§4 — это правило видимости, не поле витрины).
+ * Без рода: карточка точки пола автора не знает — в её ответе его нет, и
+ * выдумывать «была» по имени нельзя.
  */
 export function lastSeenLabel(iso: string): string {
   return `в сети ${relativeDay(iso)}`;
+}
+
+/**
+ * То же на экране анкеты, где пол человека известен: «была сегодня» (§6).
+ *
+ * Неизвестный пол — мужской род: он же и есть немаркированная форма, а
+ * «был(а)» в живом интерфейсе читается как ошибка.
+ */
+export function seenLabel(iso: string, gender?: Gender): string {
+  return `${gender === 'female' ? 'была' : 'был'} ${relativeDay(iso)}`;
+}
+
+/** Подзаголовок анкеты лайкнувшего: «лайкнула тебя» (§6, вкладка «Лайки»). */
+export function likedYouLabel(gender?: Gender): string {
+  return gender === 'female' ? 'лайкнула тебя' : 'лайкнул тебя';
 }
 
 /**
@@ -565,7 +600,7 @@ export function lastSeenLabel(iso: string): string {
  */
 export function pricePerPerson(total?: number): number | null {
   if (total == null) return null;
-  // Всегда на двоих: пул собирает минимум пару, а сколько их въедет в 3к —
+  // Всегда на двоих: снимают минимум вдвоём, а сколько въедет в 3к —
   // неизвестно; половина — честный ориентир и для однушки, и для трёшки.
   return Math.round(total / 2 / 1000) * 1000;
 }

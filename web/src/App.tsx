@@ -22,6 +22,7 @@ import {
   createSearch,
   fetchDeck,
   fetchIncoming,
+  fetchLikeBudget,
   fetchMatches,
   fetchMe,
   fetchPoint,
@@ -54,7 +55,6 @@ import {
 import {
   closeReasonLabel,
   dayMonth,
-  habitsLine,
   occupationLabel,
   ownPhotoSrc,
   paramChips,
@@ -76,14 +76,23 @@ import {
 import { PersonProfileView } from './screens/PersonProfileView';
 import { MatchView } from './screens/MatchView';
 import { HomePointView } from './screens/HomePointView';
-import { IncomingLikesScreen, type IncomingLike } from './screens/IncomingLikesScreen';
+import { LikesScreen } from './screens/LikesScreen';
+import { LikerProfileScreen } from './screens/LikerProfileScreen';
 import { MySearchesScreen, type ArchivedSearch, type SavedSearch } from './screens/MySearchesScreen';
 import { MyProfileScreen, type FixTarget, type MyMatch } from './screens/MyProfileScreen';
 import { ProfileEditScreen } from './screens/ProfileEditScreen';
 import { HomePointFormScreen } from './screens/PointFormScreens';
 import { CloseSearchSheet } from './screens/EdgeStates';
 
-type View = 'tab' | 'searchForm' | 'person' | 'match' | 'homePoint' | 'homeForm' | 'editProfile';
+type View =
+  | 'tab'
+  | 'searchForm'
+  | 'person'
+  | 'liker'
+  | 'match'
+  | 'homePoint'
+  | 'homeForm'
+  | 'editProfile';
 
 type Loading =
   | { kind: 'loading' }
@@ -96,7 +105,7 @@ type Loading =
  * `zoneId` и `pointId` — откуда пришли: контекст и строки «пересеклись», и
  * лайка, и самого доступа к профилю (по точке сервер проверяет отношение
  * только по параметру запроса, §2.3). Взаимоисключимы. `back` — куда
- * возвращает стрелка: из пула уходят обратно в пул, а не «в никуда».
+ * возвращает стрелка: с комнаты уходят обратно на комнату, а не «в никуда».
  */
 type PersonTarget = { userId: string; zoneId?: string; pointId?: string; back: View };
 
@@ -205,7 +214,7 @@ export function App() {
   const [filters, setFilters] = useState<DeckFilters>(() => loadDeckFilters());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
-  /** Открытая комната «к себе»: пула у неё нет, только витрина и отклик (§2.2). */
+  /** Открытая комната «к себе»: у неё только витрина и отклик (§2.2). */
   const [homePoint, setHomePoint] = useState<string | null>(null);
   /**
    * Отказ отклика на экране комнаты — своя строка, не общая с подбором.
@@ -224,9 +233,9 @@ export function App() {
   /**
    * Остаток дорогих лайков: точки под колодой и подпись на карточке комнаты.
    *
-   * Своей ручки у бюджета нет — он приезжает ответом на лайк и с профилем
-   * человека, поэтому до первого лайка в сессии точки показывают полный
-   * запас: окно скользящее (§2.3), и чаще всего он и правда полон.
+   * Спрашивается своей ручкой на входе и при возврате на вкладку, а дальше
+   * едет ответом на каждый лайк: окно скользящее (§2.3), и слот мог вернуться,
+   * пока приложение висело в фоне. Пока ответа нет — показываем полный запас.
    */
   const [likesRemaining, setLikesRemaining] = useState<number | null>(null);
   /**
@@ -238,16 +247,21 @@ export function App() {
    */
   const [respondedPoints, setRespondedPoints] = useState<string[]>([]);
   const [person, setPerson] = useState<PersonTarget | null>(null);
+  /** Открытая анкета лайкнувшего: сам лайк лежит в списке входящих. */
+  const [liker, setLiker] = useState<string | null>(null);
   /** Открытый мэтч: саммари по нему грузит MatchView. */
   const [matchId, setMatchId] = useState<string | null>(null);
   /**
    * Входящие лайки и мэтчи — здесь, а не в экранах: по длине входящих считается
-   * бейдж таба «Профиль», и он обязан быть тем же числом, что в разделе.
+   * бейдж таба «Лайки», и он обязан быть тем же числом, что в разделе.
    */
   const [incoming, setIncoming] = useState<IncomingLikeDTO[]>([]);
   const [matches, setMatches] = useState<MatchDTO[]>([]);
-  /** Кому сейчас отвечаем: второй тап не должен уйти вторым запросом. */
-  const [replying, setReplying] = useState<string | null>(null);
+  /**
+   * Кого сейчас отвечают или отклоняют: второй тап не должен уйти вторым
+   * запросом, а два жеста на одной анкете спорить друг с другом.
+   */
+  const [likesBusy, setLikesBusy] = useState<string | null>(null);
   const [incomingError, setIncomingError] = useState<string | null>(null);
   /**
    * Профиль, который ждёт сохранённого поиска.
@@ -287,6 +301,18 @@ export function App() {
       .catch(() => undefined);
     void fetchMatches()
       .then(setMatches)
+      .catch(() => undefined);
+  }, []);
+
+  /**
+   * Перечитывает остаток лайков.
+   *
+   * Отказ переживаем молча: точки под колодой останутся прежними, а настоящий
+   * остаток всё равно приедет ответом на ближайший лайк.
+   */
+  const reloadBudget = useCallback(() => {
+    void fetchLikeBudget()
+      .then((b) => setLikesRemaining(b.remaining))
       .catch(() => undefined);
   }, []);
 
@@ -359,6 +385,9 @@ export function App() {
         // лайке узнают только те, кто сам зашёл в раздел.
         reloadLikes();
         reloadPoints();
+        // Точки лимита под колодой честны с первого кадра: без этого запроса
+        // они обещали бы пять слотов тому, кто вчера потратил четыре.
+        reloadBudget();
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -370,7 +399,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [reloadLikes, reloadPoints, loadDeck]);
+  }, [reloadLikes, reloadPoints, reloadBudget, loadDeck]);
 
   const setProfile = useCallback((profile: Profile) => setState({ kind: 'ready', profile }), []);
 
@@ -410,6 +439,11 @@ export function App() {
       if (which === 'likes' || which === 'profile') {
         reloadLikes();
       }
+      // Слоты возвращаются временем, а не действием: вкладки, где лайкают,
+      // спрашивают остаток заново — приложение могло провисеть в фоне сутки.
+      if (which === 'deck' || which === 'likes') {
+        reloadBudget();
+      }
       if (which === 'profile') {
         void fetchMe()
           .then(setProfile)
@@ -423,7 +457,7 @@ export function App() {
         if (!d.loaded || d.index >= d.cards.length) void loadDeck(filtersRef.current);
       }
     },
-    [reloadPoints, reloadSearches, reloadLikes, setProfile, loadDeck],
+    [reloadPoints, reloadSearches, reloadLikes, reloadBudget, setProfile, loadDeck],
   );
 
   const toTab = useCallback(
@@ -794,29 +828,63 @@ export function App() {
     openEditor(target === 'draft' ? undefined : target);
 
   /**
-   * «Ответить» из «Лайков»: тот же дорогой лайк, но бесплатный (§2.3).
+   * Сердце на анкете лайкнувшего: тот же дорогой лайк, но бесплатный (§2.3).
    *
-   * Контекст берётся из самого входящего — пул, в котором пересеклись, а не
-   * тот, где мы сейчас стоим. Взаимность гарантирована (в списке ровно те, кто
+   * Контекст берётся из самого входящего — место, где пересеклись, а не то,
+   * где мы сейчас стоим. Взаимность гарантирована (в списке ровно те, кто
    * лайкнул), но ветвимся всё равно по ответу сервера: мэтч рождается там.
    */
   const replyLike = async (userId: string) => {
-    if (replying) return;
-    setReplying(userId);
+    if (likesBusy) return;
+    setLikesBusy(userId);
     setIncomingError(null);
     try {
       const like = incoming.find((l) => l.user_id === userId);
       const res = await postLike(userId, { zoneId: like?.zone?.id, pointId: like?.point?.id });
       setLikesRemaining(res.budget.remaining);
       reloadLikes();
-      if (res.matched && res.match_id) openMatch(res.match_id);
+      if (res.matched && res.match_id) {
+        openMatch(res.match_id);
+        return;
+      }
+      // Мэтча не случилось (лайк уже стоял и мэтч кто-то успел удалить):
+      // показывать нечего, но и держать анкету открытой незачем.
+      closeLiker();
     } catch (e: unknown) {
       // 403 «анкета на проверке» — единственный ожидаемый отказ ответа:
       // лимита он не тратит и поиска не требует. Показываем слова сервера.
       setIncomingError(asApiError(e).message);
     } finally {
-      setReplying(null);
+      setLikesBusy(null);
     }
+  };
+
+  /**
+   * Стрелка на анкете лайкнувшего: тот же пропуск, что в подборе (§2.1).
+   *
+   * Сам лайк при этом цел — он сгорает только с удалением мэтча и блоком
+   * (§2.3): человек уходит из списка на 7 дней и возвращается сам, а
+   * «Показать пропущенных» в конце подбора вернёт его раньше.
+   */
+  const declineLike = async (userId: string) => {
+    if (likesBusy) return;
+    setLikesBusy(userId);
+    setIncomingError(null);
+    try {
+      await passPerson(userId);
+      closeLiker();
+      reloadLikes();
+    } catch (e: unknown) {
+      setIncomingError(asApiError(e).message);
+    } finally {
+      setLikesBusy(null);
+    }
+  };
+
+  /** Возврат из анкеты лайкнувшего — всегда на вкладку, откуда её открыли. */
+  const closeLiker = () => {
+    setLiker(null);
+    setView('tab');
   };
 
   const openPerson = (target: PersonTarget) => {
@@ -968,26 +1036,18 @@ export function App() {
           />
         );
       }
-      // Плитки «Лайков» — задача шага 11.5; пока вкладку держит прежний
-      // список входящих, чтобы петля лайк → мэтч не ломалась на пересадке.
       case 'likes':
         return (
-          <IncomingLikesScreen
-            likes={incoming.map(toIncomingRow)}
-            replyingId={replying}
+          <LikesScreen
+            likes={incoming}
             error={incomingError}
-            onBack={() => toTab('deck')}
-            onOpenProfile={(id) => {
-              const like = incoming.find((l) => l.user_id === id);
-              openPerson({
-                userId: id,
-                zoneId: like?.point ? undefined : like?.zone?.id,
-                pointId: like?.point?.id,
-                back: 'tab',
-              });
+            onOpen={(id) => {
+              // Прошлый отказ уже рассказан: встречать им на входе в другую
+              // анкету нечего.
+              setIncomingError(null);
+              setLiker(id);
+              setView('liker');
             }}
-            onReply={(id) => void replyLike(id)}
-            onToFeed={() => toTab('deck')}
           />
         );
       case 'searches':
@@ -1023,11 +1083,9 @@ export function App() {
             photoStatus={profile.photo_status}
             aboutStatus={profile.about_status}
             emailKind={profile.occupation === 'study' ? 'Учебная почта' : 'Рабочая почта'}
-            incomingLikes={unreadLikes}
             matches={matches.map(toMyMatch)}
             onEdit={() => openEditor()}
             onFix={fixProfile}
-            onOpenIncomingLikes={() => toTab('likes')}
             onOpenMatch={openMatch}
           />
         );
@@ -1112,6 +1170,26 @@ export function App() {
           />
         );
       }
+      case 'liker': {
+        if (!liker) return tabScreen();
+        const userId = liker;
+        // Контекст лайка — из самого входящего: по нему сервер и открывает
+        // анкету (§2.3), а у отклика на комнату это точка, а не зона.
+        const like = incoming.find((l) => l.user_id === userId);
+        return (
+          <LikerProfileScreen
+            key={userId}
+            userId={userId}
+            zoneId={like?.point ? undefined : like?.zone?.id}
+            pointId={like?.point?.id}
+            busy={likesBusy === userId}
+            error={incomingError}
+            onBack={closeLiker}
+            onDecline={(id) => void declineLike(id)}
+            onReply={(id) => void replyLike(id)}
+          />
+        );
+      }
       case 'match':
         if (!matchId) return tabScreen();
         return (
@@ -1164,8 +1242,8 @@ export function App() {
             zones={zones}
             hasLivePoint={myPoints.created.some((p) => p.stage === 'live')}
             onBack={back}
-            // У «к себе» пула нет (§2.2), и «ты первый в пуле» ему сказать
-            // нечего: точка сразу видна в своём блоке со статусом проверки.
+            // Показывать созданной комнате нечего: она сразу видна в своём
+            // блоке «Поисков» со статусом проверки (§2.2).
             onCreated={() => {
               reloadPoints();
               toTab('searches');
@@ -1241,35 +1319,6 @@ function openShare(url: string): void {
     return;
   }
   window.open(url, '_blank', 'noopener');
-}
-
-/**
- * Карточка входящего лайка (§6).
- *
- * Контекста может не быть: зона выпала из справочника или лайк пришёл ответом,
- * у которого зоны нет. Тогда мини-карточки просто нет — выдумывать ей место
- * пересечения нельзя.
- *
- * Метка точки приезжает готовой и уже от лица адресата: отклик на комнату
- * сервер подписывает «на твою комнату» (§2.2), и переписывать её здесь нечем.
- * Тапабельной она больше не бывает: отдельных экранов зоны и квартиры нет.
- */
-function toIncomingRow(l: IncomingLikeDTO): IncomingLike {
-  const context = l.point
-    ? { label: l.point.label }
-    : l.zone
-      ? { label: `ищет ${l.zone.name_in}` }
-      : undefined;
-  return {
-    id: l.user_id,
-    name: l.name,
-    age: l.age,
-    photoUrl: l.photo_url || undefined,
-    habits: habitsLine(l),
-    when: relativeDay(l.at),
-    notSearching: l.not_searching,
-    context,
-  };
 }
 
 /** Строка «Моих мэтчей»: контакты остаются на экране самого мэтча (§3). */

@@ -1,4 +1,6 @@
-/* Профиль свой — §6. Статус анкеты, вход в «Тебя лайкнули», верификация, мэтчи. */
+/* Профиль свой — §6. Статус анкеты, верификация, мэтчи.
+   Входящие лайки живут своей вкладкой (§4 дизайна редизайна), и второго входа
+   к ним отсюда нет: бейдж на «Лайках» и есть их место. */
 import type { CSSProperties } from 'react';
 import type { ModerationStatus, Profile } from '../api/client';
 import { ABOUT_REJECTED, PHOTO_REJECTED } from '../api/format';
@@ -71,7 +73,7 @@ const L = {
     color: 'var(--warning-fg)',
   } as CSSProperties,
   secondary: {
-    flex: '1 1 0',
+    width: '100%',
     padding: 12,
     border: 'none',
     borderRadius: 10,
@@ -81,37 +83,6 @@ const L = {
     fontWeight: 590,
     color: 'var(--tg-theme-accent-text-color)',
     cursor: 'pointer',
-  } as CSSProperties,
-  /** Акцентная рамка, не залив: вход в раздел, а не дорогое действие. */
-  likesButton: {
-    flex: '1 1 0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    padding: 12,
-    border: '1.5px solid var(--tg-theme-button-color)',
-    borderRadius: 10,
-    background: 'transparent',
-    font: 'inherit',
-    fontSize: 15,
-    fontWeight: 590,
-    color: 'var(--tg-theme-accent-text-color)',
-    cursor: 'pointer',
-  } as CSSProperties,
-  countBadge: {
-    minWidth: 18,
-    height: 18,
-    padding: '0 5px',
-    borderRadius: 9,
-    background: 'var(--tg-theme-destructive-text-color)',
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 640,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxSizing: 'border-box',
   } as CSSProperties,
   okChip: {
     marginLeft: 'auto',
@@ -134,11 +105,9 @@ export function MyProfileScreen({
   photoStatus,
   aboutStatus,
   emailKind,
-  incomingLikes,
   matches,
   onEdit,
   onFix,
-  onOpenIncomingLikes,
   onOpenMatch,
 }: {
   name: string;
@@ -151,12 +120,10 @@ export function MyProfileScreen({
   aboutStatus: ModerationStatus;
   /** «Учебная почта» студенту, «Рабочая почта» работающему */
   emailKind: string;
-  incomingLikes: number;
   matches: MyMatch[];
   onEdit?: () => void;
   /** Тап в строку статуса: увести чинить ровно то, что не прошло. */
   onFix?: (target: FixTarget) => void;
-  onOpenIncomingLikes?: () => void;
   onOpenMatch?: (id: string) => void;
 }) {
   const notice = noticeOf(status, photoStatus, aboutStatus);
@@ -200,15 +167,9 @@ export function MyProfileScreen({
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" style={L.secondary} onClick={onEdit}>
-              Редактировать
-            </button>
-            <button type="button" style={L.likesButton} onClick={onOpenIncomingLikes}>
-              Тебя лайкнули
-              {incomingLikes > 0 && <span style={L.countBadge}>{incomingLikes}</span>}
-            </button>
-          </div>
+          <button type="button" style={L.secondary} onClick={onEdit}>
+            Редактировать
+          </button>
         </div>
 
         <div style={L.block}>
@@ -218,7 +179,7 @@ export function MyProfileScreen({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
               <span style={{ fontSize: 15, fontWeight: 510 }}>{emailKind}</span>
               <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>
-                бейдж вуза в карточках и пулах
+                бейдж вуза в карточках и подборе
               </span>
             </div>
             {/* Ручки верификации ещё нет: кнопка появится вместе с ней, мёртвой

@@ -316,6 +316,9 @@ function MoneyInput({
 
 const MAX_POINT_PHOTOS = 10;
 
+/** Столько же держит сервер (§ схемы): длиннее он ответит 400 по полю. */
+const MAX_DESCRIPTION = 400;
+
 function PhotoPicker({
   title,
   hint,
@@ -490,6 +493,7 @@ export function HomePointFormScreen({
   const [deposit, setDeposit] = useState('');
   const [isolated, setIsolated] = useState<boolean | null>(null);
   const [moveIn, setMoveIn] = useState('');
+  const [description, setDescription] = useState('');
   const [restrictions, setRestrictions] = useState<Restriction[]>([]);
   const [photoKeys, setPhotoKeys] = useState<string[]>([]);
 
@@ -515,6 +519,7 @@ export function HomePointFormScreen({
       isolated,
       restrictions,
       photo_keys: photoKeys,
+      description: description.trim() || null,
       move_in: moveIn || null,
       deposit: deposit ? Number(deposit) : null,
     });
@@ -706,6 +711,59 @@ export function HomePointFormScreen({
                     : 'none',
                 }}
               />
+            </Field>
+
+            {/* Свободный текст о комнате: цифры выше отвечают «сколько», а
+                «как там жить» — только словами автора (§2.2). Уходит на
+                проверку вместе с фото, поэтому и сказано об этом рядом. */}
+            <Field
+              label={
+                <span
+                  style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}
+                >
+                  Описание
+                  <span style={{ fontSize: 12, color: 'var(--tg-theme-hint-color)' }}>необязательно</span>
+                </span>
+              }
+            >
+              <textarea
+                value={description}
+                maxLength={MAX_DESCRIPTION}
+                placeholder="Что за квартира, кто живёт рядом, что важно знать до заезда"
+                onChange={(e) => setDescription(e.target.value)}
+                style={{
+                  ...F.input,
+                  minHeight: 96,
+                  lineHeight: 1.45,
+                  resize: 'none',
+                  outline: bad('description')
+                    ? '1.5px solid var(--tg-theme-destructive-text-color)'
+                    : 'none',
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span
+                  style={{
+                    flex: '1 1 auto',
+                    minWidth: 0,
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                    color: 'var(--tg-theme-hint-color)',
+                  }}
+                >
+                  Пройдёт проверку вместе с фото
+                </span>
+                <span
+                  style={{
+                    flex: '0 0 auto',
+                    fontSize: 12,
+                    color: 'var(--tg-theme-hint-color)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {description.length}/{MAX_DESCRIPTION}
+                </span>
+              </div>
             </Field>
 
             <PhotoPicker

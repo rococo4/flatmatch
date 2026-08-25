@@ -1,9 +1,12 @@
 import { retrieveLaunchParams, retrieveRawInitData } from '@telegram-apps/sdk-react';
 
+/** Пол — правило видимости (§4) и род глаголов о человеке («была сегодня»). */
+export type Gender = 'male' | 'female';
+
 /** Ответы анкеты (§4). Каждое поле — из закрытого набора, кроме возраста и «о себе». */
 export interface Questionnaire {
   age?: number;
-  gender?: 'male' | 'female';
+  gender?: Gender;
   gender_pref?: 'any' | 'same';
   occupation?: 'study' | 'office' | 'hybrid' | 'remote' | 'shift';
   schedule?: 'owl' | 'lark' | 'floating';
@@ -56,7 +59,7 @@ export interface Profile extends Questionnaire {
   bot_username?: string;
 }
 
-/* ── Зоны, поиски, пулы (§2.1, §6) ──────────────────────────────────────────
+/* ── Зоны и поиски (§2.1, §6) ───────────────────────────────────────────────
    Имена полей — как в JSON, snake_case. Переименования при разборе тут нет
    намеренно: тип провода должен читаться рядом с ответом сервера, иначе
    расхождение контракта ловится не компилятором, а глазами. Русские строки
@@ -112,7 +115,7 @@ export interface TopZoneDTO {
 }
 
 /**
- * Зона в ответах поисков и пулов — только имена и склонения.
+ * Зона в ответах поисков и карточек — только имена и склонения.
  *
  * Урезана намеренно: множество станций там не нужно, а гонять его в каждом
  * элементе списка поисков — лишние килобайты на каждый вызов.
@@ -124,7 +127,7 @@ export interface ZoneRef {
   name_gen: string;
 }
 
-/** Срок аренды. Мягкий параметр: влияет на секцию пула, но не отсекает (§2.1). */
+/** Срок аренды. Мягкий параметр: влияет на секцию пары, но не отсекает (§2.1). */
 export type Term = 'half_year' | 'year' | 'open';
 
 /** «нашёл здесь» — ГЛАВНАЯ МЕТРИКА продукта (§3), поэтому причина обязательна. */
@@ -136,7 +139,7 @@ export type SearchStatus = 'unknown' | 'active' | 'paused' | 'closed';
 /**
  * Параметры поиска — они же фильтры ленты: поиск это снапшот фильтров (§2.1).
  *
- * Обязательны только зона (граница пула) и «до» по цене; комнатность, срок и
+ * Обязательны только зона (граница подбора) и «до» по цене; комнатность, срок и
  * заезд — НАБОРЫ, и пустой набор означает «неважно», совпадающее со всем.
  */
 export interface SearchParams {
@@ -151,7 +154,7 @@ export interface SearchParams {
   has_stuff?: string[];
 }
 
-/** Те же параметры там, где зона лежит отдельно: в поиске и у человека в пуле. */
+/** Те же параметры там, где зона лежит отдельно: в поиске и у человека в подборе. */
 export type SearchParamsNoZone = Omit<SearchParams, 'zone_id'>;
 
 /**
@@ -169,7 +172,7 @@ export interface SearchResponse extends SearchParamsNoZone {
   created_at: string;
   people: number;
   full_match: number;
-  /** «M новых» — гаснет побочным эффектом захода в пул этой зоны. */
+  /** «M новых» — гаснет побочным эффектом захода в подбор по этой зоне. */
   new_count: number;
   /** «M квартир под эти параметры»: активные точки зон, пересекающих зону поиска. */
   points_count: number;
@@ -177,8 +180,8 @@ export interface SearchResponse extends SearchParamsNoZone {
 
 /* ── Подбор «Соседи» (§2.1, §6) ─────────────────────────────────────────────
    Одна колода на все активные поиски смотрящего: люди и комнаты «к себе»
-   вперемешку, человек в ней один раз. Списками экрана и пулами больше никто
-   не ходит — слова «пул» в интерфейсе нет. */
+   вперемешку, человек в ней один раз. Списками людей по зонам больше никто
+   не ходит — старого имени механики в интерфейсе нет. */
 
 /**
  * Вердикт параметра против поиска смотрящего.
@@ -339,7 +342,7 @@ export function hasDeckFilters(f: DeckFilters): boolean {
    («без животных» на квартире, «нельзя с животными» у «к себе»), и собирает их
    api/format.ts. */
 
-/** Тип точки решает всё: у `flat` пул и дешёвый вход, у `intent_home` — отклики. */
+/** Тип точки решает всё: `flat` заморожен (§2.2), живой остался `intent_home`. */
 export type PointType = 'flat' | 'intent_home';
 
 /** Стадия «к себе»: уже живёт или заезжает. У квартиры с рынка стадии нет. */
@@ -376,14 +379,14 @@ export type Restriction = 'no_pets' | 'no_couples' | 'no_smoking';
 /**
  * Автор «к себе» — единственная карточка с лицом (§2.2).
  *
- * Контактов не несёт: @username живёт только в мэтче (§3). Пустой `photo_url` =
- * фото не одобрено, вместо него заглушка (§5).
+ * Контактов не несёт: @username живёт только в мэтче (§3).
  */
 export interface PointAuthorDTO {
   user_id: string;
   name: string;
   age: number;
-  photo_url: string;
+  /** Первое — главное. Пустой массив = набор не одобрен, вместо него заглушка (§5). */
+  photo_urls: string[];
   occupation?: NonNullable<Questionnaire['occupation']>;
   schedule: NonNullable<Questionnaire['schedule']>;
   smoking: NonNullable<Questionnaire['smoking']>;
@@ -411,8 +414,8 @@ export interface PointRef {
  * `created_by` тут нет и не будет: квартира с рынка обезличена (§2.2). Лицо есть
  * только у «к себе» и приезжает в `author`.
  *
- * Счётчики персональные и по типу разные: `pool_count` — «в пуле N» квартиры,
- * `responses` — «N откликов» у «к себе». `in_pool` — вошёл ли смотрящий.
+ * Счётчики персональные и по типу разные: `pool_count` считал вошедших в
+ * замороженную квартиру, `responses` — «N откликов» у «к себе».
  */
 export interface PointDTO {
   id: string;
@@ -430,6 +433,8 @@ export interface PointDTO {
   restrictions?: Restriction[];
   /** Первое — обложка карточки; остальные листаются на экране точки. */
   photo_urls: string[];
+  /** Рассказ автора о комнате и соседях, до 400 знаков. Модерируется с фото (§5). */
+  description?: string;
   /** Нормализованная ссылка на оригинал; есть только у квартир с рынка. */
   url?: string;
   /** День заезда, «2026-09-15». У точки это дата, а не месяц как у поиска. */
@@ -466,6 +471,8 @@ export interface CreateHomePoint {
   restrictions?: Restriction[];
   /** До 10; первый ключ — обложка. */
   photo_keys: string[];
+  /** До 400 знаков; пусто — поля просто нет на карточке. */
+  description?: string | null;
   move_in?: string | null;
   deposit?: number | null;
 }
@@ -476,12 +483,12 @@ export type CreatePointBody = CreateHomePoint;
 export interface MyPointsResponse {
   /** Мои точки во всех статусах, кроме закрытых: они и считаются в лимит. */
   created: PointDTO[];
-  /** Чужие квартиры, в чьи пулы я вошёл. Лимита у них нет. */
+  /** Чужие квартиры, в которые я вошёл, — тип заморожен (§2.2). */
   entered: PointDTO[];
 }
 
 /**
- * Где пересеклись: зона пула или точка. Взаимоисключимы — лайк несёт один
+ * Где пересеклись: зона или точка. Взаимоисключимы — лайк несёт один
  * контекст (§2.3), и оба разом сервер отбивает 400 `invalid_field`.
  */
 export interface MeetingContext {
@@ -520,8 +527,11 @@ export interface PersonProfileDTO {
   user_id: string;
   name: string;
   age: number;
-  /** Пустая строка = фото не одобрено: вместо него заглушка с инициалами (§5). */
-  photo_url: string;
+  /** Род глаголов о человеке: «была сегодня», «лайкнула тебя». */
+  gender?: Gender;
+  last_seen: string;
+  /** Первое — главное. Пустой массив = набор не одобрен, вместо него заглушка (§5). */
+  photo_urls: string[];
 
   occupation: NonNullable<Questionnaire['occupation']>;
   schedule: NonNullable<Questionnaire['schedule']>;
@@ -536,9 +546,9 @@ export interface PersonProfileDTO {
   about?: string;
 
   shared: SharedAnswer[];
-  /** Пул, из которого открыт профиль: «пересеклись: {зона}». Может не быть. */
+  /** Зона, из которой открыт профиль: «пересеклись: {зона}». Может не быть. */
   context_zone?: ZoneRef;
-  /** То же для точки: пул квартиры или карточка «к себе». Взаимоисключим с зоной. */
+  /** То же для точки: карточка комнаты «к себе». Взаимоисключим с зоной. */
   context_point?: PointRef;
 
   liked_me: boolean;
@@ -562,15 +572,36 @@ export interface LikeResponse {
   budget: LikeBudget;
 }
 
-/** Карточка входящего лайка (§6 «Тебя лайкнули»). Контактов тут тоже нет. */
-export interface IncomingLikeDTO {
+/**
+ * Пара входящего лайка: та же, что у карточки подбора, но без параметров.
+ *
+ * Значений его поиска сервер здесь не шлёт — плитка мелкая, и на ней от чипа
+ * нужен только сам параметр с вердиктом, а не «40–55к».
+ */
+export interface IncomingPair {
+  /** Зона лучшей пары, у отклика на комнату — зона комнаты. Может не быть вовсе. */
+  zone?: ZoneRef;
+  zone_match: boolean;
+  section: 'all' | 'partial' | 'none';
+  chips?: PairChip[];
+  /** Отклик на мою комнату: вместо зоны бейдж «на твою комнату» (§2.2). */
+  room?: boolean;
+}
+
+/**
+ * Плитка входящего лайка (§6, вкладка «Лайки»). Контактов тут тоже нет.
+ *
+ * `pair` — лучшая пара «мой поиск × его поиск», та же, что в подборе: по ней
+ * сервер и сортирует список, а плитка берёт из неё бейдж зоны и ✓-чипы.
+ * Лайк «на твою комнату» несёт `pair.room` — сравнивать в нём нечего.
+ */
+export interface IncomingLikeDTO extends HabitsFields {
   user_id: string;
   name: string;
   age: number;
-  photo_url: string;
-  schedule: NonNullable<Questionnaire['schedule']>;
-  smoking: NonNullable<Questionnaire['smoking']>;
-  pets_own: NonNullable<Questionnaire['pets_own']>;
+  /** Первое — главное. Пустой массив = набор не одобрен, вместо него заглушка (§5). */
+  photo_urls: string[];
+  pair: IncomingPair;
 
   zone?: ZoneRef;
   /**
@@ -931,7 +962,7 @@ export function fetchPoint(id: string): Promise<PointDTO> {
   return request<PointDTO>(`/api/v1/points/${encodeURIComponent(id)}`);
 }
 
-/** Блоки 2–3 «Моих поисков»: свои точки и чужие пулы, в которые вошёл. */
+/** Блок «Зову к себе»: свои комнаты и то, во что вошёл до заморозки квартир. */
 export function fetchPointsMine(): Promise<MyPointsResponse> {
   return request<MyPointsResponse>('/api/v1/points/mine');
 }
@@ -948,7 +979,7 @@ export function closePoint(id: string): Promise<void> {
  * Бот, в котором живёт Mini App.
  *
  * Имя приезжает с сервера (`bot_username` в /me — оно же getMe у бота): ссылка
- * «Позвать в пул» обязана вести в тот же бот, из которого приложение открыли,
+ * «Позвать в чат» обязана вести в тот же бот, из которого приложение открыли,
  * а бот на стенде и на бою разный. Константа — запас на случай, когда сервер
  * имени не знает: при выключенном поллинге спрашивать его не у кого.
  */
@@ -986,7 +1017,7 @@ export type StartTarget =
   | { kind: 'source'; code: string };
 
 /**
- * Ссылка «Позвать в пул — поделиться в чат»: открывает у гостя карточку точки.
+ * Ссылка «Позвать в чат»: открывает у гостя карточку комнаты.
  *
  * Форма `t.me/{бот}?startapp=` — главный Mini App бота (Configure Mini App в
  * BotFather): ему, в отличие от `t.me/{бот}/{short_name}`, не нужно имя
@@ -1067,8 +1098,8 @@ function parseStartParam(raw?: string): StartTarget | null {
 /**
  * Профиль человека и состояние лайка между вами.
  *
- * `zone` — пул, из которого профиль открыт: он же станет контекстом лайка.
- * В отличие от пула, этот GET ничего не мутирует — звать можно свободно.
+ * `zone` — зона, из которой профиль открыт: она же станет контекстом лайка.
+ * Этот GET ничего не мутирует — звать можно свободно.
  * Невидимый по правилу пола или заблокировавший отвечает 404 `not_found`:
  * невидимый и несуществующий — один ответ (§4).
  */
@@ -1086,7 +1117,7 @@ export function fetchPerson(id: string, ctx?: MeetingContext): Promise<PersonPro
 export type ReportReason = 'spam' | 'scam' | 'abuse' | 'other';
 
 /**
- * Откуда пожаловались: пул, точка или мэтч — модератору это половина разбора.
+ * Откуда пожаловались: зона, точка или мэтч — модератору это половина разбора.
  *
  * Все три взаимоисключимы и все три необязательны: жалоба из места, которого
  * экран не знает, уходит без контекста, а не с выдуманным.
@@ -1136,8 +1167,8 @@ export function reportPerson(id: string, reason: ReportReason, ctx?: ReportConte
  * 400 `like_limit` — израсходованы 5 в сутки (сообщение сервера уже называет
  * час возврата), 403 `not_approved` — анкета не одобрена. Ровно три ключа в
  * теле: декодер сервера с DisallowUnknownFields откажет на любом лишнем.
- * Пустой контекст легален — у ответного лайка пула нет; точечному лайку
- * активный поиск не нужен вовсе, отношение несёт сам пул или карточка (§2.2).
+ * Пустой контекст легален — у ответного лайка места нет; лайку с карточки
+ * активный поиск не нужен вовсе, отношение несёт она сама (§2.2).
  */
 export function postLike(toId: string, ctx?: MeetingContext): Promise<LikeResponse> {
   return request<LikeResponse>('/api/v1/likes', {
@@ -1151,9 +1182,19 @@ export function postLike(toId: string, ctx?: MeetingContext): Promise<LikeRespon
   });
 }
 
-/** «Тебя лайкнули»: входящие без ответа, новые первыми. */
+/** Входящие лайки: плитки вкладки «Лайки», порядок — по совпадению (§6). */
 export function fetchIncoming(): Promise<IncomingLikeDTO[]> {
   return request<IncomingLikeDTO[]>('/api/v1/likes/incoming');
+}
+
+/**
+ * Остаток дорогих лайков сам по себе: точки под колодой честны с первого экрана.
+ *
+ * Тот же тип, что приезжает ответом на лайк и с профилем человека, — бюджет в
+ * продукте один, и второй его формы быть не должно.
+ */
+export function fetchLikeBudget(): Promise<LikeBudget> {
+  return request<LikeBudget>('/api/v1/likes/budget');
 }
 
 /** Мои мэтчи списком. Контакты — только в карточке одного (§3). */
@@ -1169,7 +1210,7 @@ export function fetchMatch(id: string): Promise<MatchDetail> {
 /**
  * Удаление мэтча любой стороной (§2.3).
  *
- * Стирает мэтч и ОБА лайка пары: люди снова видят друг друга в пулах, а
+ * Стирает мэтч и ОБА лайка пары: люди снова видят друг друга в подборе, а
  * потраченные слоты не возвращаются. Второй стороне не уходит ничего — ни
  * пуша, ни следа. Повторный вызов отвечает 404: удалять уже нечего.
  */

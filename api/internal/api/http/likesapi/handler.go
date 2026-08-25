@@ -63,8 +63,24 @@ func New(likes Likes, photos Photos, points Points, pairs Pairs, dir ZoneDir) *H
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.create)
+	r.Get("/budget", h.budget)
 	r.Get("/incoming", h.incoming)
 	return r
+}
+
+func (h *Handler) budget(w http.ResponseWriter, r *http.Request) {
+	user, ok := authmw.FromContext(r.Context())
+	if !ok {
+		httpx.Internal(w, r, errNoUserInContext)
+		return
+	}
+
+	budget, err := h.likes.Budget(r.Context(), user.ID)
+	if err != nil {
+		h.handleError(w, r, user.ID, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, toBudget(budget))
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {

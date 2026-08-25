@@ -1,13 +1,12 @@
 /* Контейнер профиля человека: загрузка, дорогой лайк и его отказы (§2.3, §6).
 
-   ЕДИНСТВЕННОЕ место, откуда ставится дорогой лайк: продукт разрешает его
-   только с полного профиля. Отсюда же берётся контекст лайка — зона пула, из
-   которого профиль открыт.
+   Дорогой лайк ставится только с полного профиля. Отсюда же берётся его
+   контекст — зона или точка, из которой профиль открыт.
 
-   В отличие от зонного пула, этот GET ничего не мутирует, поэтому ref-guard
-   ему не нужен: второй прогон эффекта в StrictMode стоит лишнего запроса, а
-   не съеденного бейджа. А вот POST лайка защищён флагом busy — второй тап
-   отправил бы второй запрос за тот же лайк. */
+   GET ничего не мутирует, поэтому ref-guard ему не нужен: второй прогон
+   эффекта в StrictMode стоит лишнего запроса, а не съеденного бейджа. А вот
+   POST лайка защищён флагом busy — второй тап отправил бы второй запрос за
+   тот же лайк. */
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -26,10 +25,10 @@ import {
   type PersonProfileDTO,
   type ReportReason,
 } from '../api/client';
-import { fieldLabel, occupationLabel, untilTime } from '../api/format';
+import { occupationLabel, seenLabel, untilTime } from '../api/format';
 import { launchedByTelegram } from '../telegram/mockEnv';
 import { BlockPersonSheet, ReportPersonSheet } from './EdgeStates';
-import { PersonProfileScreen, type LikeAction, type MatchRow } from './PersonProfileScreen';
+import { PersonProfileScreen, sharedRows, type LikeAction } from './PersonProfileScreen';
 
 /** Слотов дорогих лайков на окне 24ч (§2.3). Сервер шлёт остаток, потолок знает спека. */
 const LIKE_SLOTS = 5;
@@ -83,14 +82,14 @@ export function PersonProfileView({
   onBlocked,
 }: {
   userId: string;
-  /** Пул, из которого открыт профиль: и строка «пересеклись», и контекст лайка. */
+  /** Зона, из которой открыт профиль: и строка «пересеклись», и контекст лайка. */
   zoneId?: string;
   /**
-   * Точка, из которой открыт профиль: пул квартиры или карточка «к себе».
+   * Точка, из которой открыт профиль: карточка комнаты «к себе».
    *
    * Не только контекст лайка, но и пропуск к самому профилю: отношение по
-   * точке сервер проверяет ТОЛЬКО по этому параметру, без него профиль
-   * со-участника пула отвечает 404 (§2.3 «мы увиделись»).
+   * точке сервер проверяет ТОЛЬКО по этому параметру, без него анкета автора
+   * отвечает 404 (§2.3 «мы увиделись»).
    */
   pointId?: string;
   onBack?: () => void;
@@ -287,10 +286,11 @@ export function PersonProfileView({
         name={person.name}
         age={person.age}
         occupation={occupationLabel(person.occupation)}
-        photoUrl={person.photo_url || undefined}
+        photoUrls={person.photo_urls}
+        lastSeen={seenLabel(person.last_seen, person.gender)}
         zone={person.context_zone?.name}
         point={person.context_point?.label}
-        matches={toRows(person)}
+        matches={sharedRows(person.shared)}
         matchesTotal={HABIT_FIELDS}
         about={person.about}
         like={action}
@@ -363,26 +363,6 @@ function likeAction(
     label: `Хочу жить вместе · осталось ${p.budget.remaining} из ${LIKE_SLOTS}`,
     disabled: busy,
   };
-}
-
-/**
- * Совпадения анкеты: сервер шлёт только их, различий в ответе нет — красного
- * в сравнении людей не существует (§6).
- *
- * Подпись строки — «вы оба» и ничего больше: метки ответов не склоняются
- * («не курю», «творческий беспорядок»), и фраза, собранная из них, читалась
- * бы поломанной.
- */
-function toRows(p: PersonProfileDTO): MatchRow[] {
-  return p.shared.map((s) => ({
-    tone: 'both',
-    title: capitalize(fieldLabel(s.field, s.value)),
-    context: 'вы оба',
-  }));
-}
-
-function capitalize(s: string): string {
-  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 function message(e: unknown): string {

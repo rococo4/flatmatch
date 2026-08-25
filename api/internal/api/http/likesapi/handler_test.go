@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -27,6 +28,7 @@ type fakeLikes struct {
 	pointID  *uuid.UUID
 	calls    int
 	incoming []likesrepo.IncomingLike
+	budget   *entity.LikeBudget
 }
 
 type fakePhotos struct{}
@@ -124,11 +126,7 @@ func TestIncomingCarriesThePointCard(t *testing.T) {
 		PointID: &room.ID,
 	}}}
 
-	router := newRouter(likes, fakePoints{point: room}, uuid.New())
-	req := httptest.NewRequest(http.MethodGet, "/likes/incoming", nil)
-	req.Header.Set("Authorization", "tma stub")
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	rec := get(t, likes, fakePoints{point: room}, "/likes/incoming")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
@@ -138,6 +136,46 @@ func TestIncomingCarriesThePointCard(t *testing.T) {
 			t.Errorf("incoming %s does not carry %s", rec.Body, want)
 		}
 	}
+}
+
+func TestBudgetAnswersTheRemainingSlotsAndTheReturnTime(t *testing.T) {
+	free := time.Now().Add(3 * time.Hour)
+	likes := &fakeLikes{budget: &entity.LikeBudget{Remaining: 2, NextFreeAt: &free}}
+
+	rec := get(t, likes, fakePoints{}, "/likes/budget")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	for _, want := range []string{`"remaining":2`, `"next_free_at"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("budget %s does not carry %s", rec.Body, want)
+		}
+	}
+}
+
+func TestBudgetWithNothingSpentHasNoReturnTime(t *testing.T) {
+	rec := get(t, &fakeLikes{}, fakePoints{}, "/likes/budget")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"remaining":5`) {
+		t.Errorf("budget %s does not carry the full window", rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "next_free_at") {
+		t.Errorf("budget %s promises a return of a slot that was never spent", rec.Body)
+	}
+}
+
+func get(t *testing.T, likes *fakeLikes, points fakePoints, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", "tma stub")
+
+	rec := httptest.NewRecorder()
+	newRouter(likes, points, uuid.New()).ServeHTTP(rec, req)
+	return rec
 }
 
 func post(t *testing.T, likes *fakeLikes, points fakePoints, viewer uuid.UUID, body string) *httptest.ResponseRecorder {
@@ -175,6 +213,9 @@ func (f *fakeLikes) Incoming(context.Context, uuid.UUID) ([]likesrepo.IncomingLi
 }
 
 func (f *fakeLikes) Budget(context.Context, uuid.UUID) (entity.LikeBudget, error) {
+	if f.budget != nil {
+		return *f.budget, nil
+	}
 	return entity.LikeBudget{Remaining: entity.MaxDailyLikes}, nil
 }
 

@@ -76,10 +76,14 @@ type incomingDTO struct {
 	At           time.Time `json:"at"`
 }
 
+func toBudget(b entity.LikeBudget) budgetDTO {
+	return budgetDTO{Remaining: b.Remaining, NextFreeAt: b.NextFreeAt}
+}
+
 func toLikeResponse(res entity.LikeResult) likeResponse {
 	out := likeResponse{
 		Already: res.Already,
-		Budget:  budgetDTO{Remaining: res.Budget.Remaining, NextFreeAt: res.Budget.NextFreeAt},
+		Budget:  toBudget(res.Budget),
 	}
 	if res.Match != nil {
 		out.Matched = true

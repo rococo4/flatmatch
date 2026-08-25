@@ -1,8 +1,15 @@
 /* Профиль человека — §6. Дорогой лайк живёт только здесь (MainButton).
    Совпадения анкеты: зелёный фон «вы оба», нейтральный — различие с контекстом.
-   Красного в сравнении людей не существует. */
+   Красного в сравнении людей не существует.
+
+   Экран один на два входа: из подбора (внизу дорогой лайк) и из «Лайков»
+   (внизу стрелка и сердце — их подставляет `bottom`). Разводить их в две
+   вёрстки нельзя: анкета одна и та же, и разъехалась бы она мгновенно. */
 import type { CSSProperties, ReactNode } from 'react';
-import { Avatar, Badge, S } from '../ui/primitives';
+import type { SharedAnswer } from '../api/client';
+import { fieldLabel } from '../api/format';
+import { PhotoPager } from '../ui/PhotoPager';
+import { Badge, S } from '../ui/primitives';
 
 export type MatchRow = {
   /** both = «вы оба» (зелёный), diff = различие с контекстом (нейтральный) */
@@ -71,6 +78,18 @@ const L = {
     borderRadius: 10,
     background: 'var(--app-bg)',
   } as CSSProperties,
+  gradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: '34px 14px 12px',
+    background: 'linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0))',
+    color: '#fff',
+  } as CSSProperties,
   matchRow: (both: boolean): CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
@@ -121,6 +140,22 @@ const L = {
   }),
 };
 
+/**
+ * Совпадения анкеты строками — общие для обоих входов на экран.
+ *
+ * Сервер шлёт только совпавшее, различий в ответе нет: красного в сравнении
+ * людей не существует (§6). Подпись строки — «вы оба» и ничего больше: метки
+ * ответов не склоняются («не курю», «творческий беспорядок»), и фраза,
+ * собранная из них, читалась бы поломанной.
+ */
+export function sharedRows(shared: SharedAnswer[]): MatchRow[] {
+  return shared.map((s) => ({
+    tone: 'both',
+    title: capitalize(fieldLabel(s.field, s.value)),
+    context: 'вы оба',
+  }));
+}
+
 function ZoneLine({ children }: { children: ReactNode }) {
   return (
     <div style={L.zoneLine}>
@@ -142,15 +177,17 @@ export function PersonProfileScreen({
   name,
   age,
   occupation,
-  photoUrl,
+  photoUrls,
   verifiedBadge,
   lastSeen,
+  note,
   zone,
   point,
   matches,
   matchesTotal,
   about,
   like,
+  bottom,
   onBack,
   onLike,
   onReport,
@@ -159,12 +196,14 @@ export function PersonProfileScreen({
   name: string;
   age: number;
   occupation: string;
-  /** Пусто = фото не одобрено: заглушка с инициалами, а не пустой круг (§5). */
-  photoUrl?: string;
-  /** Бейджи и «была сегодня» сервер пока не шлёт — строк тогда просто нет. */
+  /** Первое — главное; пустой набор = фото не одобрено, и вместо него заглушка (§5). */
+  photoUrls: string[];
+  /** Бейдж вуза сервер пока не шлёт — строки тогда просто нет. */
   verifiedBadge?: string;
   lastSeen?: string;
-  /** Зона контекста, «Хамовники». Профиль открыт не из пула — строки нет. */
+  /** Третьим в подзаголовке: «лайкнула тебя» на анкете из «Лайков» (§6). */
+  note?: string;
+  /** Зона контекста, «Хамовники». Контекста не осталось — строки нет. */
   zone?: string;
   /**
    * Точка контекста готовой строкой: «на комнату Кати · м. Сокол».
@@ -177,7 +216,9 @@ export function PersonProfileScreen({
   matchesTotal: number; // «6 ИЗ 9»
   /** Только одобренное «о себе»: до аппрува блока нет вовсе (§5). */
   about?: string;
-  like: LikeAction;
+  like?: LikeAction;
+  /** Чем заменить нижнюю полосу: стрелка и сердце «Лайков» вместо лайка. */
+  bottom?: ReactNode;
   onBack?: () => void;
   onLike?: () => void;
   /** Жалоба и блок (§5) — тихой строкой под контентом, а не кнопками наравне. */
@@ -185,6 +226,7 @@ export function PersonProfileScreen({
   onBlock?: () => void;
 }) {
   const bothCount = matches.filter((m) => m.tone === 'both').length;
+  const subtitle = [occupation, lastSeen, note].filter(Boolean).join(' · ');
 
   return (
     <div style={L.screen}>
@@ -199,33 +241,33 @@ export function PersonProfileScreen({
       </div>
 
       <div style={L.body}>
-        <div style={{ ...L.block, gap: 12, padding: '14px 12px' }}>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <Avatar name={name} size={88} src={photoUrl} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-              <span style={{ fontSize: 22, fontWeight: 640, letterSpacing: '-0.5px' }}>
+        <div style={{ ...L.block, gap: 0, padding: 0, overflow: 'hidden' }}>
+          <PhotoPager urls={photoUrls} emptyLabel="фото на проверке" maxHeight="46vh">
+            <div style={L.gradient}>
+              <span style={{ fontSize: 24, fontWeight: 640, letterSpacing: '-0.5px' }}>
                 {name}, {age}
               </span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                <span style={{ fontSize: 14, color: 'var(--tg-theme-subtitle-text-color)' }}>
-                  {occupation}
-                </span>
-                {verifiedBadge && <Badge tone="accent">{verifiedBadge}</Badge>}
-              </div>
-              {lastSeen && (
-                <span style={{ fontSize: 13, color: 'var(--tg-theme-hint-color)' }}>{lastSeen}</span>
+              {subtitle && <span style={{ fontSize: 14, opacity: 0.9 }}>{subtitle}</span>}
+            </div>
+          </PhotoPager>
+          {(verifiedBadge || zone || point) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
+              {verifiedBadge && (
+                <div>
+                  <Badge tone="accent">{verifiedBadge}</Badge>
+                </div>
+              )}
+              {zone && (
+                <ZoneLine>
+                  пересеклись: <b style={{ fontWeight: 590 }}>{zone}</b>
+                </ZoneLine>
+              )}
+              {point && (
+                <ZoneLine>
+                  <b style={{ fontWeight: 590 }}>{point}</b>
+                </ZoneLine>
               )}
             </div>
-          </div>
-          {zone && (
-            <ZoneLine>
-              пересеклись: <b style={{ fontWeight: 590 }}>{zone}</b>
-            </ZoneLine>
-          )}
-          {point && (
-            <ZoneLine>
-              <b style={{ fontWeight: 590 }}>{point}</b>
-            </ZoneLine>
           )}
         </div>
 
@@ -295,9 +337,13 @@ export function PersonProfileScreen({
         )}
       </div>
 
+      {/* Своя нижняя полоса главнее: у анкеты из «Лайков» внизу два жеста, и
+          дорогому лайку там места нет. */}
+      {bottom && <div style={L.fixed}>{bottom}</div>}
+
       {/* В Telegram кнопку рисует MainButton, и здесь остаётся только подпись:
           две одинаковые кнопки друг над другом — это два разных обещания. */}
-      {(!like.native || like.caption) && (
+      {!bottom && like && (!like.native || like.caption) && (
         <div style={L.fixed}>
           {!like.native && (
             <button
@@ -319,4 +365,8 @@ export function PersonProfileScreen({
       )}
     </div>
   );
+}
+
+function capitalize(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }

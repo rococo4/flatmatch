@@ -21,6 +21,7 @@ import {
   restrictionLabels,
   roomCardTitle,
 } from '../api/format';
+import { PhotoPager } from '../ui/PhotoPager';
 import {
   FactsBlock,
   GreyChips,
@@ -28,7 +29,6 @@ import {
   LimitChip,
   PerPerson,
   PersonRow,
-  PhotoPlaceholder,
   S,
   type Fact,
 } from '../ui/primitives';
@@ -222,7 +222,7 @@ function HomePointCard({
             name={author.name}
             age={author.age}
             occupation={occupationLabel(author.occupation)}
-            photoUrl={author.photo_url || undefined}
+            photoUrl={author.photo_urls[0]}
           />
           {onOpenProfile && (
             <span
@@ -242,9 +242,25 @@ function HomePointCard({
           )}
         </div>
         <FactsBlock title={`Комната у ${author.name}`} facts={homeFacts(point)}>
-          <RoomPhoto url={point.photo_urls[0] ?? ''} />
+          {/* Фото листаются прямо здесь: их до десяти, и одна обложка от
+              комнаты рассказывает меньше, чем один кадр квартиры. */}
+          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <PhotoPager
+              urls={point.photo_urls}
+              emptyLabel="фото комнаты"
+              ratio="16/9"
+              maxHeight="none"
+            />
+          </div>
           <GreyChips items={restrictionLabels(point.restrictions, 'intent_home')} />
         </FactsBlock>
+        {/* Рассказ автора — под фактами: цифры отвечают «сколько», описание —
+            «как там жить» (§2.2). Пусто — блока просто нет. */}
+        {point.description && (
+          <span style={{ fontSize: 14, lineHeight: 1.45, textWrap: 'pretty' }}>
+            {point.description}
+          </span>
+        )}
         <HabitsBlock items={habitChips(author)} />
         <div
           style={{
@@ -302,15 +318,6 @@ function HomePointCard({
         )}
       </div>
     </article>
-  );
-}
-
-/** Фото комнаты. Пустой адрес — заглушка: карточка без фото всё равно карточка. */
-function RoomPhoto({ url }: { url: string }) {
-  const style: CSSProperties = { aspectRatio: '16/9', borderRadius: 8 };
-  if (!url) return <PhotoPlaceholder inCard label="фото комнаты" style={style} />;
-  return (
-    <img src={url} alt="" style={{ ...style, width: '100%', objectFit: 'cover', display: 'block' }} />
   );
 }
 

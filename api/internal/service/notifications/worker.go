@@ -28,7 +28,7 @@ const (
 )
 
 const (
-	buttonPool     = "Открыть пул"
+	buttonPool     = "Открыть подбор"
 	buttonIncoming = "Посмотреть"
 	buttonOpen     = "Открыть"
 	buttonFeed     = "В ленту"

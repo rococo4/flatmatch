@@ -33,7 +33,7 @@ func hasRoom(list []FeedPoint, id uuid.UUID) bool {
 	return false
 }
 
-func passPoint(t *testing.T, pool *pgxpool.Pool, userID, targetID uuid.UUID, ago time.Duration) {
+func pass(t *testing.T, pool *pgxpool.Pool, userID, targetID uuid.UUID, ago time.Duration) {
 	t.Helper()
 	_, err := pool.Exec(t.Context(), `
 		INSERT INTO passes (user_id, target_id, created_at)
@@ -88,7 +88,7 @@ func TestDeckRoomsShowsLiveRoomsOfVisibleStrangers(t *testing.T) {
 		VALUES ($1, $2, $3, true)`, viewer, liked, likedRoom.ID); err != nil {
 		t.Fatalf("insert like: %v", err)
 	}
-	passPoint(t, pool, viewer, passedRoom.ID, time.Hour)
+	pass(t, pool, viewer, passedRoom.ID, time.Hour)
 
 	got, err := repo.DeckRooms(t.Context(), viewer, []string{testZone}, entity.PeopleFilter{}, deckWindow)
 	if err != nil {
@@ -111,13 +111,45 @@ func TestDeckRoomsShowsLiveRoomsOfVisibleStrangers(t *testing.T) {
 		t.Errorf("room carries author %+v, want %s", got[0].Author, stranger)
 	}
 
-	passPoint(t, pool, viewer, room.ID, 8*24*time.Hour)
+	pass(t, pool, viewer, room.ID, 8*24*time.Hour)
 	back, err := repo.DeckRooms(t.Context(), viewer, []string{testZone}, entity.PeopleFilter{}, deckWindow)
 	if err != nil {
 		t.Fatalf("DeckRooms() failed: %v", err)
 	}
 	if !hasRoom(back, room.ID) {
 		t.Error("a pass older than the window must expire on its own")
+	}
+}
+
+func TestDeckRoomsHidesRoomsOfPassedAuthors(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+
+	viewer := seedUser(t, pool, 1)
+	passed := seedUser(t, pool, 2)
+	longAgoPassed := seedUser(t, pool, 3)
+	stranger := seedUser(t, pool, 4)
+
+	passedRoom := mustCreate(t, repo, intentHome(passed, entity.StageLive))
+	longAgoRoom := mustCreate(t, repo, intentHome(longAgoPassed, entity.StageLive))
+	strangerRoom := mustCreate(t, repo, intentHome(stranger, entity.StageLive))
+
+	pass(t, pool, viewer, passed, time.Hour)
+	pass(t, pool, viewer, longAgoPassed, 8*24*time.Hour)
+
+	got, err := repo.DeckRooms(t.Context(), viewer, []string{testZone}, entity.PeopleFilter{}, deckWindow)
+	if err != nil {
+		t.Fatalf("DeckRooms() failed: %v", err)
+	}
+	if hasRoom(got, passedRoom.ID) {
+		t.Errorf("the room of a passed author must be gone too: %v", roomIDs(got))
+	}
+	if !hasRoom(got, longAgoRoom.ID) {
+		t.Errorf("a pass older than the window must expire on its own: %v", roomIDs(got))
+	}
+	if !hasRoom(got, strangerRoom.ID) {
+		t.Errorf("the room of an untouched author is missing: %v", roomIDs(got))
 	}
 }
 

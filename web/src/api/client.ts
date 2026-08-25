@@ -325,6 +325,27 @@ export const NO_DECK_FILTERS: DeckFilters = {
   occupation: [],
 };
 
+/**
+ * Те же сужения, что и были: наборы нормализованы порядком чипов, сравниваем
+ * поэлементно.
+ *
+ * Нужно кнопке «Показать»: нетронутые фильтры — не событие, а перезагрузка
+ * колоды сбросила бы курсор и вернула бы человека в её начало.
+ */
+export function sameDeckFilters(a: DeckFilters, b: DeckFilters): boolean {
+  const same = (x: string[], y: string[]) =>
+    x.length === y.length && x.every((v, i) => v === y[i]);
+  return (
+    a.age_min === b.age_min &&
+    a.age_max === b.age_max &&
+    same(a.who, b.who) &&
+    same(a.pets, b.pets) &&
+    same(a.smoking, b.smoking) &&
+    same(a.schedule, b.schedule) &&
+    same(a.occupation, b.occupation)
+  );
+}
+
 /** Хоть одно сужение задано: синяя точка на иконке фильтров. */
 export function hasDeckFilters(f: DeckFilters): boolean {
   return (

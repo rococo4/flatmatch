@@ -540,7 +540,7 @@ export function OnboardingDone({
           <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
             <span style={{ fontSize: 19, fontWeight: 640, letterSpacing: '-0.4px' }}>Ищу, куда съехать</span>
             <span style={{ fontSize: 14, lineHeight: 1.35, opacity: 0.85, textWrap: 'pretty' }}>
-              Настрой поиск — 20 секунд, покажем людей и квартиры
+              Настрой поиск — 20 секунд, покажем людей и комнаты
             </span>
           </div>
           <span style={{ flex: '0 0 auto', fontSize: 22, lineHeight: 1, opacity: 0.6 }}>›</span>
@@ -579,7 +579,7 @@ export function OnboardingDone({
           cursor: 'pointer',
         }}
       >
-        просто посмотреть ленту
+        просто посмотреть
       </span>
     </div>
   );

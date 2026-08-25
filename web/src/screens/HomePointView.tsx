@@ -20,6 +20,7 @@ import {
   pointTitle,
   restrictionLabels,
   roomCardTitle,
+  shareValue,
 } from '../api/format';
 import { PhotoPager } from '../ui/PhotoPager';
 import {
@@ -27,7 +28,6 @@ import {
   GreyChips,
   HabitsBlock,
   LimitChip,
-  PerPerson,
   PersonRow,
   S,
   type Fact,
@@ -324,7 +324,7 @@ function HomePointCard({
 function homeFacts(p: PointDTO): Fact[] {
   const facts: Fact[] = [];
   if (p.price_share) {
-    facts.push({ label: 'Твоя доля', value: <PerPerson>{money(p.price_share)}</PerPerson> });
+    facts.push({ label: 'Твоя доля', value: shareValue(p.price_share, p.utilities) });
   }
   if (p.zone.name) facts.push({ label: 'Метро', value: p.zone.name });
   if (p.isolated != null) {

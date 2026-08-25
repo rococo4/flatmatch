@@ -124,6 +124,28 @@ func TestDeckCandidatesGroupsSearchesAndCutsTheExcluded(t *testing.T) {
 	}
 }
 
+func TestDeckCandidatesKeepsAuthorsOfPassedRooms(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	cleanTestUsers(t, pool)
+	repo := New(pool)
+
+	viewer := seedUser(t, pool, 1, "active", "male", "any")
+	author := seedUser(t, pool, 2, "active", "female", "any")
+	setProfile(t, pool, viewer, 25, "study", "owl", "no", "none", "ok")
+	setProfile(t, pool, author, 25, "study", "owl", "no", "none", "ok")
+	mustSeed(t, repo, author, "z-deck-a")
+
+	pass(t, pool, viewer, uuid.New(), time.Hour)
+
+	got, err := repo.DeckCandidates(t.Context(), viewer, []string{"z-deck-a"}, entity.PeopleFilter{}, deckWindow)
+	if err != nil {
+		t.Fatalf("DeckCandidates() failed: %v", err)
+	}
+	if _, ok := hasCandidate(got, author); !ok {
+		t.Errorf("a passed room must not hide its author: %v", candidateIDs(got))
+	}
+}
+
 func TestDeckCandidatesFilters(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	cleanTestUsers(t, pool)

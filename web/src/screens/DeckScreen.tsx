@@ -23,6 +23,7 @@ import {
   plural,
   restrictionLabels,
   roomCardTitle,
+  shareValue,
   VERDICT_UI,
 } from '../api/format';
 import { ActionPills } from '../ui/ActionPills';
@@ -846,10 +847,7 @@ function roomFacts(room: DeckRoom): { label: string; value: ReactNode }[] {
   const facts: { label: string; value: ReactNode }[] = [];
   if (room.zone.name) facts.push({ label: 'Метро', value: room.zone.name });
   if (room.price_share) {
-    facts.push({
-      label: 'Твоя доля',
-      value: `${money(room.price_share)}${room.utilities === 'meters' ? ' + счётчики' : ''}`,
-    });
+    facts.push({ label: 'Твоя доля', value: shareValue(room.price_share, room.utilities) });
   }
   if (room.isolated != null) {
     facts.push({ label: 'Комната', value: room.isolated ? 'изолированная' : 'проходная' });

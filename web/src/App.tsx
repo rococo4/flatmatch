@@ -37,6 +37,7 @@ import {
   postLike,
   postSource,
   reactivateSearch,
+  sameDeckFilters,
   startParam,
   updateSearch,
   type CloseReason,
@@ -753,9 +754,12 @@ export function App() {
   };
 
   const applyFilters = (next: DeckFilters) => {
+    setFiltersOpen(false);
+    // «Показать» с нетронутыми чипами только закрывает шторку: перезагрузка
+    // тех же фильтров вернула бы курсор в начало колоды на ровном месте.
+    if (sameDeckFilters(next, filters)) return;
     setFilters(next);
     saveDeckFilters(next);
-    setFiltersOpen(false);
     void loadDeck(next);
   };
 

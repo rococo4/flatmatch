@@ -638,6 +638,16 @@ export function money(n: number): string {
   return `${n.toLocaleString('ru-RU')} ₽`;
 }
 
+/**
+ * Доля въезжающего: «45 000 ₽» или «45 000 ₽ + счётчики».
+ *
+ * Одна строка на карточку подбора и на экран комнаты: доля без счётчиков —
+ * это заниженная цена, и узнавать о них после отклика поздно.
+ */
+export function shareValue(share: number, utilities?: Utilities): string {
+  return `${money(share)}${utilities === 'meters' ? ' + счётчики' : ''}`;
+}
+
 /** Дата без года: «12 июля». Точнее дня свежесть не обещаем (§8). */
 export function dayMonth(iso: string): string {
   return DAY_MONTH_FMT.format(new Date(iso));

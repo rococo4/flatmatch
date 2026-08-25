@@ -177,17 +177,6 @@ export function FactsBlock({
   );
 }
 
-export function PerPerson({ children }: { children: ReactNode }) {
-  return (
-    <span style={{ fontWeight: 590 }}>
-      {children}{' '}
-      <span style={{ fontWeight: 400, color: 'var(--tg-theme-subtitle-text-color)' }}>
-        с человека
-      </span>
-    </span>
-  );
-}
-
 /** Ограничения собственника — серые чипы: их читают до лайка, а не после мэтча (§2.2). */
 export function GreyChips({ items }: { items: string[] }) {
   if (items.length === 0) return null;

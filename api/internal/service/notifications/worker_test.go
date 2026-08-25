@@ -411,7 +411,7 @@ func TestAggregateGoesOutAsOneMessage(t *testing.T) {
 		t.Errorf("text = %q, want %q", got, want)
 	}
 	if got := f.sender.sent[0].buttons; len(got) != 1 ||
-		got[0].Text != "Открыть пул" || got[0].StartParam != "pool_d-khamovniki" {
+		got[0].Text != "Открыть подбор" || got[0].StartParam != "pool_d-khamovniki" {
 		t.Errorf("buttons = %+v, want one deep link into the zone pool", got)
 	}
 

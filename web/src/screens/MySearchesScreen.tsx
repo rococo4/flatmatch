@@ -262,7 +262,7 @@ export function MySearchesScreen({
                 ))}
               </div>
               <span style={{ fontSize: 15, fontWeight: 590 }}>
-                {s.peopleCount} ищут · с {s.fullMatchCount} полное совпадение
+                {s.peopleCount} ищут соседа · с {s.fullMatchCount} полное совпадение
               </span>
               <button type="button" style={S.secondaryButton} onClick={() => onOpenPool?.(s.id)}>
                 Смотреть в „Соседях“

@@ -34,6 +34,10 @@ func (r *Repo) DeckRooms(ctx context.Context, viewerID uuid.UUID, zoneIDs []stri
 		      SELECT 1 FROM passes ps
 		      WHERE ps.user_id = $1 AND ps.target_id = p.id
 		        AND ps.created_at >= now() - make_interval(secs => $3))
+		  AND NOT EXISTS (
+		      SELECT 1 FROM passes ps
+		      WHERE ps.user_id = $1 AND ps.target_id = p.created_by
+		        AND ps.created_at >= now() - make_interval(secs => $3))
 		  AND `+peopleFilter,
 		viewerID, zoneIDs, within.Seconds(),
 		f.AgeMin, f.AgeMax, f.Occupation, f.Schedule, f.Smoking, f.PetsOwnNone, f.PetsOKFine)
